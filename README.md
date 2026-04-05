@@ -14,6 +14,17 @@ Each parallelogram is defined by a center point **C**, an "up" half-diagonal **v
 
 ## Formula derivation
 
+If you want to inspect the mathematical derivation, look at the image below.
+
+<details>
+ <summary>Show the image</summary>
+  
+  ![math-derivation](https://github.com/user-attachments/assets/e42a025b-9b0d-45b8-bedc-fd0c52cb8433)
+
+</details>
+
+---
+
 A parallelogram with half-diagonals **vUp** and **vLeft** is drawn by finding an inner rectangle of sides `a × b` and a horizontal shear factor `x` such that the result matches the shape.
 
 **Step 1 — decompose vLeft:**
@@ -51,17 +62,6 @@ Conditions `l1 < l3` and `l2 < l3` are satisfied whenever the triangle is non-de
 **Step 4 — apply the transform:**
 
 The base quad is placed at `center`, rotated to face the plane of the parallelogram, and scaled by `x` along the base axis. The child quad is attached with a local rotation of `−arctan(b/a)` and scale `(b, a, 1)` to produce the final sheared shape.
-
----
-
-If you want to inspect the mathematical derivation, look at the image below.
-
-<details>
- <summary>Show the image</summary>
-  
-  ![math-derivation](https://github.com/user-attachments/assets/e42a025b-9b0d-45b8-bedc-fd0c52cb8433)
-
-</details>
 
 ---
 
