@@ -1,0 +1,31 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net48</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <LangVersion>latest</LangVersion>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PackageReference Include="ExMod.Exiled" Version="9.13.3" />
+      <PackageReference Include="UnityEngine.Modules" Version="2021.3.33">
+        <PrivateAssets>all</PrivateAssets>
+        <IncludeAssets>compile; runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      </PackageReference>
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="Core\" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Reference Include="Mirror">
+        <HintPath>..\..\..\anton\Downloads\Mirror.dll</HintPath>
+      </Reference>
+      <Reference Include="Mirror.Components">
+        <HintPath>..\..\..\anton\Downloads\Mirror.Components.dll</HintPath>
+      </Reference>
+    </ItemGroup>
+
+</Project>
