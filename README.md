@@ -1,5 +1,8 @@
 # Triangle
 
+![blender-monkey](https://github.com/user-attachments/assets/2012cb09-db5a-4140-a48f-e1e865e89234)
+
+
 An [EXILED](https://github.com/ExMod-Team/EXILED) plugin for SCP: Secret Laboratory that renders filled triangles and STL-based 3-D meshes in world space using primitive toys.
 
 ## Current project info
@@ -213,6 +216,121 @@ Signature:
 ```csharp
 ParallelogramPrimitive(Vector3 vUp, Vector3 vLeft, Vector3 center, Color color, PrimitiveFlags flags, Primitive? parent = null)
 ```
+
+## Mathematical Details: Parallelogram Construction
+
+![derivation](https://github.com/user-attachments/assets/78faa24b-2003-45b6-b9e5-cde804db598f)
+
+A parallelogram with half-diagonals **vUp** and **vLeft** is drawn by finding an inner rectangle of sides `a × b` and a horizontal shear factor `x` such that the result matches the shape.
+
+### Step 1 — Decompose vLeft
+
+```
+upLen = |vUp|
+leftY = dot(vLeft, vUp) / upLen      // projection along vUp
+leftX = |vLeft − leftY · vUp/upLen|  // perpendicular component
+```
+
+### Step 2 — Compute Inner Rectangle Sides
+
+Let `l3 = 2·upLen` (full diagonal of the inner rectangle). Using the chord relations from the diagram (angles α = arctan(a/b) and β = arctan(b/a)):
+
+```
+l1 = b · √((xa)² + b²) / l3
+l2 = a · √((xb)² + a²) / l3
+l3 = √(a² + b²)
+```
+
+Key identity that makes the construction consistent: **a·cos(α) = b·cos(β) = ab/l3**
+
+### Step 3 — Invert to Find a, b, x
+
+From `l3² = a² + b²` and `l1² − l2² = b² − a²` one derives:
+
+```
+a² = (l3² + l2² − l1²) / 2 = 2·upLen·(upLen + leftY)
+b² = (l3² + l1² − l2²) / 2 = 2·upLen·(upLen − leftY)
+x  = leftX · l3 / (a·b)
+```
+
+Conditions `l1 < l3` and `l2 < l3` are satisfied whenever the triangle is non-degenerate.
+
+### Step 4 — Apply the Transform
+
+The base quad is placed at `center`, rotated to face the plane of the parallelogram, and scaled by `x` along the base axis. The child quad is attached with a local rotation of `−arctan(b/a)` and scale `(b, a, 1)` to produce the final sheared shape.
+
+## Architecture Details: Why This Works
+
+### Triangle Rendering with Quads
+
+A single triangle is decomposed into three overlapping parallelograms that together fill the entire triangle area. Each parallelogram is rendered using **2 nested quads** with the following architecture:
+
+```
+TrianglePrimitive
+├── _root (1 invisible quad at centroid)
+│   ├── _prim1 (ParallelogramPrimitive)
+│   │   ├── _baseQuad (invisible, defines position/orientation/shear)
+│   │   └── _quad (visible, final sheared shape)
+│   ├── _prim2 (ParallelogramPrimitive)
+│   │   ├── _baseQuad (invisible)
+│   │   └── _quad (visible)
+│   └── _prim3 (ParallelogramPrimitive)
+│       ├── _baseQuad (invisible)
+│       └── _quad (visible)
+```
+
+**Why 2 quads per parallelogram?**
+
+The base quad cannot directly produce a sheared parallelogram due to limitations of quad scaling. Here's why we need the nested structure:
+
+1. **Base Quad** (`_baseQuad`):
+   - Position: placed at parallelogram center
+   - Rotation: aligned to face the parallelogram plane (using `vNormal`)
+   - Scale: `(x, 1, 1)` — applies horizontal shear factor along one axis
+   - **Invisible** — doesn't render, serves as transform anchor
+
+2. **Child Quad** (`_quad`):
+   - **Parented to** the base quad (local hierarchy)
+   - Local position: origin (0, 0, 0) relative to parent
+   - Local rotation: `−arctan(b/a)` — rotates to un-shear the shape
+   - Local scale: `(b, a, 1)` — applies the rectangle side lengths
+   - **Visible** — produces the final rendered parallelogram
+
+**The math:**
+
+When you scale a quad by `(x, 1, 1)` and then apply a child with `(b, a, 1)`, the combined transformation creates the sheared parallelogram. The rotation of the child by `−arctan(b/a)` compensates for the shear so the final quad edges align with the parallelogram diagonals.
+
+### Efficient Rendering with TriangleSpace
+
+Instead of each `TrianglePrimitive` having its own root quad, the `TriangleSpace` architecture shares **3 root quads** (one for each primary axis orientation).
+Each triangle's normal is compared against the forward axes of the 3 root quads. The triangle is parented to the root whose forward axis **best aligns** with the triangle's normal.
+
+```
+TriangleSpace
+├── _roots[0] (invisible quad aligned to X-axis)
+│   ├── TriangleEntry 1
+│   │   ├── ParallelogramPrimitive 1 (1 quad)
+│   │   ├── ParallelogramPrimitive 2 (1 quad)
+│   │   └── ParallelogramPrimitive 3 (1 quad)
+│   ├── TriangleEntry 2 (3 parallelograms = 3 quads)
+│   └── ...
+├── _roots[1] (invisible quad aligned to Y-axis)
+│   └── ...
+└── _roots[2] (invisible quad aligned to Z-axis)
+    └── ...
+```
+
+### Quad Counting
+
+The formula used in `TriangulatedModel.QuadCount`:
+
+```csharp
+public int QuadCount => Count * 3 + 3;
+```
+
+Is calculated as:
+- `Count * 3`: Three **visible** quads per triangle (one for each parallelogram)
+- `+ 3`: Three shared **invisible root** quads
 
 ## Notes
 
