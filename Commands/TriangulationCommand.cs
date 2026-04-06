@@ -76,7 +76,7 @@ public class TriangulationCommand : ICommand
 
         _model = TriangulatedModel.Create(parsedTriangles, spawnPosition, color, PrimitiveFlags.Visible);
 
-        //_model.Rotation = Quaternion.Euler(-90f, 0f, 90f); // blender monkey file rotation issue
+        //_model.Rotation = Quaternion.Euler(-90f, 0f, 0f); // blender monkey file rotation issue
         if (_model.Count == 0)
         {
             Clear();

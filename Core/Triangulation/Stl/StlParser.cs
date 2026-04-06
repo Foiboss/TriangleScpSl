@@ -117,15 +117,12 @@ public static class StlParser
                 // attribute byte count
                 _ = reader.ReadUInt16();
 
-                if (!IsFinite(p1) || !IsFinite(p2) || !IsFinite(p3))
-                    continue;
-
                 triangles.Add(new StlTriangle(p1, p2, p3));
             }
 
             if (triangles.Count == 0)
             {
-                error = "No valid triangles found in binary STL.";
+                error = "No triangles found in binary STL.";
                 return false;
             }
 
@@ -148,46 +145,55 @@ public static class StlParser
             stream.Position = 0;
             using StreamReader reader = new(stream, Encoding.UTF8, true, 4096, true);
 
-            List<Vector3> vertices = [];
+            List<Vector3> facetVertices = [];
 
             while (reader.ReadLine() is { } line)
             {
                 line = line.Trim();
 
-                if (!line.StartsWith("vertex", StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                string[] parts = line.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
-
-                if (parts.Length < 4)
-                    continue;
-
-                if (!TryParseFloat(parts[1], out float x) ||
-                    !TryParseFloat(parts[2], out float y) ||
-                    !TryParseFloat(parts[3], out float z))
+                if (line.StartsWith("facet", StringComparison.OrdinalIgnoreCase))
                 {
+                    facetVertices.Clear();
                     continue;
                 }
 
-                Vector3 vertex = new(x, y, z);
+                if (!line.StartsWith("vertex", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!line.StartsWith("endfacet", StringComparison.OrdinalIgnoreCase))
+                        continue;
 
-                if (!IsFinite(vertex))
+                    // Always persist one triangle per facet from the parsed STL text.
+                    while (facetVertices.Count < 3)
+                        facetVertices.Add(Vector3.zero);
+
+                    triangles.Add(new StlTriangle(facetVertices[0], facetVertices[1], facetVertices[2]));
+                    facetVertices.Clear();
                     continue;
+                }
 
-                vertices.Add(vertex);
+                string[] parts = line.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
+
+                Vector3 vertex = Vector3.zero;
+
+                if (parts.Length >= 4 &&
+                    TryParseFloat(parts[1], out float x) &&
+                    TryParseFloat(parts[2], out float y) &&
+                    TryParseFloat(parts[3], out float z))
+                {
+                    vertex = new Vector3(x, y, z);
+                }
+
+                // Preserve malformed vertex entries so facet triangle count is not reduced.
+                facetVertices.Add(vertex);
             }
 
-            if (vertices.Count < 3)
+            if (facetVertices.Count > 0)
             {
-                error = "ASCII STL does not contain enough vertices.";
-                return false;
-            }
+                // Persist last unterminated facet if file ended unexpectedly.
+                while (facetVertices.Count < 3)
+                    facetVertices.Add(Vector3.zero);
 
-            triangles = new List<StlTriangle>(vertices.Count / 3);
-
-            for (var i = 0; i + 2 < vertices.Count; i += 3)
-            {
-                triangles.Add(new StlTriangle(vertices[i], vertices[i + 1], vertices[i + 2]));
+                triangles.Add(new StlTriangle(facetVertices[0], facetVertices[1], facetVertices[2]));
             }
 
             if (triangles.Count == 0)
@@ -210,8 +216,4 @@ public static class StlParser
 
     static Vector3 ReadVector3(BinaryReader reader) => new(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
 
-    static bool IsFinite(Vector3 value) =>
-        !float.IsNaN(value.x) && !float.IsInfinity(value.x) &&
-        !float.IsNaN(value.y) && !float.IsInfinity(value.y) &&
-        !float.IsNaN(value.z) && !float.IsInfinity(value.z);
 }

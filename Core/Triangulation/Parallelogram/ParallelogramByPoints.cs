@@ -7,6 +7,11 @@ public static class ParallelogramByPoints
 {
     public static void Create(Vector3 vUp, Vector3 vLeft, Vector3 center, Primitive quad, Primitive baseQuad)
     {
+        if (Mathf.Abs(Vector3.Dot(vLeft, vUp)) > vUp.sqrMagnitude)
+        {
+            (vUp, vLeft) = (vLeft, -vUp);
+        }
+
         AffineTransformationsInfo info = GetInfo(vUp, vLeft);
         float angleDeg = Mathf.Atan2(info.B, info.A) * Mathf.Rad2Deg;
 
