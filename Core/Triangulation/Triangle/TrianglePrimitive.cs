@@ -7,7 +7,38 @@ namespace Triangle.Core.Triangulation.Triangle;
 
 public class TrianglePrimitive
 {
+    // Root quad at the centroid: invisible, provides a shared parent for all
+    // three parallelogram subtrees so the whole triangle can be moved/rotated
+    // in O(1) by updating this single transform.
+    readonly Primitive _root;
+    readonly ParallelogramPrimitive _prim1;
+    readonly ParallelogramPrimitive _prim2;
+    readonly ParallelogramPrimitive _prim3;
     Color _color;
+
+    public TrianglePrimitive(Vector3 p1, Vector3 p2, Vector3 p3, Color color, PrimitiveFlags flags, Primitive? parent = null)
+    {
+        P1 = p1;
+        P2 = p2;
+        P3 = p3;
+        _color = color;
+
+        Vector3 centroid = (p1 + p2 + p3) / 3f;
+        Vector3 normal = Vector3.Cross(p2 - p1, p3 - p1).normalized;
+        Quaternion rootRot = Quaternion.LookRotation(normal, (p1 - centroid).normalized);
+
+        // Invisible root at the centroid — scale (1,1,1) so children inherit no distortion.
+        _root = Primitive.Create(PrimitiveType.Quad, PrimitiveFlags.None, centroid, null, Vector3.one, true, color);
+        _root.Rotation = rootRot;
+
+        if (parent is not null)
+            _root.Transform.SetParent(parent.Transform, true);
+
+        Vector3[][] data = TriangleParallelogramBuilder.GetParallelogramsInfo(p1, p2, p3);
+        _prim1 = new ParallelogramPrimitive(data[0][0], data[0][1], data[0][2], color, flags, _root);
+        _prim2 = new ParallelogramPrimitive(data[1][0], data[1][1], data[1][2], color, flags, _root);
+        _prim3 = new ParallelogramPrimitive(data[2][0], data[2][1], data[2][2], color, flags, _root);
+    }
 
     public Vector3 P1 { get; private set; }
     public Vector3 P2 { get; private set; }
@@ -15,7 +46,6 @@ public class TrianglePrimitive
 
     public Vector3 Center => (P1 + P2 + P3) / 3f;
     public Vector3 Normal => Vector3.Cross(P2 - P1, P3 - P1).normalized;
-    public float Area => Vector3.Cross(P2 - P1, P3 - P1).magnitude / 2f;
 
     public Bounds Bounds
     {
@@ -50,40 +80,9 @@ public class TrianglePrimitive
         }
     }
 
-    // Root quad at the centroid: invisible, provides a shared parent for all
-    // three parallelogram subtrees so the whole triangle can be moved/rotated
-    // in O(1) by updating this single transform.
-    readonly Primitive _root;
-    readonly ParallelogramPrimitive _prim1;
-    readonly ParallelogramPrimitive _prim2;
-    readonly ParallelogramPrimitive _prim3;
-
-    public static TrianglePrimitive Create(Vector3 p1, Vector3 p2, Vector3 p3, Color color,
+    public static TrianglePrimitive Create
+    (Vector3 p1, Vector3 p2, Vector3 p3, Color color,
         PrimitiveFlags flags = PrimitiveFlags.Visible, Primitive? parent = null) => new(p1, p2, p3, color, flags, parent);
-
-    public TrianglePrimitive(Vector3 p1, Vector3 p2, Vector3 p3, Color color, PrimitiveFlags flags, Primitive? parent = null)
-    {
-        P1 = p1;
-        P2 = p2;
-        P3 = p3;
-        _color = color;
-
-        Vector3 centroid = (p1 + p2 + p3) / 3f;
-        Vector3 normal = Vector3.Cross(p2 - p1, p3 - p1).normalized;
-        Quaternion rootRot = Quaternion.LookRotation(normal, (p1 - centroid).normalized);
-
-        // Invisible root at the centroid — scale (1,1,1) so children inherit no distortion.
-        _root = Primitive.Create(PrimitiveType.Quad, PrimitiveFlags.None, centroid, null, Vector3.one, true, color);
-        _root.Rotation = rootRot;
-
-        if (parent is not null)
-            _root.Transform.SetParent(parent.Transform, worldPositionStays: true);
-        
-        var data = TriangleParallelogramBuilder.GetParallelogramsInfo(p1, p2, p3);
-        _prim1 = new ParallelogramPrimitive(data[0][0], data[0][1], data[0][2], color, flags, _root);
-        _prim2 = new ParallelogramPrimitive(data[1][0], data[1][1], data[1][2], color, flags, _root);
-        _prim3 = new ParallelogramPrimitive(data[2][0], data[2][1], data[2][2], color, flags, _root);
-    }
 
     public void Rebuild(Vector3 p1, Vector3 p2, Vector3 p3)
     {
@@ -96,7 +95,7 @@ public class TrianglePrimitive
         _root.Position = centroid;
         _root.Rotation = Quaternion.LookRotation(normal, (p1 - centroid).normalized);
 
-        var data = TriangleParallelogramBuilder.GetParallelogramsInfo(p1, p2, p3);
+        Vector3[][] data = TriangleParallelogramBuilder.GetParallelogramsInfo(p1, p2, p3);
         _prim1.Rebuild(data[0][0], data[0][1], data[0][2]);
         _prim2.Rebuild(data[1][0], data[1][1], data[1][2]);
         _prim3.Rebuild(data[2][0], data[2][1], data[2][2]);

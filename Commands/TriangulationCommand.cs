@@ -10,19 +10,18 @@ namespace Triangle.Commands;
 [CommandHandler(typeof(RemoteAdminCommandHandler))]
 public class TriangulationCommand : ICommand
 {
-    const int MaxTriangles = 4000;
+    TriangulatedModel? _model;
 
     public string Command { get; } = "Triangulate";
     public string[] Aliases { get; } = [];
     public string Description { get; } = "Triangulates a .stl file into triangles and displays them (for example: \"triangulate blender_monkey.stl\")";
-    TriangulatedModel? _model;
 
     void Clear()
     {
         _model?.Destroy();
         _model = null;
     }
-    
+
     public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)
     {
         if (_model is not null)
@@ -39,15 +38,16 @@ public class TriangulationCommand : ICommand
             response = "This command can only be used by a player.";
             return false;
         }
-        
+
         if (arguments.Count != 1)
         {
             response = "Usage: triangulate <stl file>";
             return false;
         }
-        
+
         string requestedFile = arguments.Array?[arguments.Offset] ?? string.Empty;
         string fileName = Path.GetFileName(requestedFile);
+
         if (!string.Equals(requestedFile, fileName))
         {
             response = "Only a file name is allowed (without directories).";
@@ -58,21 +58,16 @@ public class TriangulationCommand : ICommand
             fileName += ".stl";
 
         string stlFilePath = Path.Combine(Paths.Plugins, "StlModels", fileName);
+
         if (!File.Exists(stlFilePath))
         {
             response = $"STL file not found: {stlFilePath}";
             return false;
         }
 
-        if (!StlParser.TryParseFile(stlFilePath, out var parsedTriangles, out string parseError))
+        if (!StlParser.TryParseFile(stlFilePath, out List<StlTriangle> parsedTriangles, out string parseError))
         {
             response = $"Failed to parse STL: {parseError}";
-            return false;
-        }
-
-        if (parsedTriangles.Count > MaxTriangles)
-        {
-            response = $"Model has {parsedTriangles.Count} triangles, limit is {MaxTriangles}.";
             return false;
         }
 
@@ -80,6 +75,7 @@ public class TriangulationCommand : ICommand
         Color color = Color.white;
 
         _model = TriangulatedModel.Create(parsedTriangles, spawnPosition, color, PrimitiveFlags.Visible);
+
         //_model.Rotation = Quaternion.Euler(-90f, 0f, 90f); // blender monkey file rotation issue
         if (_model.Count == 0)
         {

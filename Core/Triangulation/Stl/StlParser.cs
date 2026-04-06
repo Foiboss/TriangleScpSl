@@ -57,11 +57,12 @@ public static class StlParser
         try
         {
             stream.Position = BinaryHeaderLength;
-            byte[] countBytes = new byte[4];
+            var countBytes = new byte[4];
+
             if (stream.Read(countBytes, 0, countBytes.Length) != 4)
                 return false;
 
-            uint triangleCount = BitConverter.ToUInt32(countBytes, 0);
+            var triangleCount = BitConverter.ToUInt32(countBytes, 0);
             long expectedLength = BinaryHeaderLength + 4L + triangleCount * BinaryTriangleLength;
             return expectedLength == stream.Length;
         }
@@ -79,7 +80,7 @@ public static class StlParser
         try
         {
             stream.Position = 0;
-            using BinaryReader reader = new(stream, Encoding.ASCII, leaveOpen: true);
+            using BinaryReader reader = new(stream, Encoding.ASCII, true);
             _ = reader.ReadBytes(BinaryHeaderLength);
             uint triangleCount = reader.ReadUInt32();
 
@@ -92,6 +93,7 @@ public static class StlParser
             if (stream.CanSeek)
             {
                 long requiredLength = BinaryHeaderLength + 4L + triangleCount * BinaryTriangleLength;
+
                 if (stream.Length < requiredLength)
                 {
                     error = "Binary STL is truncated.";
@@ -144,17 +146,19 @@ public static class StlParser
         try
         {
             stream.Position = 0;
-            using StreamReader reader = new(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, bufferSize: 4096, leaveOpen: true);
+            using StreamReader reader = new(stream, Encoding.UTF8, true, 4096, true);
 
             List<Vector3> vertices = [];
 
             while (reader.ReadLine() is { } line)
             {
                 line = line.Trim();
+
                 if (!line.StartsWith("vertex", StringComparison.OrdinalIgnoreCase))
                     continue;
 
                 string[] parts = line.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
+
                 if (parts.Length < 4)
                     continue;
 
@@ -166,6 +170,7 @@ public static class StlParser
                 }
 
                 Vector3 vertex = new(x, y, z);
+
                 if (!IsFinite(vertex))
                     continue;
 
@@ -179,8 +184,11 @@ public static class StlParser
             }
 
             triangles = new List<StlTriangle>(vertices.Count / 3);
-            for (int i = 0; i + 2 < vertices.Count; i += 3)
+
+            for (var i = 0; i + 2 < vertices.Count; i += 3)
+            {
                 triangles.Add(new StlTriangle(vertices[i], vertices[i + 1], vertices[i + 2]));
+            }
 
             if (triangles.Count == 0)
             {
@@ -207,6 +215,3 @@ public static class StlParser
         !float.IsNaN(value.y) && !float.IsInfinity(value.y) &&
         !float.IsNaN(value.z) && !float.IsInfinity(value.z);
 }
-
-
-

@@ -11,11 +11,11 @@ namespace Triangle.Commands;
 [CommandHandler(typeof(RemoteAdminCommandHandler))]
 public class TriangleExampleCommand : ICommand
 {
+    readonly List<Primitive> _points = [];
+    TrianglePrimitive? _triangle;
     public string Command { get; } = "TriangleExample";
     public string[] Aliases { get; } = [];
     public string Description { get; } = "Spawns an example triangle on player position, second call will destroy it";
-    readonly List<Primitive> _points = [];
-    TrianglePrimitive? _triangle;
 
     void ClearCurrentTriangle()
     {
@@ -27,7 +27,7 @@ public class TriangleExampleCommand : ICommand
         _triangle?.Destroy();
         _triangle = null;
     }
-    
+
     public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)
     {
         if (_triangle is not null)
@@ -44,7 +44,7 @@ public class TriangleExampleCommand : ICommand
             response = "This command can only be used by a player.";
             return false;
         }
-        
+
         Vector3 p1 = player.Position + Random.insideUnitSphere * 2f;
         Vector3 p2 = player.Position + Random.insideUnitSphere * 2f;
         Vector3 p3 = player.Position + Random.insideUnitSphere * 2f;
@@ -52,9 +52,9 @@ public class TriangleExampleCommand : ICommand
         _points.Add(Primitive.Create(PrimitiveType.Sphere, PrimitiveFlags.Visible, p1, Vector3.zero, Vector3.one * 0.1f, true, Color.red));
         _points.Add(Primitive.Create(PrimitiveType.Sphere, PrimitiveFlags.Visible, p2, Vector3.zero, Vector3.one * 0.1f, true, Color.green));
         _points.Add(Primitive.Create(PrimitiveType.Sphere, PrimitiveFlags.Visible, p3, Vector3.zero, Vector3.one * 0.1f, true, Color.blue));
-        
+
         _triangle = new(p1, p2, p3, Color.magenta, PrimitiveFlags.Visible);
-        
+
         response = "Done";
         return true;
     }
