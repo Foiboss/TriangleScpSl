@@ -14,7 +14,7 @@ public class TriangulationCommand : ICommand
 
     public string Command { get; } = "Triangulate";
     public string[] Aliases { get; } = [];
-    public string Description { get; } = "Triangulates a .stl file into triangles and displays them (for example: \"triangulate blender_monkey.stl\")";
+    public string Description { get; } = "Triangulates .stl file and displays them (\"triangulate blender_monkey.stl\")";
 
     void Clear()
     {
@@ -46,44 +46,19 @@ public class TriangulationCommand : ICommand
         }
 
         string requestedFile = arguments.Array?[arguments.Offset] ?? string.Empty;
-        string fileName = Path.GetFileName(requestedFile);
-
-        if (!string.Equals(requestedFile, fileName))
-        {
-            response = "Only a file name is allowed (without directories).";
-            return false;
-        }
-
-        if (!fileName.EndsWith(".stl", StringComparison.OrdinalIgnoreCase))
-            fileName += ".stl";
-
-        string stlFilePath = Path.Combine(Paths.Plugins, "StlModels", fileName);
-
-        if (!File.Exists(stlFilePath))
-        {
-            response = $"STL file not found: {stlFilePath}";
-            return false;
-        }
-
-        if (!StlParser.TryParseFile(stlFilePath, out List<StlTriangle> parsedTriangles, out string parseError))
-        {
-            response = $"Failed to parse STL: {parseError}";
-            return false;
-        }
 
         Vector3 spawnPosition = player.Position + player.GameObject.transform.forward * 2.5f + Vector3.up * 1.2f;
         Color color = Color.white;
 
-        _model = TriangulatedModel.Create(parsedTriangles, spawnPosition, color, PrimitiveFlags.Visible);
-
-        if (_model.Count == 0)
+        if (!StlModelFactory.TryCreateModel(requestedFile, spawnPosition, color, out TriangulatedModel? createdModel, out string fileName, out string error, PrimitiveFlags.Visible))
         {
-            Clear();
-            response = "No valid non-degenerate triangles found in STL.";
+            response = error;
             return false;
         }
 
-        response = $"Created model '{fileName}': triangles={_model.Count}, quads={_model.QuadCount}. Run command again to destroy.";
+        _model = createdModel;
+
+        response = $"Created model '{fileName}': triangles={createdModel!.Count}, quads={createdModel.QuadCount}. Run command again to destroy.";
         return true;
     }
 }
