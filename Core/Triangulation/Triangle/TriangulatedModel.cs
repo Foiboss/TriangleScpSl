@@ -56,6 +56,12 @@ public class TriangulatedModel
         get => _space.Rotation;
         set => _space.Rotation = value;
     }
+    
+    public Vector3 Scale
+    {
+        get => _space.Scale;
+        set => _space.Scale = value;
+    }
 
     public Transform Transform => _space.Transform;
 

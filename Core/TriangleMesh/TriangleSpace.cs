@@ -63,6 +63,12 @@ public class TriangleSpace
         set => _baseRoot.Rotation = value;
     }
 
+    public Vector3 Scale
+    {
+        get => _baseRoot.Scale;
+        set => _baseRoot.Scale = value;
+    }
+    
     public Transform Transform => _baseRoot.Transform;
     
     public TriangleEntry AddTriangle
