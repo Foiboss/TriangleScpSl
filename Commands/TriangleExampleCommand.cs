@@ -9,12 +9,12 @@ using Random = UnityEngine.Random;
 namespace Triangle.Commands;
 
 [CommandHandler(typeof(RemoteAdminCommandHandler))]
-public class TriangleTest : ICommand
+public class TriangleExampleCommand : ICommand
 {
     public string Command { get; } = "TriangleExample";
     public string[] Aliases { get; } = [];
     public string Description { get; } = "Spawns an example triangle on player position, second call will destroy it";
-    List<Primitive> _points = [];
+    readonly List<Primitive> _points = [];
     TrianglePrimitive? _triangle;
 
     void ClearCurrentTriangle()
