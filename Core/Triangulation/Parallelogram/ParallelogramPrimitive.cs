@@ -31,9 +31,10 @@ public class ParallelogramPrimitive
     readonly Primitive _baseQuad;
 
     public static ParallelogramPrimitive Create(Vector3 vUp, Vector3 vLeft, Vector3 center, Color color,
-        PrimitiveFlags flags = PrimitiveFlags.Visible) => new(vUp, vLeft, center, color, flags);
+        PrimitiveFlags flags = PrimitiveFlags.Visible, Primitive? parent = null) => new(vUp, vLeft, center, color, flags, parent);
 
-    public ParallelogramPrimitive(Vector3 vUp, Vector3 vLeft, Vector3 center, Color color, PrimitiveFlags flags)
+    public ParallelogramPrimitive(Vector3 vUp, Vector3 vLeft, Vector3 center, Color color, PrimitiveFlags flags,
+        Primitive? parent = null)
     {
         _color = color;
         _p1 = center + vUp;
@@ -44,6 +45,9 @@ public class ParallelogramPrimitive
         _quad = Primitive.Create(PrimitiveType.Quad, flags, Vector3.zero, null, Vector3.one, true, color);
         _baseQuad = Primitive.Create(PrimitiveType.Quad, PrimitiveFlags.None, Vector3.zero, null, Vector3.one, true, color);
         ParallelogramByPoints.Create(vUp, vLeft, center, _quad, _baseQuad);
+
+        if (parent != null)
+            _baseQuad.Transform.SetParent(parent.Transform, worldPositionStays: true);
     }
 
     public void Rebuild(Vector3 vUp, Vector3 vLeft, Vector3 center)
