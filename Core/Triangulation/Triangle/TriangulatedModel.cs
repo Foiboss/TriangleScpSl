@@ -12,9 +12,6 @@ public class TriangulatedModel
     readonly TriangleSpace _space;
     readonly List<TriangleEntry> _entries = [];
 
-    Vector3 _position;
-    Quaternion _rotation = Quaternion.identity;
-
     public TriangulatedModel
     (
         IReadOnlyList<StlTriangle> stlTriangles,
@@ -24,7 +21,6 @@ public class TriangulatedModel
         float scale = 1f,
         bool invertWinding = false)
     {
-        _position = worldPosition;
         _space = new TriangleSpace(worldPosition);
 
         if (stlTriangles.Count == 0) return;
@@ -47,27 +43,21 @@ public class TriangulatedModel
     }
 
     public int Count => _entries.Count;
-    public int QuadCount => Count * 3 + 3; // 3 per triangle + 3 shared space roots
+    public int QuadCount => Count * 3 + 4; // 3 per triangle + 3 shared roots + 1 model base root
 
     public Vector3 Position
     {
-        get => _position;
-        set
-        {
-            _position = value;
-            _space.SetTransform(_position, _rotation);
-        }
+        get => _space.Position;
+        set => _space.Position = value;
     }
 
     public Quaternion Rotation
     {
-        get => _rotation;
-        set
-        {
-            _rotation = value;
-            _space.SetTransform(_position, _rotation);
-        }
+        get => _space.Rotation;
+        set => _space.Rotation = value;
     }
+
+    public Transform Transform => _space.Transform;
 
     public Color Color
     {
@@ -94,7 +84,7 @@ public class TriangulatedModel
         float scale = 1f,
         bool invertWinding = false)
         => new(stlTriangles, worldPosition, color, flags, scale, invertWinding);
-
+    
     public void Destroy() => _space.Destroy();
 
     static Vector3 CalculateCenter(IReadOnlyList<StlTriangle> triangles)

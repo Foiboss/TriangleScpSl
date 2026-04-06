@@ -8,8 +8,6 @@ namespace Triangle.Core.Triangulation.Triangle;
 public class TrianglePrimitive
 {
     // Root quad at the centroid: invisible, provides a shared parent for all
-    // three parallelogram subtrees so the whole triangle can be moved/rotated
-    // in O(1) by updating this single transform.
     readonly Primitive _root;
     readonly ParallelogramPrimitive _prim1;
     readonly ParallelogramPrimitive _prim2;
@@ -27,7 +25,6 @@ public class TrianglePrimitive
         Vector3 normal = Vector3.Cross(p2 - p1, p3 - p1).normalized;
         Quaternion rootRot = Quaternion.LookRotation(normal, (p1 - centroid).normalized);
 
-        // Invisible root at the centroid — scale (1,1,1) so children inherit no distortion.
         _root = Primitive.Create(PrimitiveType.Quad, PrimitiveFlags.None, centroid, null, Vector3.one, true, color);
         _root.Rotation = rootRot;
 
@@ -101,7 +98,6 @@ public class TrianglePrimitive
         _prim3.Rebuild(data[2][0], data[2][1], data[2][2]);
     }
 
-    // Efficient translation: shifting the root moves all 6 child quads in one call.
     public void Move(Vector3 delta)
     {
         P1 += delta;

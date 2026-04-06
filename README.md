@@ -18,7 +18,7 @@ An [EXILED](https://github.com/ExMod-Team/EXILED) plugin for SCP: Secret Laborat
 Each triangle is rendered as three parallelograms that share the triangle area.
 
 - `TrianglePrimitive` renders one triangle with its own invisible root quad.
-- `TriangleSpace` renders many triangles with three shared invisible roots at a common origin.
+- `TriangleSpace` renders many triangles with a shared invisible base root and three axis-oriented invisible roots under it.
 - `TriangulatedModel` is a convenience wrapper that loads `StlTriangle` data into a single `TriangleSpace`.
 
 Each parallelogram is built from two nested quads:
@@ -30,7 +30,7 @@ When a triangle is added to a `TriangleSpace`, its parallelograms are attached t
 
 ### Primitive count
 
-The implementation uses three shared roots per `TriangleSpace` and three parallelograms per triangle. So each `TriangulatedModel` will have `TriangleCount * 3 + 3` quads used.
+The implementation uses one shared base root + three shared axis roots per `TriangleSpace` and three parallelograms per triangle. So each `TriangulatedModel` will have `TriangleCount * 3 + 4` quads used.
 
 ## Installation
 
@@ -177,9 +177,9 @@ Members:
 
 - `TriangleSpace(Vector3 origin)`
 - `TriangleSpace(Vector3 origin, Quaternion orientation)`
+- `Position` — world position of the shared base root
+- `Rotation` — world rotation of the shared base root
 - `AddTriangle(p1, p2, p3, color, flags = PrimitiveFlags.Visible)`
-- `Move(delta)`
-- `SetTransform(origin, orientation)`
 - `Destroy()`
 
 ### `ParallelogramPrimitive`
@@ -302,22 +302,23 @@ When you scale a quad by `(x, 1, 1)` and then apply a child with `(b, a, 1)`, th
 
 ### Efficient Rendering with TriangleSpace
 
-Instead of each `TrianglePrimitive` having its own root quad, the `TriangleSpace` architecture shares **3 root quads** (one for each primary axis orientation).
-Each triangle's normal is compared against the forward axes of the 3 root quads. The triangle is parented to the root whose forward axis **best aligns** with the triangle's normal.
+Instead of each `TrianglePrimitive` having its own root quad, the `TriangleSpace` architecture uses **1 shared base root quad** and **3 child root quads** (one for each primary axis orientation).
+Each triangle's normal is compared against the forward axes of those 3 child roots. The triangle is parented to the root whose forward axis **best aligns** with the triangle's normal.
 
 ```
 TriangleSpace
-├── _roots[0] (invisible quad aligned to X-axis)
-│   ├── TriangleEntry 1
-│   │   ├── ParallelogramPrimitive 1 (1 quad)
-│   │   ├── ParallelogramPrimitive 2 (1 quad)
-│   │   └── ParallelogramPrimitive 3 (1 quad)
-│   ├── TriangleEntry 2 (3 parallelograms = 3 quads)
-│   └── ...
-├── _roots[1] (invisible quad aligned to Y-axis)
-│   └── ...
-└── _roots[2] (invisible quad aligned to Z-axis)
-    └── ...
+├── _baseRoot (invisible model-space anchor)
+│   ├── _roots[0] (invisible quad aligned to X-axis)
+│   │   ├── TriangleEntry 1
+│   │   │   ├── ParallelogramPrimitive 1 (1 quad)
+│   │   │   ├── ParallelogramPrimitive 2 (1 quad)
+│   │   │   └── ParallelogramPrimitive 3 (1 quad)
+│   │   ├── TriangleEntry 2 (3 parallelograms = 3 quads)
+│   │   └── ...
+│   ├── _roots[1] (invisible quad aligned to Y-axis)
+│   │   └── ...
+│   └── _roots[2] (invisible quad aligned to Z-axis)
+│       └── ...
 ```
 
 ### Quad Counting
@@ -325,12 +326,13 @@ TriangleSpace
 The formula used in `TriangulatedModel.QuadCount`:
 
 ```csharp
-public int QuadCount => Count * 3 + 3;
+public int QuadCount => Count * 3 + 4;
 ```
 
 Is calculated as:
 - `Count * 3`: Three **visible** quads per triangle (one for each parallelogram)
-- `+ 3`: Three shared **invisible root** quads
+- `+ 3`: Three shared **invisible axis root** quads
+- `+ 1`: One shared **invisible base root** quad
 
 ## Notes
 

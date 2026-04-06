@@ -14,16 +14,21 @@ public class TriangleSpace
         Quaternion.LookRotation(Vector3.forward, Vector3.up), // normal Z
     ];
 
+    readonly Primitive _baseRoot;
     readonly Primitive[] _roots = new Primitive[3];
     readonly List<TriangleEntry> _entries = [];
 
-    Vector3 _origin;
-    Quaternion _orientation;
-
     public TriangleSpace(Vector3 origin, Quaternion orientation)
     {
-        _origin = origin;
-        _orientation = orientation;
+        // Shared model-space anchor for all TriangleSpace roots.
+        _baseRoot = Primitive.Create(
+            PrimitiveType.Quad,
+            PrimitiveFlags.None,
+            origin,
+            null,
+            Vector3.one,
+            true,
+            Color.clear);
 
         for (var i = 0; i < 3; i++)
         {
@@ -35,12 +40,31 @@ public class TriangleSpace
                 Vector3.one,
                 true,
                 Color.clear);
-            _roots[i].Rotation = orientation * LocalRootRots[i];
+            _roots[i].Transform.SetParent(_baseRoot.Transform, true);
+            _roots[i].Transform.localPosition = Vector3.zero;
+            _roots[i].Transform.localRotation = LocalRootRots[i];
+            
+            
+            _baseRoot.Rotation = orientation;
         }
     }
 
     public TriangleSpace(Vector3 origin) : this(origin, Quaternion.identity) { }
 
+    public Vector3 Position
+    {
+        get => _baseRoot.Position;
+        set => _baseRoot.Position = value;
+    }
+
+    public Quaternion Rotation
+    {
+        get => _baseRoot.Rotation;
+        set => _baseRoot.Rotation = value;
+    }
+
+    public Transform Transform => _baseRoot.Transform;
+    
     public TriangleEntry AddTriangle
     (Vector3 p1, Vector3 p2, Vector3 p3, Color color,
         PrimitiveFlags flags = PrimitiveFlags.Visible)
@@ -52,27 +76,7 @@ public class TriangleSpace
         _entries.Add(entry);
         return entry;
     }
-
-    public void Move(Vector3 delta)
-    {
-        _origin += delta;
-
-        foreach (Primitive root in _roots)
-            root.Position += delta;
-    }
-
-    public void SetTransform(Vector3 origin, Quaternion orientation)
-    {
-        _origin = origin;
-        _orientation = orientation;
-
-        for (var i = 0; i < 3; i++)
-        {
-            _roots[i].Position = origin;
-            _roots[i].Rotation = orientation * LocalRootRots[i];
-        }
-    }
-
+    
     public void Destroy()
     {
         foreach (TriangleEntry entry in _entries)
@@ -81,6 +85,8 @@ public class TriangleSpace
 
         foreach (Primitive root in _roots)
             root.Destroy();
+
+        _baseRoot.Destroy();
     }
 
     // Returns the root whose forward axis is most aligned with the given normal
