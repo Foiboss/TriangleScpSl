@@ -1,4 +1,5 @@
 using AdminToys;
+using Exiled.API.Features.Toys;
 using Triangle.Core.Triangulation.Stl;
 using UnityEngine;
 
@@ -10,8 +11,67 @@ public class TriangulatedModel
 
     readonly List<TrianglePrimitive> _triangles = [];
 
+    public TriangulatedModel
+    (
+        IReadOnlyList<StlTriangle> stlTriangles,
+        Vector3 worldPosition,
+        Color color,
+        PrimitiveFlags flags = PrimitiveFlags.Visible,
+        float scale = 1f,
+        bool invertWinding = false)
+    {
+        ModelBase = Primitive.Create(PrimitiveType.Quad, PrimitiveFlags.None, worldPosition, null, Vector3.one, true, color);
+        ModelBase.Rotation = Quaternion.identity;
+        ModelBase.Scale = Vector3.one;
+
+        if (stlTriangles.Count == 0)
+            return;
+
+        Vector3 center = CalculateCenter(stlTriangles);
+
+        foreach (StlTriangle triangle in stlTriangles)
+        {
+            Vector3 p1 = (triangle.P1 - center) * scale + worldPosition;
+            Vector3 p2 = (triangle.P3 - center) * scale + worldPosition;
+            Vector3 p3 = (triangle.P2 - center) * scale + worldPosition;
+
+            if (invertWinding)
+            {
+                (p2, p3) = (p3, p2);
+            }
+
+            Vector3 cross = Vector3.Cross(p2 - p1, p3 - p1);
+
+            if (cross.sqrMagnitude < 1e-8f)
+                continue;
+
+            _triangles.Add(new TrianglePrimitive(p1, p2, p3, color, flags, ModelBase));
+        }
+    }
+
     public int Count => _triangles.Count;
     public int QuadCount => Count * QuadsPerTriangle;
+    public Primitive ModelBase { get; }
+
+    public Vector3 Position
+    {
+        get => ModelBase.Position;
+        set => ModelBase.Position = value;
+    }
+
+    public Quaternion Rotation
+    {
+        get => ModelBase.Rotation;
+        set => ModelBase.Rotation = value;
+    }
+
+    public Vector3 Scale
+    {
+        get => ModelBase.Scale;
+        set => ModelBase.Scale = value;
+    }
+    
+    public Transform Transform => ModelBase.Transform;
 
     public PrimitiveFlags Flags
     {
@@ -31,48 +91,7 @@ public class TriangulatedModel
         }
     }
 
-    public static TriangulatedModel Create(
-        IReadOnlyList<StlTriangle> stlTriangles,
-        Vector3 worldPosition,
-        Color color,
-        PrimitiveFlags flags = PrimitiveFlags.Visible,
-        float scale = 1f,
-        bool invertWinding = false)
-    {
-        return new TriangulatedModel(stlTriangles, worldPosition, color, flags, scale, invertWinding);
-    }
-
-    public TriangulatedModel(
-        IReadOnlyList<StlTriangle> stlTriangles,
-        Vector3 worldPosition,
-        Color color,
-        PrimitiveFlags flags = PrimitiveFlags.Visible,
-        float scale = 1f,
-        bool invertWinding = false)
-    {
-        if (stlTriangles.Count == 0)
-            return;
-
-        Vector3 center = CalculateCenter(stlTriangles);
-
-        foreach (StlTriangle triangle in stlTriangles)
-        {
-            Vector3 p1 = (triangle.P1 - center) * scale + worldPosition;
-            Vector3 p2 = (triangle.P3 - center) * scale + worldPosition;
-            Vector3 p3 = (triangle.P2 - center) * scale + worldPosition;
-
-            if (invertWinding)
-            {
-                (p2, p3) = (p3, p2);
-            }
-
-            Vector3 cross = Vector3.Cross(p2 - p1, p3 - p1);
-            if (cross.sqrMagnitude < 1e-8f)
-                continue;
-
-            _triangles.Add(new TrianglePrimitive(p1, p2, p3, color, flags));
-        }
-    }
+    public static TriangulatedModel Create(IReadOnlyList<StlTriangle> stlTriangles, Vector3 worldPosition, Color color, PrimitiveFlags flags = PrimitiveFlags.Visible, float scale = 1f, bool invertWinding = false) => new(stlTriangles, worldPosition, color, flags, scale, invertWinding);
 
     public void Destroy()
     {
@@ -80,6 +99,7 @@ public class TriangulatedModel
             triangle.Destroy();
 
         _triangles.Clear();
+        ModelBase.Destroy();
     }
 
     static Vector3 CalculateCenter(IReadOnlyList<StlTriangle> triangles)
@@ -103,7 +123,3 @@ public class TriangulatedModel
         max = Vector3.Max(max, point);
     }
 }
-
-
-
-

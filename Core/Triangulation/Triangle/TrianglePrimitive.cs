@@ -59,9 +59,9 @@ public class TrianglePrimitive
     readonly ParallelogramPrimitive _prim3;
 
     public static TrianglePrimitive Create(Vector3 p1, Vector3 p2, Vector3 p3, Color color,
-        PrimitiveFlags flags = PrimitiveFlags.Visible) => new(p1, p2, p3, color, flags);
+        PrimitiveFlags flags = PrimitiveFlags.Visible, Primitive? parent = null) => new(p1, p2, p3, color, flags, parent);
 
-    public TrianglePrimitive(Vector3 p1, Vector3 p2, Vector3 p3, Color color, PrimitiveFlags flags)
+    public TrianglePrimitive(Vector3 p1, Vector3 p2, Vector3 p3, Color color, PrimitiveFlags flags, Primitive? parent = null)
     {
         P1 = p1;
         P2 = p2;
@@ -75,6 +75,9 @@ public class TrianglePrimitive
         // Invisible root at the centroid — scale (1,1,1) so children inherit no distortion.
         _root = Primitive.Create(PrimitiveType.Quad, PrimitiveFlags.None, centroid, null, Vector3.one, true, color);
         _root.Rotation = rootRot;
+
+        if (parent is not null)
+            _root.Transform.SetParent(parent.Transform, worldPositionStays: true);
         
         var data = TriangleParallelogramBuilder.GetParallelogramsInfo(p1, p2, p3);
         _prim1 = new ParallelogramPrimitive(data[0][0], data[0][1], data[0][2], color, flags, _root);
