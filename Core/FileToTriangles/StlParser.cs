@@ -1,15 +1,16 @@
 using System.Globalization;
 using System.Text;
+using Triangle.Core.TriangulatedModel;
 using UnityEngine;
 
-namespace Triangle.Core.Triangulation.Stl;
+namespace Triangle.Core.FileToTriangles;
 
 public static class StlParser
 {
     const int BinaryHeaderLength = 80;
     const int BinaryTriangleLength = 50;
 
-    public static bool TryParseFile(string filePath, out List<StlTriangle> triangles, out string error)
+    public static bool TryParseFile(string filePath, Color color, out List<ModelTriangle> triangles, out string error)
     {
         triangles = [];
         error = string.Empty;
@@ -27,18 +28,18 @@ public static class StlParser
 
             if (looksBinary)
             {
-                if (TryParseBinary(stream, out triangles, out error))
+                if (TryParseBinary(stream, color, out triangles, out error))
                     return true;
 
                 stream.Position = 0;
-                return TryParseAscii(stream, out triangles, out error);
+                return TryParseAscii(stream, color, out triangles, out error);
             }
 
-            if (TryParseAscii(stream, out triangles, out error))
+            if (TryParseAscii(stream, color, out triangles, out error))
                 return true;
 
             stream.Position = 0;
-            return TryParseBinary(stream, out triangles, out error);
+            return TryParseBinary(stream, color, out triangles, out error);
         }
         catch (Exception ex)
         {
@@ -57,12 +58,12 @@ public static class StlParser
         try
         {
             stream.Position = BinaryHeaderLength;
-            var countBytes = new byte[4];
+            byte[] countBytes = new byte[4];
 
             if (stream.Read(countBytes, 0, countBytes.Length) != 4)
                 return false;
 
-            var triangleCount = BitConverter.ToUInt32(countBytes, 0);
+            uint triangleCount = BitConverter.ToUInt32(countBytes, 0);
             long expectedLength = BinaryHeaderLength + 4L + triangleCount * BinaryTriangleLength;
             return expectedLength == stream.Length;
         }
@@ -72,7 +73,7 @@ public static class StlParser
         }
     }
 
-    static bool TryParseBinary(Stream stream, out List<StlTriangle> triangles, out string error)
+    static bool TryParseBinary(Stream stream, Color color, out List<ModelTriangle> triangles, out string error)
     {
         triangles = [];
         error = string.Empty;
@@ -101,7 +102,7 @@ public static class StlParser
                 }
             }
 
-            triangles = new List<StlTriangle>((int)Math.Min(triangleCount, int.MaxValue));
+            triangles = new List<ModelTriangle>((int)Math.Min(triangleCount, int.MaxValue));
 
             for (uint i = 0; i < triangleCount; i++)
             {
@@ -117,7 +118,7 @@ public static class StlParser
                 // attribute byte count
                 _ = reader.ReadUInt16();
 
-                triangles.Add(new StlTriangle(p1, p2, p3));
+                triangles.Add(new ModelTriangle(p1, p2, p3, color));
             }
 
             if (triangles.Count == 0)
@@ -135,7 +136,7 @@ public static class StlParser
         }
     }
 
-    static bool TryParseAscii(Stream stream, out List<StlTriangle> triangles, out string error)
+    static bool TryParseAscii(Stream stream, Color color, out List<ModelTriangle> triangles, out string error)
     {
         triangles = [];
         error = string.Empty;
@@ -166,7 +167,7 @@ public static class StlParser
                     while (facetVertices.Count < 3)
                         facetVertices.Add(Vector3.zero);
 
-                    triangles.Add(new StlTriangle(facetVertices[0], facetVertices[1], facetVertices[2]));
+                    triangles.Add(new ModelTriangle(facetVertices[0], facetVertices[1], facetVertices[2], color));
                     facetVertices.Clear();
                     continue;
                 }
@@ -193,7 +194,7 @@ public static class StlParser
                 while (facetVertices.Count < 3)
                     facetVertices.Add(Vector3.zero);
 
-                triangles.Add(new StlTriangle(facetVertices[0], facetVertices[1], facetVertices[2]));
+                triangles.Add(new ModelTriangle(facetVertices[0], facetVertices[1], facetVertices[2], color));
             }
 
             if (triangles.Count == 0)

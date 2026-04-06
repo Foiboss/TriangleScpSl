@@ -43,8 +43,7 @@ public class TriangleSpace
             _roots[i].Transform.SetParent(_baseRoot.Transform, true);
             _roots[i].Transform.localPosition = Vector3.zero;
             _roots[i].Transform.localRotation = LocalRootRots[i];
-            
-            
+
             _baseRoot.Rotation = orientation;
         }
     }
@@ -68,9 +67,9 @@ public class TriangleSpace
         get => _baseRoot.Scale;
         set => _baseRoot.Scale = value;
     }
-    
+
     public Transform Transform => _baseRoot.Transform;
-    
+
     public TriangleEntry AddTriangle
     (Vector3 p1, Vector3 p2, Vector3 p3, Color color,
         PrimitiveFlags flags = PrimitiveFlags.Visible)
@@ -82,7 +81,7 @@ public class TriangleSpace
         _entries.Add(entry);
         return entry;
     }
-    
+
     public void Destroy()
     {
         foreach (TriangleEntry entry in _entries)

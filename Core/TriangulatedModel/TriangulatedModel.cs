@@ -1,11 +1,11 @@
 using AdminToys;
-using Triangle.Core.Triangulation.Stl;
+using Triangle.Core.FileToTriangles;
 using Triangle.Core.TriangleMesh;
 using UnityEngine;
 
-namespace Triangle.Core.Triangulation.Triangle;
+namespace Triangle.Core.TriangulatedModel;
 
-// A 3-D mesh loaded from an STL file
+// A 3-D mesh loaded from triangulated file data (STL/OBJ)
 // All triangles share a single TriangleSpace
 public class TriangulatedModel
 {
@@ -14,31 +14,33 @@ public class TriangulatedModel
 
     public TriangulatedModel
     (
-        IReadOnlyList<StlTriangle> stlTriangles,
+        IReadOnlyList<ModelTriangle> triangles,
         Vector3 worldPosition,
-        Color color,
         PrimitiveFlags flags = PrimitiveFlags.Visible,
         float scale = 1f,
+        bool swapSecondAndThirdVertices = false,
         bool invertWinding = false)
     {
         _space = new TriangleSpace(worldPosition);
 
-        if (stlTriangles.Count == 0) return;
+        if (triangles.Count == 0) return;
 
-        Vector3 modelCenter = CalculateCenter(stlTriangles);
+        Vector3 modelCenter = CalculateCenter(triangles);
 
-        foreach (StlTriangle tri in stlTriangles)
+        foreach (ModelTriangle tri in triangles)
         {
-            // Map STL vertices to world space, centered on worldPosition
-            // P2/P3 are swapped to convert from STL winding
+            // Map model vertices to world space, centered on worldPosition.
             Vector3 p1 = (tri.P1 - modelCenter) * scale + worldPosition;
-            Vector3 p2 = (tri.P3 - modelCenter) * scale + worldPosition;
-            Vector3 p3 = (tri.P2 - modelCenter) * scale + worldPosition;
+            Vector3 p2 = (tri.P2 - modelCenter) * scale + worldPosition;
+            Vector3 p3 = (tri.P3 - modelCenter) * scale + worldPosition;
+
+            if (swapSecondAndThirdVertices)
+                (p2, p3) = (p3, p2);
 
             if (invertWinding)
                 (p2, p3) = (p3, p2);
 
-            _entries.Add(_space.AddTriangle(p1, p2, p3, color, flags));
+            _entries.Add(_space.AddTriangle(p1, p2, p3, tri.Color, flags));
         }
     }
 
@@ -56,7 +58,7 @@ public class TriangulatedModel
         get => _space.Rotation;
         set => _space.Rotation = value;
     }
-    
+
     public Vector3 Scale
     {
         get => _space.Scale;
@@ -83,22 +85,22 @@ public class TriangulatedModel
 
     public static TriangulatedModel Create
     (
-        IReadOnlyList<StlTriangle> stlTriangles,
+        IReadOnlyList<ModelTriangle> triangles,
         Vector3 worldPosition,
-        Color color,
         PrimitiveFlags flags = PrimitiveFlags.Visible,
         float scale = 1f,
+        bool swapSecondAndThirdVertices = false,
         bool invertWinding = false)
-        => new(stlTriangles, worldPosition, color, flags, scale, invertWinding);
-    
+        => new(triangles, worldPosition, flags, scale, swapSecondAndThirdVertices, invertWinding);
+
     public void Destroy() => _space.Destroy();
 
-    static Vector3 CalculateCenter(IReadOnlyList<StlTriangle> triangles)
+    static Vector3 CalculateCenter(IReadOnlyList<ModelTriangle> triangles)
     {
         Vector3 min = triangles[0].P1;
         Vector3 max = triangles[0].P1;
 
-        foreach (StlTriangle tri in triangles)
+        foreach (ModelTriangle tri in triangles)
         {
             min = Vector3.Min(min, Vector3.Min(tri.P1, Vector3.Min(tri.P2, tri.P3)));
             max = Vector3.Max(max, Vector3.Max(tri.P1, Vector3.Max(tri.P2, tri.P3)));
