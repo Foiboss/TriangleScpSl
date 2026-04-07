@@ -66,9 +66,7 @@ public class TriangulatedModel
                 return;
 
             _position = value;
-            
             _baseQuad.Position = value;
-            RebuildTriangles();
         }
     }
 
@@ -81,9 +79,7 @@ public class TriangulatedModel
                 return;
 
             _rotation = value;
-            
             _baseQuad.Rotation = value;
-            RebuildTriangles();
         }
     }
 
@@ -96,11 +92,11 @@ public class TriangulatedModel
                 return;
 
             _scale = value;
-            
             _baseQuad.Scale = value;
-            RebuildTriangles();
         }
     }
+    
+    public Transform Transform => _baseQuad.Transform;
 
     public Vector3 TransformPoint(Vector3 localPoint)
         => _position + (_rotation * Vector3.Scale(localPoint, _scale));
@@ -179,25 +175,6 @@ public class TriangulatedModel
         foreach (ModelTriangle localTriangle in _localTriangles)
         {
             _triangles.Add(CreateTriangle(localTriangle, flags));
-        }
-    }
-
-    void RebuildTriangles()
-    {
-        if (_triangles.Count == 0)
-            return;
-
-        for (var i = 0; i < _triangles.Count; i++)
-        {
-            ModelTriangle localTriangle = _localTriangles[i];
-            Vector3 p1 = TransformPoint(localTriangle.P1);
-            Vector3 p2 = TransformPoint(localTriangle.P2);
-            Vector3 p3 = TransformPoint(localTriangle.P3);
-
-            if (_invertWinding)
-                (p2, p3) = (p3, p2);
-
-            _triangles[i].Rebuild(p1, p2, p3);
         }
     }
 

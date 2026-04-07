@@ -8,7 +8,7 @@ An [EXILED](https://github.com/ExMod-Team/EXILED) plugin for SCP: Secret Laborat
 ## Current project info
 
 - Plugin name: `TriangleScpSl`
-- Version: `2.0.0`
+- Version: `2.2.0`
 - Author: `Foibos`
 - Target framework: `net48`
 - EXILED package: `ExMod.Exiled 9.13.3`
@@ -30,7 +30,7 @@ An [EXILED](https://github.com/ExMod-Team/EXILED) plugin for SCP: Secret Laborat
 - [Mathematical Details: Parallelogram Construction](#mathematical-details-parallelogram-construction)
   - [Step 1 — Decompose vLeft](#step-1--decompose-vleft)
   - [Step 2 — Compute Inner Rectangle Sides](#step-2--compute-inner-rectangle-sides)
-  - [Step 3 — Invert to Find a, b, x](#step-3--invert-to-find-a-b-x)
+  - [Step 3 — Invert to Find a, [README.md](README.md)b, x](#step-3--invert-to-find-a-b-x)
   - [Step 4 — Apply the Transform](#step-4--apply-the-transform)
 - [Architecture Details](#architecture-details)
   - [Quad Counting](#quad-counting)
@@ -40,14 +40,14 @@ An [EXILED](https://github.com/ExMod-Team/EXILED) plugin for SCP: Secret Laborat
 Each triangle is rendered as three parallelograms that share the triangle area.
 
 - `TrianglePrimitive` renders one triangle directly from three parallelograms.
-- `TriangulatedModel` is a convenience wrapper that loads `ModelTriangle` data into a list of `TrianglePrimitive` objects and rebuilds them when the model transform changes.
+- `TriangulatedModel` is a convenience wrapper that loads `ModelTriangle` data into a list of `TrianglePrimitive` objects and keeps an internal transform anchor for coordinate conversion helpers.
 
 Each parallelogram is built from two nested quads:
 
 1. a base quad that sets position and orientation,
 2. a child quad that applies the shear needed to match the parallelogram.
 
-When a triangle is added to a `TrianglePrimitive`, its parallelograms are built directly from the triangle vertices. `TriangulatedModel` keeps triangles in model-local coordinates and reapplies translation, rotation, scale, or winding changes by rebuilding the underlying primitives.
+When a triangle is added to a `TrianglePrimitive`, its parallelograms are built directly from the triangle vertices. `TriangulatedModel` keeps source triangles in model-local coordinates, applies optional winding inversion when creating primitives, and exposes transform helpers through an internal anchor transform.
 
 ### Primitive count
 
@@ -125,9 +125,14 @@ var model2 = new TriangulatedModel(triangles, worldPosition, PrimitiveFlags.Visi
 int triangleCount = model.Count;
 int quadCount = model.QuadCount;
 
+// Anchor transform values used by TransformPoint / InverseTransformPoint helpers.
 model.Position = new Vector3(0, 1, 0);
 model.Rotation = Quaternion.Euler(0, 90f, 0);
 model.Scale = Vector3.one * 2f;
+
+Vector3 world = model.TransformPoint(new Vector3(1, 0, 0));
+Vector3 local = model.InverseTransformPoint(world);
+
 model.Color = Color.red;
 model.Flags = PrimitiveFlags.Visible | PrimitiveFlags.Collidable;
 model.Destroy();
@@ -137,9 +142,10 @@ Members:
 
 - `Count` — number of triangles in the model
 - `QuadCount` — total primitive count (`Count * 6 + 1`)
-- `Position` — world position of the mesh origin
-- `Rotation` — world rotation of the mesh origin
-- `Scale` — world scale of the mesh origin
+- `Position` — position of the internal transform anchor
+- `Rotation` — rotation of the internal transform anchor
+- `Scale` — scale of the internal transform anchor
+- `Transform` — Unity `Transform` of the internal anchor primitive
 - `TransformPoint(...)` — converts a local point to world space
 - `InverseTransformPoint(...)` — converts a world point to local space
 - `Color` — write-only; overrides the color of all triangles
