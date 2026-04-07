@@ -11,7 +11,7 @@ namespace TriangleScpSl.Commands;
 [CommandHandler(typeof(RemoteAdminCommandHandler))]
 public sealed class ExportSchematicCommand : ICommand
 {
-    readonly Color _fallbackColor = Color.cyan;
+    readonly Color _fallbackColor = Color.white;
 
     public string Command { get; } = "ExportSchematic";
     public string[] Aliases { get; } = [];
