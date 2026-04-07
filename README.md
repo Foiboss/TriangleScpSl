@@ -36,7 +36,6 @@ An [EXILED](https://github.com/ExMod-Team/EXILED) plugin for SCP: Secret Laborat
 - [Architecture Details](#architecture-details)
   - [Efficient Rendering with TriangleSpace](#efficient-rendering-with-trianglespace)
   - [Quad Counting](#quad-counting)
-- [Notes](#notes)
 
 ## How it works
 
