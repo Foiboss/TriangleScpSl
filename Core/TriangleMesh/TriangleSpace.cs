@@ -43,9 +43,9 @@ public class TriangleSpace
             _roots[i].Transform.SetParent(_baseRoot.Transform, true);
             _roots[i].Transform.localPosition = Vector3.zero;
             _roots[i].Transform.localRotation = LocalRootRots[i];
-
-            _baseRoot.Rotation = orientation;
         }
+
+        _baseRoot.Rotation = orientation;
     }
 
     public TriangleSpace(Vector3 origin) : this(origin, Quaternion.identity) { }

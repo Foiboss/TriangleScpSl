@@ -1,13 +1,13 @@
-# Triangle
+# TriangleScpSl
 
 ![blender-monkey](https://github.com/user-attachments/assets/2012cb09-db5a-4140-a48f-e1e865e89234)
 
 
-An [EXILED](https://github.com/ExMod-Team/EXILED) plugin for SCP: Secret Laboratory that renders filled triangles and STL-based 3-D meshes in world space using primitive toys.
+An [EXILED](https://github.com/ExMod-Team/EXILED) plugin for SCP: Secret Laboratory that renders filled triangles and STL/OBJ-based 3-D meshes in world space using primitive toys.
 
 ## Current project info
 
-- Plugin name: `Triangle`
+- Plugin name: `TriangleScpSl`
 - Version: `2.0.0`
 - Author: `Foibos`
 - Target framework: `net48`
@@ -19,7 +19,7 @@ Each triangle is rendered as three parallelograms that share the triangle area.
 
 - `TrianglePrimitive` renders one triangle with its own invisible root quad.
 - `TriangleSpace` renders many triangles with a shared invisible base root and three axis-oriented invisible roots under it.
-- `TriangulatedModel` is a convenience wrapper that loads `StlTriangle` data into a single `TriangleSpace`.
+- `TriangulatedModel` is a convenience wrapper that loads `ModelTriangle` data into a single `TriangleSpace`.
 
 Each parallelogram is built from two nested quads:
 
@@ -30,62 +30,81 @@ When a triangle is added to a `TriangleSpace`, its parallelograms are attached t
 
 ### Primitive count
 
-The implementation uses one shared base root + three shared axis roots per `TriangleSpace` and three parallelograms per triangle. So each `TriangulatedModel` will have `TriangleCount * 3 + 4` quads used.
+The implementation uses one shared base root + three shared axis roots per `TriangleSpace` and three parallelograms per triangle. Each `TriangulatedModel` uses `TriangleCount * 3 + 4` quads total.
 
 ## Installation
 
 1. Build the project.
-2. Copy `Triangle.dll` into `EXILED/Plugins/`.
-3. If you want to use the STL command, place models in `EXILED/Plugins/StlModels/`.
+2. Copy `TriangleScpSl.dll` into `EXILED/Plugins/`.
+3. Place models in `EXILED/Plugins/BlenderModels/`.
 
 ## Commands
 
 ### `Triangulate`
 
-Spawns an STL model near the player. Running the command again destroys the currently spawned model.
-
-Usage:
+Spawns a model near the player. Running the command again destroys the currently spawned model.
 
 ```text
-triangulate <stl file>
+triangulate <model file (.stl/.obj)> [force color (true/false)]
 ```
 
-Behavior:
-
-- must be used by a player
-- only a file name is allowed, not a path
-- `.stl` is added automatically if omitted
-- the file is loaded from `EXILED/Plugins/StlModels/
+- Must be used by a player.
+- Only a file name is allowed, not a path.
+- `.stl` is appended automatically if the extension is omitted.
+- File is loaded from `EXILED/Plugins/BlenderModels/`.
+- Optional second argument forces all triangles to a single fallback color (cyan).
 
 ### `TriangleExample`
 
-Spawns a randomly generated example triangle on the player. Running the command again destroys the current example.
+Spawns a randomly generated triangle near the player with colored vertex markers. Running the command again destroys it.
+
+### `ExportSchematic`
+
+Exports an STL or OBJ model as a ProjectMER schematic JSON file.
+
+```text
+exportschematic <model file (.stl/.obj)> <output json> [forceObjColor(true/false)] [previewScale]
+```
+
+- Output must be a file name only (no path), e.g. `mymodel.json`.
+- The schematic is written to the LabAPI ProjectMER Schematics folder.
+- `previewScale` is a positive float (default `1`).
 
 ## API
 
-### `TriangulatedModel`
+### `ModelTriangle`
 
-Loads and displays a 3-D mesh from a list of `StlTriangle` values.
+A readonly struct that stores three vertices and a color.
 
 ```csharp
-using Triangle.Core.Triangulation.Stl;
-using Triangle.Core.Triangulation.Triangle;
+using TriangleScpSl.Core.TriangulatedModel;
 using UnityEngine;
 
-var model = TriangulatedModel.Create(stlTriangles, worldPosition, Color.white);
-var model2 = new TriangulatedModel(
-    stlTriangles,
-    worldPosition,
-    Color.white,
-    PrimitiveFlags.Visible,
-    scale: 0.01f,
-    invertWinding: true);
+var tri = new ModelTriangle(p1, p2, p3, Color.white);
+Vector3 p1 = tri.P1;
+Color color = tri.Color;
+```
+
+### `TriangulatedModel`
+
+Loads and displays a 3-D mesh from a list of `ModelTriangle` values.
+
+```csharp
+using AdminToys;
+using TriangleScpSl.Core.TriangulatedModel;
+using UnityEngine;
+
+List<ModelTriangle> triangles = [new(p1, p2, p3, Color.white)];
+
+var model = TriangulatedModel.Create(triangles, worldPosition);
+var model2 = new TriangulatedModel(triangles, worldPosition, PrimitiveFlags.Visible, scale: 0.01f, invertWinding: true);
 
 int triangleCount = model.Count;
 int quadCount = model.QuadCount;
 
 model.Position = new Vector3(0, 1, 0);
 model.Rotation = Quaternion.Euler(0, 90f, 0);
+model.Scale = Vector3.one * 2f;
 model.Color = Color.red;
 model.Flags = PrimitiveFlags.Visible | PrimitiveFlags.Collidable;
 model.Destroy();
@@ -94,32 +113,37 @@ model.Destroy();
 Members:
 
 - `Count` — number of triangles in the model
-- `QuadCount` — reported quad count for the model
+- `QuadCount` — total primitive count (`Count * 3 + 4`)
 - `Position` — world position of the mesh origin
 - `Rotation` — world rotation of the mesh origin
-- `Color` — updates the color of all triangle entries
-- `Flags` — updates primitive flags of all triangle entries
-- `Create(...)` — static factory method
-- `Destroy()` — destroys the underlying primitives
+- `Scale` — world scale of the mesh origin
+- `Transform` — the underlying root transform
+- `Color` — write-only; overrides the color of all triangles
+- `Flags` — write-only; sets primitive flags of all triangles
+- `GetTriangleSnapshot()` — returns a snapshot as `IReadOnlyList<(ModelTriangle, PrimitiveFlags)>`
+- `Create(...)` — static factory, mirrors the constructor
+- `Destroy()` — destroys all underlying primitives
 
-Constructor / factory signature:
+Constructor signature:
 
 ```csharp
 TriangulatedModel(
-    IReadOnlyList<StlTriangle> stlTriangles,
+    IReadOnlyList<ModelTriangle> triangles,
     Vector3 worldPosition,
-    Color color,
     PrimitiveFlags flags = PrimitiveFlags.Visible,
     float scale = 1f,
     bool invertWinding = false)
 ```
+
+`invertWinding` swaps the second and third vertices of every triangle, reversing the face normals. When loading files via `ModelFactory`, the winding correction for the coordinate system is applied automatically — `invertWinding` is purely for user-level control on top of that.
 
 ### `TrianglePrimitive`
 
 A single filled triangle with its own invisible root quad.
 
 ```csharp
-using Triangle.Core.Triangulation.Triangle;
+using AdminToys;
+using TriangleScpSl.Core.Triangulation.Triangle;
 using UnityEngine;
 
 var tri = TrianglePrimitive.Create(p1, p2, p3, Color.red);
@@ -147,7 +171,7 @@ Members:
 - `Flags` — updates primitive flags for all three parallelograms
 - `GetPoints()` — returns the three vertices as a list
 - `Rebuild(p1, p2, p3)` — rebuilds the triangle from new vertices
-- `Move(delta)` — moves the triangle by a delta
+- `Move(delta)` — translates the triangle by a delta vector
 - `Destroy()` — destroys all underlying primitives
 
 Signature:
@@ -161,33 +185,36 @@ TrianglePrimitive(Vector3 p1, Vector3 p2, Vector3 p3, Color color, PrimitiveFlag
 A shared coordinate space for a collection of triangle entries.
 
 ```csharp
-using Triangle.Core.TriangleMesh;
+using TriangleScpSl.Core.TriangleMesh;
 using UnityEngine;
 
 var space = new TriangleSpace(origin);
 var space2 = new TriangleSpace(origin, orientation);
 
 TriangleEntry entry = space.AddTriangle(p1, p2, p3, Color.white);
-space.Move(new Vector3(0, 1, 0));
-space.SetTransform(newOrigin, newOrientation);
+
+space.Position = new Vector3(0, 1, 0);
+space.Rotation = Quaternion.Euler(0, 90f, 0);
+space.Scale = Vector3.one * 2f;
 space.Destroy();
 ```
 
 Members:
 
-- `TriangleSpace(Vector3 origin)`
-- `TriangleSpace(Vector3 origin, Quaternion orientation)`
 - `Position` — world position of the shared base root
 - `Rotation` — world rotation of the shared base root
-- `AddTriangle(p1, p2, p3, color, flags = PrimitiveFlags.Visible)`
-- `Destroy()`
+- `Scale` — world scale of the shared base root
+- `Transform` — the base root's transform
+- `AddTriangle(p1, p2, p3, color, flags = PrimitiveFlags.Visible)` — adds a triangle, returns `TriangleEntry`
+- `Destroy()` — destroys all primitives
 
 ### `ParallelogramPrimitive`
 
 Represents one sheared parallelogram built from two nested quads.
 
 ```csharp
-using Triangle.Core.Triangulation.Parallelogram;
+using AdminToys;
+using TriangleScpSl.Core.Triangulation.Parallelogram;
 using UnityEngine;
 
 var para = ParallelogramPrimitive.Create(vUp, vLeft, center, Color.green);
@@ -337,6 +364,6 @@ Is calculated as:
 ## Notes
 
 - `TriangleEntry` is an internal type used by `TriangleSpace`.
-- `StlParser` skips non-finite vertices and ignores malformed triangles instead of crashing.
-- `TriangulatedModel` centers imported STL geometry around the bounding-box center before applying the requested `scale` and `worldPosition`.
-
+- `StlParser` falls back to ASCII parsing when binary detection fails, and vice versa.
+- `TriangulatedModel` centers imported geometry around the bounding-box center before applying `scale` and `worldPosition`.
+- Color is stored per-triangle in `ModelTriangle`; `TriangulatedModel.Color` is a write-only setter that overrides all triangles at once.

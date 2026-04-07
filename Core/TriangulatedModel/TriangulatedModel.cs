@@ -17,7 +17,6 @@ public class TriangulatedModel
         Vector3 worldPosition,
         PrimitiveFlags flags = PrimitiveFlags.Visible,
         float scale = 1f,
-        bool swapSecondAndThirdVertices = false,
         bool invertWinding = false)
     {
         _space = new TriangleSpace(worldPosition);
@@ -28,13 +27,9 @@ public class TriangulatedModel
 
         foreach (ModelTriangle tri in triangles)
         {
-            // Map model vertices to world space, centered on worldPosition.
             Vector3 p1 = (tri.P1 - modelCenter) * scale + worldPosition;
             Vector3 p2 = (tri.P2 - modelCenter) * scale + worldPosition;
             Vector3 p3 = (tri.P3 - modelCenter) * scale + worldPosition;
-
-            if (swapSecondAndThirdVertices)
-                (p2, p3) = (p3, p2);
 
             if (invertWinding)
                 (p2, p3) = (p3, p2);
@@ -88,9 +83,8 @@ public class TriangulatedModel
         Vector3 worldPosition,
         PrimitiveFlags flags = PrimitiveFlags.Visible,
         float scale = 1f,
-        bool swapSecondAndThirdVertices = false,
         bool invertWinding = false)
-        => new(triangles, worldPosition, flags, scale, swapSecondAndThirdVertices, invertWinding);
+        => new(triangles, worldPosition, flags, scale, invertWinding);
 
     public void Destroy() => _space.Destroy();
 

@@ -186,7 +186,7 @@ public static class ProjectMerSchematicExporter
         if (Mathf.Abs(Vector3.Dot(vLeft, vUp)) > vUp.sqrMagnitude)
             (vUp, vLeft) = (vLeft, -vUp);
 
-        (float a, float b, float x) = GetAffineInfo(vUp, vLeft);
+        (float a, float b, float x) = ParallelogramHelpUtils.GetAffineComponents(vUp, vLeft);
         float angleDeg = Mathf.Atan2(b, a) * Mathf.Rad2Deg;
         Vector3 vNormal = Vector3.Cross(ParallelogramHelpUtils.PerpSameHalfPlane(vUp, vLeft), vUp.normalized);
 
@@ -196,24 +196,6 @@ public static class ProjectMerSchematicExporter
 
         childLocalRotation = Quaternion.Euler(0f, 0f, -angleDeg);
         childLocalScale = new Vector3(b, a, 1f);
-    }
-
-    static (float A, float B, float X) GetAffineInfo(Vector3 vUp, Vector3 vLeft)
-    {
-        float upLen = vUp.magnitude;
-
-        if (upLen <= Mathf.Epsilon)
-            return (1f, 1f, 1f);
-
-        Vector3 upN = vUp / upLen;
-        float leftY = Mathf.Clamp(Vector3.Dot(vLeft, upN), -upLen, upLen);
-        float leftX = Vector3.ProjectOnPlane(vLeft, upN).magnitude;
-
-        float a = Mathf.Sqrt(Mathf.Max(2f * upLen * (upLen + leftY), Mathf.Epsilon));
-        float b = Mathf.Sqrt(Mathf.Max(2f * upLen * (upLen - leftY), Mathf.Epsilon));
-        float x = leftX * 2f * upLen / Mathf.Max(a * b, Mathf.Epsilon);
-
-        return (a, b, x);
     }
 
     static int GeneratePositiveId() => Guid.NewGuid().GetHashCode() & int.MaxValue;

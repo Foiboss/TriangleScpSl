@@ -16,15 +16,6 @@ public class TriangulationCommand : ICommand
     public string[] Aliases { get; } = [];
     public string Description { get; } = "Displays a model Usage: <filename(.obj/.stl)> <true/false(force color)>";
 
-    static bool ParseObjColorFlag(string raw, out bool forceObjColor)
-    {
-        if (bool.TryParse(raw, out forceObjColor))
-            return true;
-
-        forceObjColor = false;
-        return false;
-    }
-
     void Clear()
     {
         _model?.Destroy();
@@ -61,7 +52,7 @@ public class TriangulationCommand : ICommand
         {
             string rawFlag = arguments.Array?[arguments.Offset + 1] ?? string.Empty;
 
-            if (!ParseObjColorFlag(rawFlag, out forceObjColor))
+            if (!bool.TryParse(rawFlag, out forceObjColor))
             {
                 response = "Invalid OBJ color flag. Use: true/false";
                 return false;

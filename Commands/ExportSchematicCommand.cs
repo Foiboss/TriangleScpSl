@@ -14,7 +14,7 @@ public sealed class ExportSchematicCommand : ICommand
     readonly Color _fallbackColor = Color.cyan;
 
     public string Command { get; } = "ExportSchematic";
-    public string[] Aliases { get; } = ["ExportModelSchematic", "ObjToSchematic", "StlToSchematic"];
+    public string[] Aliases { get; } = [];
     public string Description { get; } = "Exports .obj/.stl as ProjectMER schematic JSON. Usage: <model file> <output file> [forceObjColor(true/false)] [previewScale]";
 
     public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)

@@ -43,9 +43,8 @@ public static class ModelFactory
     (
         IReadOnlyList<ModelTriangle> triangles,
         Vector3 worldPosition,
-        bool swapSecondAndThirdVertices,
         PrimitiveFlags flags = PrimitiveFlags.Visible)
-        => TriangulatedModel.Create(triangles, worldPosition, flags, swapSecondAndThirdVertices: swapSecondAndThirdVertices);
+        => TriangulatedModel.Create(triangles, worldPosition, flags);
 
     public static bool TryCreateModel
     (
@@ -71,8 +70,8 @@ public static class ModelFactory
                 return false;
             }
 
-            // OBJ files in this pipeline need winding conversion as well.
-            model = CreateModel(parsedObjTriangles, worldPosition, true, flags);
+            FixWinding(parsedObjTriangles);
+            model = CreateModel(parsedObjTriangles, worldPosition, flags);
 
             if (forceObjColor)
                 model.Color = color;
@@ -85,7 +84,8 @@ public static class ModelFactory
                 return false;
             }
 
-            model = CreateModel(parsedStlTriangles, worldPosition, true, flags);
+            FixWinding(parsedStlTriangles);
+            model = CreateModel(parsedStlTriangles, worldPosition, flags);
         }
 
         if (model.Count == 0)
@@ -97,5 +97,14 @@ public static class ModelFactory
         }
 
         return true;
+    }
+
+    static void FixWinding(List<ModelTriangle> triangles)
+    {
+        for (var i = 0; i < triangles.Count; i++)
+        {
+            ModelTriangle t = triangles[i];
+            triangles[i] = new ModelTriangle(t.P1, t.P3, t.P2, t.Color);
+        }
     }
 }
