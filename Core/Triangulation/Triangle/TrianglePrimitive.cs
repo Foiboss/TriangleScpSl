@@ -1,5 +1,4 @@
 using AdminToys;
-using Exiled.API.Features.Toys;
 using TriangleScpSl.Core.Triangulation.Parallelogram;
 using UnityEngine;
 
@@ -7,34 +6,22 @@ namespace TriangleScpSl.Core.Triangulation.Triangle;
 
 public class TrianglePrimitive
 {
-    // Root quad at the centroid: invisible, provides a shared parent for all
-    readonly Primitive _root;
     readonly ParallelogramPrimitive _prim1;
     readonly ParallelogramPrimitive _prim2;
     readonly ParallelogramPrimitive _prim3;
     Color _color;
 
-    public TrianglePrimitive(Vector3 p1, Vector3 p2, Vector3 p3, Color color, PrimitiveFlags flags, Primitive? parent = null)
+    public TrianglePrimitive(Vector3 p1, Vector3 p2, Vector3 p3, Color color, PrimitiveFlags flags)
     {
         P1 = p1;
         P2 = p2;
         P3 = p3;
         _color = color;
 
-        Vector3 centroid = (p1 + p2 + p3) / 3f;
-        Vector3 normal = Vector3.Cross(p2 - p1, p3 - p1).normalized;
-        Quaternion rootRot = Quaternion.LookRotation(normal, (p1 - centroid).normalized);
-
-        _root = Primitive.Create(PrimitiveType.Quad, PrimitiveFlags.None, centroid, null, Vector3.one, true, color);
-        _root.Rotation = rootRot;
-
-        if (parent is not null)
-            _root.Transform.SetParent(parent.Transform, true);
-
         Vector3[][] data = TriangleParallelogramBuilder.GetParallelogramsInfo(p1, p2, p3);
-        _prim1 = new ParallelogramPrimitive(data[0][0], data[0][1], data[0][2], color, flags, _root);
-        _prim2 = new ParallelogramPrimitive(data[1][0], data[1][1], data[1][2], color, flags, _root);
-        _prim3 = new ParallelogramPrimitive(data[2][0], data[2][1], data[2][2], color, flags, _root);
+        _prim1 = new ParallelogramPrimitive(data[0][0], data[0][1], data[0][2], color, flags);
+        _prim2 = new ParallelogramPrimitive(data[1][0], data[1][1], data[1][2], color, flags);
+        _prim3 = new ParallelogramPrimitive(data[2][0], data[2][1], data[2][2], color, flags);
     }
 
     public Vector3 P1 { get; private set; }
@@ -79,18 +66,13 @@ public class TrianglePrimitive
 
     public static TrianglePrimitive Create
     (Vector3 p1, Vector3 p2, Vector3 p3, Color color,
-        PrimitiveFlags flags = PrimitiveFlags.Visible, Primitive? parent = null) => new(p1, p2, p3, color, flags, parent);
+        PrimitiveFlags flags = PrimitiveFlags.Visible) => new(p1, p2, p3, color, flags);
 
     public void Rebuild(Vector3 p1, Vector3 p2, Vector3 p3)
     {
         P1 = p1;
         P2 = p2;
         P3 = p3;
-
-        Vector3 centroid = (p1 + p2 + p3) / 3f;
-        Vector3 normal = Vector3.Cross(p2 - p1, p3 - p1).normalized;
-        _root.Position = centroid;
-        _root.Rotation = Quaternion.LookRotation(normal, (p1 - centroid).normalized);
 
         Vector3[][] data = TriangleParallelogramBuilder.GetParallelogramsInfo(p1, p2, p3);
         _prim1.Rebuild(data[0][0], data[0][1], data[0][2]);
@@ -100,10 +82,7 @@ public class TrianglePrimitive
 
     public void Move(Vector3 delta)
     {
-        P1 += delta;
-        P2 += delta;
-        P3 += delta;
-        _root.Position += delta;
+        Rebuild(P1 + delta, P2 + delta, P3 + delta);
     }
 
     public void Destroy()
@@ -111,7 +90,6 @@ public class TrianglePrimitive
         _prim1.Destroy();
         _prim2.Destroy();
         _prim3.Destroy();
-        _root.Destroy();
     }
 
     public List<Vector3> GetPoints() => [P1, P2, P3];

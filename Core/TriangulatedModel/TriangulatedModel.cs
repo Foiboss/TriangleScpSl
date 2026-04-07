@@ -1,79 +1,139 @@
-using AdminToys;
-using TriangleScpSl.Core.TriangleMesh;
+using Exiled.API.Features.Toys;
+using TriangleScpSl.Core.Triangulation.Triangle;
 using UnityEngine;
 
 namespace TriangleScpSl.Core.TriangulatedModel;
 
-// A 3-D mesh loaded from triangulated file data (STL/OBJ)
-// All triangles share a single TriangleSpace
+// A 3-D mesh loaded from triangulated file data (STL/OBJ).
+// The model stores local-space triangles and rebuilds TrianglePrimitive instances
+// when its transform changes.
 public class TriangulatedModel
 {
-    readonly TriangleSpace _space;
-    readonly List<TriangleEntry> _entries = [];
+    readonly Primitive _baseQuad;
+    readonly List<ModelTriangle> _localTriangles = [];
+    readonly List<TrianglePrimitive> _triangles = [];
+
+    Vector3 _position;
+    Quaternion _rotation;
+    Vector3 _scale;
+    readonly bool _invertWinding;
+    bool _isDestroyed;
 
     public TriangulatedModel
     (
         IReadOnlyList<ModelTriangle> triangles,
         Vector3 worldPosition,
-        PrimitiveFlags flags = PrimitiveFlags.Visible,
+        AdminToys.PrimitiveFlags flags = AdminToys.PrimitiveFlags.Visible,
         float scale = 1f,
         bool invertWinding = false)
     {
-        _space = new TriangleSpace(worldPosition);
+        _position = worldPosition;
+        _rotation = Quaternion.identity;
+        _scale = Vector3.one * scale;
+        _invertWinding = invertWinding;
 
-        if (triangles.Count == 0) return;
+        _baseQuad = Primitive.Create(
+            PrimitiveType.Quad,
+            AdminToys.PrimitiveFlags.None,
+            _position,
+            Vector3.zero,
+            _scale,
+            true,
+            Color.clear);
+
+        if (triangles.Count == 0)
+            return;
 
         Vector3 modelCenter = CalculateCenter(triangles);
 
         foreach (ModelTriangle tri in triangles)
         {
-            Vector3 p1 = (tri.P1 - modelCenter) * scale + worldPosition;
-            Vector3 p2 = (tri.P2 - modelCenter) * scale + worldPosition;
-            Vector3 p3 = (tri.P3 - modelCenter) * scale + worldPosition;
-
-            if (invertWinding)
-                (p2, p3) = (p3, p2);
-
-            _entries.Add(_space.AddTriangle(p1, p2, p3, tri.Color, flags));
+            _localTriangles.Add(new ModelTriangle(tri.P1 - modelCenter, tri.P2 - modelCenter, tri.P3 - modelCenter, tri.Color));
         }
+
+        BuildTriangles(flags);
     }
 
-    public int Count => _entries.Count;
-    public int QuadCount => Count * 3 + 4; // 3 per triangle + 3 shared roots + 1 model base root
+    public int Count => _triangles.Count;
+    public int QuadCount => _isDestroyed ? 0 : Count * 6 + 1; // +1 for model base quad
 
     public Vector3 Position
     {
-        get => _space.Position;
-        set => _space.Position = value;
+        get => _position;
+        set
+        {
+            if (_isDestroyed)
+                return;
+
+            _position = value;
+            
+            _baseQuad.Position = value;
+            RebuildTriangles();
+        }
     }
 
     public Quaternion Rotation
     {
-        get => _space.Rotation;
-        set => _space.Rotation = value;
+        get => _rotation;
+        set
+        {
+            if (_isDestroyed)
+                return;
+
+            _rotation = value;
+            
+            _baseQuad.Rotation = value;
+            RebuildTriangles();
+        }
     }
 
     public Vector3 Scale
     {
-        get => _space.Scale;
-        set => _space.Scale = value;
+        get => _scale;
+        set
+        {
+            if (_isDestroyed)
+                return;
+
+            _scale = value;
+            
+            _baseQuad.Scale = value;
+            RebuildTriangles();
+        }
     }
 
-    public Transform Transform => _space.Transform;
+    public Vector3 TransformPoint(Vector3 localPoint)
+        => _position + (_rotation * Vector3.Scale(localPoint, _scale));
+
+    public Vector3 InverseTransformPoint(Vector3 worldPoint)
+    {
+        Vector3 local = Quaternion.Inverse(_rotation) * (worldPoint - _position);
+
+        return new Vector3(
+            _scale.x != 0f ? local.x / _scale.x : 0f,
+            _scale.y != 0f ? local.y / _scale.y : 0f,
+            _scale.z != 0f ? local.z / _scale.z : 0f);
+    }
 
     public Color Color
     {
         set
         {
-            foreach (TriangleEntry e in _entries) e.Color = value;
+            if (_isDestroyed)
+                return;
+
+            foreach (TrianglePrimitive triangle in _triangles) triangle.Color = value;
         }
     }
 
-    public PrimitiveFlags Flags
+    public AdminToys.PrimitiveFlags Flags
     {
         set
         {
-            foreach (TriangleEntry e in _entries) e.Flags = value;
+            if (_isDestroyed)
+                return;
+
+            foreach (TrianglePrimitive triangle in _triangles) triangle.Flags = value;
         }
     }
 
@@ -81,20 +141,76 @@ public class TriangulatedModel
     (
         IReadOnlyList<ModelTriangle> triangles,
         Vector3 worldPosition,
-        PrimitiveFlags flags = PrimitiveFlags.Visible,
+        AdminToys.PrimitiveFlags flags = AdminToys.PrimitiveFlags.Visible,
         float scale = 1f,
         bool invertWinding = false)
         => new(triangles, worldPosition, flags, scale, invertWinding);
 
-    public void Destroy() => _space.Destroy();
-
-    public IReadOnlyList<(ModelTriangle Triangle, PrimitiveFlags Flags)> GetTriangleSnapshot()
+    public void Destroy()
     {
-        List<(ModelTriangle Triangle, PrimitiveFlags Flags)> snapshot = new(_entries.Count);
+        if (_isDestroyed)
+            return;
 
-        snapshot.AddRange(_entries.Select(entry => (new ModelTriangle(entry.P1, entry.P2, entry.P3, entry.Color), entry.Flags)));
+        _isDestroyed = true;
+
+        foreach (TrianglePrimitive triangle in _triangles)
+            triangle.Destroy();
+
+        _triangles.Clear();
+        _localTriangles.Clear();
+        _baseQuad.Destroy();
+    }
+
+    public IReadOnlyList<(ModelTriangle Triangle, AdminToys.PrimitiveFlags Flags)> GetTriangleSnapshot()
+    {
+        if (_isDestroyed)
+            return [];
+
+        List<(ModelTriangle Triangle, AdminToys.PrimitiveFlags Flags)> snapshot = new(_triangles.Count);
+        snapshot.AddRange(_triangles.Select(triangle => (new ModelTriangle(triangle.P1, triangle.P2, triangle.P3, triangle.Color), triangle.Flags)));
 
         return snapshot;
+    }
+
+    void BuildTriangles(AdminToys.PrimitiveFlags flags)
+    {
+        _triangles.Clear();
+
+        foreach (ModelTriangle localTriangle in _localTriangles)
+        {
+            _triangles.Add(CreateTriangle(localTriangle, flags));
+        }
+    }
+
+    void RebuildTriangles()
+    {
+        if (_triangles.Count == 0)
+            return;
+
+        for (var i = 0; i < _triangles.Count; i++)
+        {
+            ModelTriangle localTriangle = _localTriangles[i];
+            Vector3 p1 = TransformPoint(localTriangle.P1);
+            Vector3 p2 = TransformPoint(localTriangle.P2);
+            Vector3 p3 = TransformPoint(localTriangle.P3);
+
+            if (_invertWinding)
+                (p2, p3) = (p3, p2);
+
+            _triangles[i].Rebuild(p1, p2, p3);
+        }
+    }
+
+    TrianglePrimitive CreateTriangle(ModelTriangle localTriangle, AdminToys.PrimitiveFlags flags)
+    {
+        Vector3 p1 = TransformPoint(localTriangle.P1);
+        Vector3 p2 = TransformPoint(localTriangle.P2);
+        Vector3 p3 = TransformPoint(localTriangle.P3);
+
+        if (_invertWinding)
+            (p2, p3) = (p3, p2);
+
+        return TrianglePrimitive.Create(p1, p2, p3, localTriangle.Color, flags);
     }
 
     static Vector3 CalculateCenter(IReadOnlyList<ModelTriangle> triangles)

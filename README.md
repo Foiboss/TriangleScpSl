@@ -26,7 +26,6 @@ An [EXILED](https://github.com/ExMod-Team/EXILED) plugin for SCP: Secret Laborat
   - [ModelTriangle](#modeltriangle)
   - [TriangulatedModel](#triangulatedmodel)
   - [TrianglePrimitive](#triangleprimitive)
-  - [TriangleSpace](#trianglespace)
   - [ParallelogramPrimitive](#parallelogramprimitive)
 - [Mathematical Details: Parallelogram Construction](#mathematical-details-parallelogram-construction)
   - [Step 1 — Decompose vLeft](#step-1--decompose-vleft)
@@ -34,27 +33,25 @@ An [EXILED](https://github.com/ExMod-Team/EXILED) plugin for SCP: Secret Laborat
   - [Step 3 — Invert to Find a, b, x](#step-3--invert-to-find-a-b-x)
   - [Step 4 — Apply the Transform](#step-4--apply-the-transform)
 - [Architecture Details](#architecture-details)
-  - [Efficient Rendering with TriangleSpace](#efficient-rendering-with-trianglespace)
   - [Quad Counting](#quad-counting)
 
 ## How it works
 
 Each triangle is rendered as three parallelograms that share the triangle area.
 
-- `TrianglePrimitive` renders one triangle with its own invisible root quad.
-- `TriangleSpace` renders many triangles with a shared invisible base root and three axis-oriented invisible roots under it.
-- `TriangulatedModel` is a convenience wrapper that loads `ModelTriangle` data into a single `TriangleSpace`.
+- `TrianglePrimitive` renders one triangle directly from three parallelograms.
+- `TriangulatedModel` is a convenience wrapper that loads `ModelTriangle` data into a list of `TrianglePrimitive` objects and rebuilds them when the model transform changes.
 
 Each parallelogram is built from two nested quads:
 
 1. a base quad that sets position and orientation,
 2. a child quad that applies the shear needed to match the parallelogram.
 
-When a triangle is added to a `TriangleSpace`, its parallelograms are attached to the root whose forward axis best matches the triangle normal. This keeps transform inheritance stable while the whole space can still be moved or rotated efficiently.
+When a triangle is added to a `TrianglePrimitive`, its parallelograms are built directly from the triangle vertices. `TriangulatedModel` keeps triangles in model-local coordinates and reapplies translation, rotation, scale, or winding changes by rebuilding the underlying primitives.
 
 ### Primitive count
 
-The implementation uses one shared base root + three shared axis roots per `TriangleSpace` and three parallelograms per triangle. Each `TriangulatedModel` uses `TriangleCount * 3 + 4` quads total.
+The implementation uses three parallelograms per triangle, and each parallelogram is rendered with two quads. `TriangulatedModel` also keeps one invisible base quad as a transform anchor, so total count is `TriangleCount * 6 + 1`.
 
 ## Installation
 
@@ -139,11 +136,12 @@ model.Destroy();
 Members:
 
 - `Count` — number of triangles in the model
-- `QuadCount` — total primitive count (`Count * 3 + 4`)
+- `QuadCount` — total primitive count (`Count * 6 + 1`)
 - `Position` — world position of the mesh origin
 - `Rotation` — world rotation of the mesh origin
 - `Scale` — world scale of the mesh origin
-- `Transform` — the underlying root transform
+- `TransformPoint(...)` — converts a local point to world space
+- `InverseTransformPoint(...)` — converts a world point to local space
 - `Color` — write-only; overrides the color of all triangles
 - `Flags` — write-only; sets primitive flags of all triangles
 - `GetTriangleSnapshot()` — returns a snapshot as `IReadOnlyList<(ModelTriangle, PrimitiveFlags)>`
@@ -165,7 +163,7 @@ TriangulatedModel(
 
 ### `TrianglePrimitive`
 
-A single filled triangle with its own invisible root quad.
+A single filled triangle built from three `ParallelogramPrimitive` instances.
 
 ```csharp
 using AdminToys;
@@ -203,36 +201,8 @@ Members:
 Signature:
 
 ```csharp
-TrianglePrimitive(Vector3 p1, Vector3 p2, Vector3 p3, Color color, PrimitiveFlags flags, Primitive? parent = null)
+TrianglePrimitive(Vector3 p1, Vector3 p2, Vector3 p3, Color color, PrimitiveFlags flags)
 ```
-
-### `TriangleSpace`
-
-A shared coordinate space for a collection of triangle entries.
-
-```csharp
-using TriangleScpSl.Core.TriangleMesh;
-using UnityEngine;
-
-var space = new TriangleSpace(origin);
-var space2 = new TriangleSpace(origin, orientation);
-
-TriangleEntry entry = space.AddTriangle(p1, p2, p3, Color.white);
-
-space.Position = new Vector3(0, 1, 0);
-space.Rotation = Quaternion.Euler(0, 90f, 0);
-space.Scale = Vector3.one * 2f;
-space.Destroy();
-```
-
-Members:
-
-- `Position` — world position of the shared base root
-- `Rotation` — world rotation of the shared base root
-- `Scale` — world scale of the shared base root
-- `Transform` — the base root's transform
-- `AddTriangle(p1, p2, p3, color, flags = PrimitiveFlags.Visible)` — adds a triangle, returns `TriangleEntry`
-- `Destroy()` — destroys all primitives
 
 ### `ParallelogramPrimitive`
 
@@ -267,7 +237,7 @@ Members:
 Signature:
 
 ```csharp
-ParallelogramPrimitive(Vector3 vUp, Vector3 vLeft, Vector3 center, Color color, PrimitiveFlags flags, Primitive? parent = null)
+ParallelogramPrimitive(Vector3 vUp, Vector3 vLeft, Vector3 center, Color color, PrimitiveFlags flags)
 ```
 
 ## Mathematical Details: Parallelogram Construction
@@ -329,37 +299,15 @@ A single triangle is decomposed into three overlapping parallelograms that toget
 
 ```
 TrianglePrimitive
-├── _root (1 invisible quad at centroid)
-│   ├── _prim1 (ParallelogramPrimitive)
-│   │   ├── _baseQuad (invisible, defines position/orientation/shear)
-│   │   └── _quad (visible, final sheared shape)
-│   ├── _prim2 (ParallelogramPrimitive)
-│   │   ├── _baseQuad (invisible)
-│   │   └── _quad (visible)
-│   └── _prim3 (ParallelogramPrimitive)
-│       ├── _baseQuad (invisible)
-│       └── _quad (visible)
-```
-
-### Efficient Rendering with TriangleSpace
-
-Instead of each `TrianglePrimitive` having its own root quad, the `TriangleSpace` architecture uses **1 shared base root quad** and **3 child root quads** (one for each primary axis orientation).
-Each triangle's normal is compared against the forward axes of those 3 child roots. The triangle is parented to the root whose forward axis **best aligns** with the triangle's normal.
-
-```
-TriangleSpace
-├── _baseRoot (invisible model-space anchor)
-│   ├── _roots[0] (invisible quad aligned to X-axis)
-│   │   ├── TriangleEntry 1
-│   │   │   ├── ParallelogramPrimitive 1 (1 quad)
-│   │   │   ├── ParallelogramPrimitive 2 (1 quad)
-│   │   │   └── ParallelogramPrimitive 3 (1 quad)
-│   │   ├── TriangleEntry 2 (3 parallelograms = 3 quads)
-│   │   └── ...
-│   ├── _roots[1] (invisible quad aligned to Y-axis)
-│   │   └── ...
-│   └── _roots[2] (invisible quad aligned to Z-axis)
-│       └── ...
+├── _prim1 (ParallelogramPrimitive)
+│   ├── _baseQuad (invisible, defines position/orientation/shear)
+│   └── _quad (visible, final sheared shape)
+├── _prim2 (ParallelogramPrimitive)
+│   ├── _baseQuad (invisible)
+│   └── _quad (visible)
+└── _prim3 (ParallelogramPrimitive)
+    ├── _baseQuad (invisible)
+    └── _quad (visible)
 ```
 
 ### Quad Counting
@@ -367,13 +315,12 @@ TriangleSpace
 The formula used in `TriangulatedModel.QuadCount`:
 
 ```csharp
-public int QuadCount => Count * 3 + 4;
+public int QuadCount => Count * 6 + 1;
 ```
 
 Is calculated as:
-- `Count * 3`: Three **visible** quads per triangle (one for each parallelogram)
-- `+ 3`: Three shared **invisible axis root** quads
-- `+ 1`: One shared **invisible base root** quad
+- `Count * 6`: Three parallelograms per triangle, two quads per parallelogram
+- `+ 1`: One invisible base quad used as model transform anchor
 
 ## License
 

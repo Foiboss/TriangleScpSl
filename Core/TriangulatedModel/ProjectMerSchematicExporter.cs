@@ -77,7 +77,7 @@ public static class ProjectMerSchematicExporter
                         Name = $"(T.{triangleIndex + 1})P{part + 1}.Base",
                         ObjectId = baseId,
                         ParentId = modelObjectId,
-                        Position = model.Transform.InverseTransformPoint(basePos),
+                        Position = model.InverseTransformPoint(basePos),
                         Rotation = (Quaternion.Inverse(model.Rotation) * baseRot).eulerAngles,
                         Scale = baseScale,
                         BlockType = 0,
