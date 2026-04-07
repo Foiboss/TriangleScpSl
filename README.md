@@ -377,12 +377,14 @@ Is calculated as:
 
 ## License
 
-This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+This project is licensed under the **Creative Commons Attribution-ShareAlike 3.0 Unported (CC-BY-SA 3.0)** — see the [LICENSE](LICENSE) file for details.
 
-## Acknowledgments
+> **Note:** This license is required because this project depends on [EXILED](https://github.com/ExMod-Team/EXILED), which is also licensed under CC-BY-SA 3.0. When using or distributing this work, you must comply with CC-BY-SA 3.0 terms, including attribution and share-alike requirements.
+
+## Acknowledgments & Dependencies
 
 This plugin relies on the following projects and libraries:
 
-- [EXILED](https://github.com/ExMod-Team/EXILED) — MIT License
-- [Mirror Networking](https://github.com/MirrorNetworking/Mirror) — MIT License
-- [Unity Engine](https://unity.com/) — Unity Companion License
+- **[EXILED](https://github.com/ExMod-Team/EXILED)** — Creative Commons Attribution-ShareAlike 3.0 Unported
+- **[Mirror Networking](https://github.com/MirrorNetworking/Mirror)** — MIT License
+- **[Unity Engine](https://unity.com/)** — Unity Companion License
