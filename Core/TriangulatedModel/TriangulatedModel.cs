@@ -1,9 +1,8 @@
 using AdminToys;
-using Triangle.Core.FileToTriangles;
-using Triangle.Core.TriangleMesh;
+using TriangleScpSl.Core.TriangleMesh;
 using UnityEngine;
 
-namespace Triangle.Core.TriangulatedModel;
+namespace TriangleScpSl.Core.TriangulatedModel;
 
 // A 3-D mesh loaded from triangulated file data (STL/OBJ)
 // All triangles share a single TriangleSpace

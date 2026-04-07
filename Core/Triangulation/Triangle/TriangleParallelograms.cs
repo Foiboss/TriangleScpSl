@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Triangle.Core.Triangulation.Triangle;
+namespace TriangleScpSl.Core.Triangulation.Triangle;
 
 public static class TriangleParallelogramBuilder
 {

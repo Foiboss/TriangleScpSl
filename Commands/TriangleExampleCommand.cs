@@ -2,11 +2,11 @@ using AdminToys;
 using CommandSystem;
 using Exiled.API.Features;
 using Exiled.API.Features.Toys;
-using Triangle.Core.Triangulation.Triangle;
+using TriangleScpSl.Core.Triangulation.Triangle;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
-namespace Triangle.Commands;
+namespace TriangleScpSl.Commands;
 
 [CommandHandler(typeof(RemoteAdminCommandHandler))]
 public class TriangleExampleCommand : ICommand

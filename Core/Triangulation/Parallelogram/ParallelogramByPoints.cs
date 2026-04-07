@@ -1,7 +1,7 @@
 using Exiled.API.Features.Toys;
 using UnityEngine;
 
-namespace Triangle.Core.Triangulation.Parallelogram;
+namespace TriangleScpSl.Core.Triangulation.Parallelogram;
 
 public static class ParallelogramByPoints
 {

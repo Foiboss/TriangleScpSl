@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Triangle.Core.TriangulatedModel;
+namespace TriangleScpSl.Core.TriangulatedModel;
 
 public readonly struct ModelTriangle(Vector3 p1, Vector3 p2, Vector3 p3, Color color)
 {
@@ -9,4 +9,3 @@ public readonly struct ModelTriangle(Vector3 p1, Vector3 p2, Vector3 p3, Color c
     public Vector3 P3 { get; } = p3;
     public Color Color { get; } = color;
 }
-

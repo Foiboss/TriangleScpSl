@@ -1,11 +1,11 @@
 using System.Globalization;
 using System.Text;
 using AdminToys;
-using Triangle.Core.Triangulation.Parallelogram;
-using Triangle.Core.Triangulation.Triangle;
+using TriangleScpSl.Core.Triangulation.Parallelogram;
+using TriangleScpSl.Core.Triangulation.Triangle;
 using UnityEngine;
 
-namespace Triangle.Core.TriangulatedModel;
+namespace TriangleScpSl.Core.TriangulatedModel;
 
 public static class ProjectMerSchematicExporter
 {
@@ -30,28 +30,31 @@ public static class ProjectMerSchematicExporter
             }
 
             string? outputDirectory = Path.GetDirectoryName(outputPath);
+
             if (!string.IsNullOrWhiteSpace(outputDirectory))
                 Directory.CreateDirectory(outputDirectory);
 
-            int objectIdSeed = (GeneratePositiveId() % 500000) + 1000;
+            int objectIdSeed = GeneratePositiveId() % 500000 + 1000;
             int rootObjectId = objectIdSeed++;
             int modelObjectId = objectIdSeed++;
             int objectId = objectIdSeed;
 
-            List<SchematicBlock> blocks = [];
-            blocks.Add(new SchematicBlock
-            {
-                Name = string.IsNullOrWhiteSpace(modelName) ? "TriangulatedModel" : modelName,
-                ObjectId = modelObjectId,
-                ParentId = rootObjectId,
-                // MER schematics should be stored in local coordinates.
-                Position = Vector3.zero,
-                Rotation = Vector3.zero,
-                Scale = Vector3.one,
-                BlockType = 0,
-                IsPrimitive = false,
-                Static = false,
-            });
+            List<SchematicBlock> blocks =
+            [
+                new()
+                {
+                    Name = string.IsNullOrWhiteSpace(modelName) ? "TriangulatedModel" : modelName,
+                    ObjectId = modelObjectId,
+                    ParentId = rootObjectId,
+                    // MER schematics should be stored in local coordinates.
+                    Position = Vector3.zero,
+                    Rotation = Vector3.zero,
+                    Scale = Vector3.one,
+                    BlockType = 0,
+                    IsPrimitive = false,
+                    Static = false,
+                },
+            ];
 
             for (var triangleIndex = 0; triangleIndex < triangles.Count; triangleIndex++)
             {
@@ -148,6 +151,7 @@ public static class ProjectMerSchematicExporter
 
             sb.AppendLine("      }");
             sb.Append("    }");
+
             if (i < blocks.Count - 1)
                 sb.Append(',');
             sb.AppendLine();
@@ -168,7 +172,8 @@ public static class ProjectMerSchematicExporter
         sb.Append(pad).Append('}');
     }
 
-    static void BuildParallelogramTransforms(
+    static void BuildParallelogramTransforms
+    (
         Vector3 vUp,
         Vector3 vLeft,
         Vector3 center,
@@ -196,6 +201,7 @@ public static class ProjectMerSchematicExporter
     static (float A, float B, float X) GetAffineInfo(Vector3 vUp, Vector3 vLeft)
     {
         float upLen = vUp.magnitude;
+
         if (upLen <= Mathf.Epsilon)
             return (1f, 1f, 1f);
 
@@ -218,12 +224,9 @@ public static class ProjectMerSchematicExporter
         return $"{c.r:X2}{c.g:X2}{c.b:X2}{c.a:X2}";
     }
 
-    static string EscapeJson(string value)
-    {
-        return value
-            .Replace("\\", "\\\\")
-            .Replace("\"", "\\\"");
-    }
+    static string EscapeJson(string value) => value
+        .Replace("\\", "\\\\")
+        .Replace("\"", "\\\"");
 
     static string FormatFloat(float value)
     {
@@ -235,17 +238,17 @@ public static class ProjectMerSchematicExporter
 
     sealed class SchematicBlock
     {
-        public string Name { get; set; } = string.Empty;
-        public int ObjectId { get; set; }
-        public int ParentId { get; set; }
-        public Vector3 Position { get; set; }
-        public Vector3 Rotation { get; set; }
-        public Vector3 Scale { get; set; }
-        public int BlockType { get; set; }
-        public bool IsPrimitive { get; set; }
-        public int PrimitiveType { get; set; }
-        public string PrimitiveColor { get; set; } = "FFFFFFFF";
-        public int PrimitiveFlags { get; set; }
-        public bool Static { get; set; }
+        public string Name { get; init; } = string.Empty;
+        public int ObjectId { get; init; }
+        public int ParentId { get; init; }
+        public Vector3 Position { get; init; }
+        public Vector3 Rotation { get; init; }
+        public Vector3 Scale { get; init; }
+        public int BlockType { get; init; }
+        public bool IsPrimitive { get; init; }
+        public int PrimitiveType { get; init; }
+        public string PrimitiveColor { get; init; } = "FFFFFFFF";
+        public int PrimitiveFlags { get; init; }
+        public bool Static { get; init; }
     }
 }

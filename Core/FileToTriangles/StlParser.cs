@@ -1,9 +1,9 @@
 using System.Globalization;
 using System.Text;
-using Triangle.Core.TriangulatedModel;
+using TriangleScpSl.Core.TriangulatedModel;
 using UnityEngine;
 
-namespace Triangle.Core.FileToTriangles;
+namespace TriangleScpSl.Core.FileToTriangles;
 
 public static class StlParser
 {
@@ -58,12 +58,12 @@ public static class StlParser
         try
         {
             stream.Position = BinaryHeaderLength;
-            byte[] countBytes = new byte[4];
+            var countBytes = new byte[4];
 
             if (stream.Read(countBytes, 0, countBytes.Length) != 4)
                 return false;
 
-            uint triangleCount = BitConverter.ToUInt32(countBytes, 0);
+            var triangleCount = BitConverter.ToUInt32(countBytes, 0);
             long expectedLength = BinaryHeaderLength + 4L + triangleCount * BinaryTriangleLength;
             return expectedLength == stream.Length;
         }

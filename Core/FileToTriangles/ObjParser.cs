@@ -1,8 +1,8 @@
 using System.Globalization;
-using Triangle.Core.TriangulatedModel;
+using TriangleScpSl.Core.TriangulatedModel;
 using UnityEngine;
 
-namespace Triangle.Core.FileToTriangles;
+namespace TriangleScpSl.Core.FileToTriangles;
 
 public static class ObjParser
 {

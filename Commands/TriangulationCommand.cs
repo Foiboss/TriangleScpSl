@@ -1,17 +1,17 @@
 using AdminToys;
 using CommandSystem;
 using Exiled.API.Features;
-using Triangle.Core.TriangulatedModel;
+using TriangleScpSl.Core.TriangulatedModel;
 using UnityEngine;
 
-namespace Triangle.Commands;
+namespace TriangleScpSl.Commands;
 
 [CommandHandler(typeof(RemoteAdminCommandHandler))]
 public class TriangulationCommand : ICommand
 {
-    TriangulatedModel? _model;
     readonly Color _forceColor = Color.cyan;
-    
+    TriangulatedModel? _model;
+
     public string Command { get; } = "Triangulate";
     public string[] Aliases { get; } = [];
     public string Description { get; } = "Displays a model Usage: <filename(.obj/.stl)> <true/false(force color)>";
@@ -55,7 +55,7 @@ public class TriangulationCommand : ICommand
         }
 
         string requestedFile = arguments.Array?[arguments.Offset] ?? string.Empty;
-        bool forceObjColor = false;
+        var forceObjColor = false;
 
         if (arguments.Count == 2)
         {

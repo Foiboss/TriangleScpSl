@@ -2,11 +2,11 @@ using System.Globalization;
 using AdminToys;
 using CommandSystem;
 using Exiled.API.Features;
-using Triangle.Core.Paths;
-using Triangle.Core.TriangulatedModel;
+using TriangleScpSl.Core.Paths;
+using TriangleScpSl.Core.TriangulatedModel;
 using UnityEngine;
 
-namespace Triangle.Commands;
+namespace TriangleScpSl.Commands;
 
 [CommandHandler(typeof(RemoteAdminCommandHandler))]
 public sealed class ExportSchematicCommand : ICommand
@@ -34,10 +34,12 @@ public sealed class ExportSchematicCommand : ICommand
             return false;
         }
 
-        bool forceObjColor = false;
+        var forceObjColor = false;
+
         if (arguments.Count >= 3)
         {
             string rawForce = arguments.Array?[arguments.Offset + 2] ?? string.Empty;
+
             if (!bool.TryParse(rawForce, out forceObjColor))
             {
                 response = "Invalid forceObjColor value. Use true/false.";
@@ -45,10 +47,12 @@ public sealed class ExportSchematicCommand : ICommand
             }
         }
 
-        float previewScale = 1f;
+        var previewScale = 1f;
+
         if (arguments.Count >= 4)
         {
             string rawScale = arguments.Array?[arguments.Offset + 3] ?? string.Empty;
+
             if (!float.TryParse(rawScale, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out previewScale) || previewScale <= 0f)
             {
                 response = "Invalid previewScale. Use a positive number (example: 1 or 0.5).";
@@ -93,7 +97,7 @@ public sealed class ExportSchematicCommand : ICommand
 
     static bool TryNormalizeOutputName(string raw, out string fileName)
     {
-        fileName = Path.GetFileName(raw ?? string.Empty);
+        fileName = Path.GetFileName(raw);
 
         if (!string.Equals(fileName, raw, StringComparison.Ordinal) || string.IsNullOrWhiteSpace(fileName))
             return false;

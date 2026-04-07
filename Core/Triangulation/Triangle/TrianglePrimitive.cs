@@ -1,9 +1,9 @@
 using AdminToys;
 using Exiled.API.Features.Toys;
-using Triangle.Core.Triangulation.Parallelogram;
+using TriangleScpSl.Core.Triangulation.Parallelogram;
 using UnityEngine;
 
-namespace Triangle.Core.Triangulation.Triangle;
+namespace TriangleScpSl.Core.Triangulation.Triangle;
 
 public class TrianglePrimitive
 {

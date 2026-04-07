@@ -1,10 +1,10 @@
 using AdminToys;
 using Exiled.API.Features.Toys;
-using Triangle.Core.Triangulation.Parallelogram;
-using Triangle.Core.Triangulation.Triangle;
+using TriangleScpSl.Core.Triangulation.Parallelogram;
+using TriangleScpSl.Core.Triangulation.Triangle;
 using UnityEngine;
 
-namespace Triangle.Core.TriangleMesh;
+namespace TriangleScpSl.Core.TriangleMesh;
 
 // A single triangle living inside a TriangleSpace.
 // Unlike TrianglePrimitive it owns no root quad of its own —

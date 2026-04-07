@@ -2,7 +2,7 @@ using AdminToys;
 using Exiled.API.Features.Toys;
 using UnityEngine;
 
-namespace Triangle.Core.TriangleMesh;
+namespace TriangleScpSl.Core.TriangleMesh;
 
 // A shared coordinate space for a collection of triangles.
 public class TriangleSpace

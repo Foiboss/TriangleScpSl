@@ -1,4 +1,4 @@
-namespace Triangle.Core.Paths;
+namespace TriangleScpSl.Core.Paths;
 
 public static class TrianglePaths
 {
@@ -39,4 +39,3 @@ public static class TrianglePaths
     public static string GetSchematicOutputPath(string outputFileName) =>
         Path.Combine(GetSchematicDirectory(outputFileName), outputFileName);
 }
-

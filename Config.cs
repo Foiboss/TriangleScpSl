@@ -1,6 +1,6 @@
 using Exiled.API.Interfaces;
 
-namespace Triangle;
+namespace TriangleScpSl;
 
 public sealed class Config : IConfig
 {

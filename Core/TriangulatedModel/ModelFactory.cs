@@ -1,18 +1,12 @@
 using AdminToys;
-using Exiled.API.Features;
-using Triangle.Core.FileToTriangles;
-using Triangle.Core.Paths;
+using TriangleScpSl.Core.FileToTriangles;
+using TriangleScpSl.Core.Paths;
 using UnityEngine;
 
-namespace Triangle.Core.TriangulatedModel;
+namespace TriangleScpSl.Core.TriangulatedModel;
 
 public static class ModelFactory
 {
-    public const string ModelsFolderName = TrianglePaths.ModelsFolderName;
-    public static string ModelsFolderPath => TrianglePaths.ModelsFolderPath;
-
-    public static void EnsureModelsFolderExists() => TrianglePaths.EnsureModelsFolderExists();
-
     static bool TryResolveModelPath(string? requestedFile, out string modelPath, out string normalizedFileName, out string error)
     {
         modelPath = string.Empty;
@@ -78,7 +72,7 @@ public static class ModelFactory
             }
 
             // OBJ files in this pipeline need winding conversion as well.
-            model = CreateModel(parsedObjTriangles, worldPosition, swapSecondAndThirdVertices: true, flags: flags);
+            model = CreateModel(parsedObjTriangles, worldPosition, true, flags);
 
             if (forceObjColor)
                 model.Color = color;
@@ -91,7 +85,7 @@ public static class ModelFactory
                 return false;
             }
 
-            model = CreateModel(parsedStlTriangles, worldPosition, swapSecondAndThirdVertices: true, flags: flags);
+            model = CreateModel(parsedStlTriangles, worldPosition, true, flags);
         }
 
         if (model.Count == 0)
