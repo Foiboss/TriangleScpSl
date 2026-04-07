@@ -1,5 +1,6 @@
 using Exiled.API.Enums;
 using Exiled.API.Features;
+using Triangle.Core.Paths;
 
 namespace Triangle;
 
@@ -10,4 +11,10 @@ public class Plugin : Plugin<Config>
     public override Version Version { get; } = new(2, 0, 0);
 
     public override PluginPriority Priority { get; } = PluginPriority.Last;
+
+    public override void OnEnabled()
+    {
+        TrianglePaths.EnsureModelsFolderExists();
+        base.OnEnabled();
+    }
 }

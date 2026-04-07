@@ -95,6 +95,20 @@ public class TriangulatedModel
 
     public void Destroy() => _space.Destroy();
 
+    public IReadOnlyList<(ModelTriangle Triangle, PrimitiveFlags Flags)> GetTriangleSnapshot()
+    {
+        List<(ModelTriangle Triangle, PrimitiveFlags Flags)> snapshot = new(_entries.Count);
+
+        foreach (TriangleEntry entry in _entries)
+        {
+            snapshot.Add((
+                new ModelTriangle(entry.P1, entry.P2, entry.P3, entry.Color),
+                entry.Flags));
+        }
+
+        return snapshot;
+    }
+
     static Vector3 CalculateCenter(IReadOnlyList<ModelTriangle> triangles)
     {
         Vector3 min = triangles[0].P1;

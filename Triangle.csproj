@@ -17,10 +17,13 @@
 
     <ItemGroup>
       <Reference Include="Mirror">
-        <HintPath>..\..\..\anton\Downloads\Mirror.dll</HintPath>
+        <HintPath>_ProjectDependencies\Mirror.dll</HintPath>
       </Reference>
       <Reference Include="Mirror.Components">
-        <HintPath>..\..\..\anton\Downloads\Mirror.Components.dll</HintPath>
+        <HintPath>_ProjectDependencies\Mirror.Components.dll</HintPath>
+      </Reference>
+      <Reference Include="ProjectMER">
+        <HintPath>_ProjectDependencies\ProjectMER.dll</HintPath>
       </Reference>
     </ItemGroup>
 

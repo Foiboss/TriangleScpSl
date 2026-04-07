@@ -1,13 +1,17 @@
 using AdminToys;
 using Exiled.API.Features;
 using Triangle.Core.FileToTriangles;
+using Triangle.Core.Paths;
 using UnityEngine;
 
 namespace Triangle.Core.TriangulatedModel;
 
 public static class ModelFactory
 {
-    static readonly string FolderPath = Path.Combine(Paths.Plugins, "BlenderModels");
+    public const string ModelsFolderName = TrianglePaths.ModelsFolderName;
+    public static string ModelsFolderPath => TrianglePaths.ModelsFolderPath;
+
+    public static void EnsureModelsFolderExists() => TrianglePaths.EnsureModelsFolderExists();
 
     static bool TryResolveModelPath(string? requestedFile, out string modelPath, out string normalizedFileName, out string error)
     {
@@ -29,7 +33,7 @@ public static class ModelFactory
             fileName += ".stl";
         }
 
-        modelPath = Path.Combine(FolderPath, fileName);
+        modelPath = TrianglePaths.GetModelPath(fileName);
 
         if (!File.Exists(modelPath))
         {
