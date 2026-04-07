@@ -372,3 +372,15 @@ Is calculated as:
 - `Count * 3`: Three **visible** quads per triangle (one for each parallelogram)
 - `+ 3`: Three shared **invisible axis root** quads
 - `+ 1`: One shared **invisible base root** quad
+
+## License
+
+This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+This plugin relies on the following projects and libraries:
+
+- [EXILED](https://github.com/ExMod-Team/EXILED) — MIT License
+- [Mirror Networking](https://github.com/MirrorNetworking/Mirror) — MIT License
+- [Unity Engine](https://unity.com/) — Unity Companion License

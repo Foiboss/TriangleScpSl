@@ -22,9 +22,6 @@
       <Reference Include="Mirror.Components">
         <HintPath>_ProjectDependencies\Mirror.Components.dll</HintPath>
       </Reference>
-      <Reference Include="ProjectMER">
-        <HintPath>_ProjectDependencies\ProjectMER.dll</HintPath>
-      </Reference>
     </ItemGroup>
 
 </Project>
