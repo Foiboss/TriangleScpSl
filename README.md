@@ -58,6 +58,8 @@ The implementation uses one shared base root + three shared axis roots per `Tria
 
 ## Installation
 
+[![Download Latest Release](https://img.shields.io/badge/download-latest%20release-brightgreen?style=for-the-badge)](https://github.com/Foiboss/TriangleScpSl/releases/latest)
+
 1. Build the project.
 2. Copy `TriangleScpSl.dll` into `EXILED/Plugins/`.
 3. Place models in `EXILED/Plugins/BlenderModels/`.
