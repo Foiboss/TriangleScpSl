@@ -13,6 +13,31 @@ An [EXILED](https://github.com/ExMod-Team/EXILED) plugin for SCP: Secret Laborat
 - Target framework: `net48`
 - EXILED package: `ExMod.Exiled 9.13.3`
 
+## Table of Contents
+
+- [How it works](#how-it-works)
+  - [Primitive count](#primitive-count)
+- [Installation](#installation)
+- [Commands](#commands)
+  - [Triangulate](#triangulate)
+  - [TriangleExample](#triangleexample)
+  - [ExportSchematic](#exportschematic)
+- [API](#api)
+  - [ModelTriangle](#modeltriangle)
+  - [TriangulatedModel](#triangulatedmodel)
+  - [TrianglePrimitive](#triangleprimitive)
+  - [TriangleSpace](#trianglespace)
+  - [ParallelogramPrimitive](#parallelogramprimitive)
+- [Mathematical Details: Parallelogram Construction](#mathematical-details-parallelogram-construction)
+  - [Step 1 — Decompose vLeft](#step-1--decompose-vleft)
+  - [Step 2 — Compute Inner Rectangle Sides](#step-2--compute-inner-rectangle-sides)
+  - [Step 3 — Invert to Find a, b, x](#step-3--invert-to-find-a-b-x)
+  - [Step 4 — Apply the Transform](#step-4--apply-the-transform)
+- [Architecture Details](#architecture-details)
+  - [Efficient Rendering with TriangleSpace](#efficient-rendering-with-trianglespace)
+  - [Quad Counting](#quad-counting)
+- [Notes](#notes)
+
 ## How it works
 
 Each triangle is rendered as three parallelograms that share the triangle area.
@@ -246,7 +271,16 @@ ParallelogramPrimitive(Vector3 vUp, Vector3 vLeft, Vector3 center, Color color, 
 
 ## Mathematical Details: Parallelogram Construction
 
+---
+
+<details>
+ <summary>Show the image explanation</summary>
+
 ![derivation](https://github.com/user-attachments/assets/78faa24b-2003-45b6-b9e5-cde804db598f)
+
+</details>
+
+---
 
 A parallelogram with half-diagonals **vUp** and **vLeft** is drawn by finding an inner rectangle of sides `a × b` and a horizontal shear factor `x` such that the result matches the shape.
 
@@ -286,7 +320,7 @@ Conditions `l1 < l3` and `l2 < l3` are satisfied whenever the triangle is non-de
 
 The base quad is placed at `center`, rotated to face the plane of the parallelogram, and scaled by `x` along the base axis. The child quad is attached with a local rotation of `−arctan(b/a)` and scale `(b, a, 1)` to produce the final sheared shape.
 
-## Architecture Details: Why This Works
+## Architecture Details
 
 ### Triangle Rendering with Quads
 
@@ -305,27 +339,6 @@ TrianglePrimitive
 │       ├── _baseQuad (invisible)
 │       └── _quad (visible)
 ```
-
-**Why 2 quads per parallelogram?**
-
-The base quad cannot directly produce a sheared parallelogram due to limitations of quad scaling. Here's why we need the nested structure:
-
-1. **Base Quad** (`_baseQuad`):
-   - Position: placed at parallelogram center
-   - Rotation: aligned to face the parallelogram plane (using `vNormal`)
-   - Scale: `(x, 1, 1)` — applies horizontal shear factor along one axis
-   - **Invisible** — doesn't render, serves as transform anchor
-
-2. **Child Quad** (`_quad`):
-   - **Parented to** the base quad (local hierarchy)
-   - Local position: origin (0, 0, 0) relative to parent
-   - Local rotation: `−arctan(b/a)` — rotates to un-shear the shape
-   - Local scale: `(b, a, 1)` — applies the rectangle side lengths
-   - **Visible** — produces the final rendered parallelogram
-
-**The math:**
-
-When you scale a quad by `(x, 1, 1)` and then apply a child with `(b, a, 1)`, the combined transformation creates the sheared parallelogram. The rotation of the child by `−arctan(b/a)` compensates for the shear so the final quad edges align with the parallelogram diagonals.
 
 ### Efficient Rendering with TriangleSpace
 
@@ -360,10 +373,3 @@ Is calculated as:
 - `Count * 3`: Three **visible** quads per triangle (one for each parallelogram)
 - `+ 3`: Three shared **invisible axis root** quads
 - `+ 1`: One shared **invisible base root** quad
-
-## Notes
-
-- `TriangleEntry` is an internal type used by `TriangleSpace`.
-- `StlParser` falls back to ASCII parsing when binary detection fails, and vice versa.
-- `TriangulatedModel` centers imported geometry around the bounding-box center before applying `scale` and `worldPosition`.
-- Color is stored per-triangle in `ModelTriangle`; `TriangulatedModel.Color` is a write-only setter that overrides all triangles at once.
