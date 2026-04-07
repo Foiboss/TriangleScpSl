@@ -92,12 +92,7 @@ public class TriangulatedModel
     {
         List<(ModelTriangle Triangle, PrimitiveFlags Flags)> snapshot = new(_entries.Count);
 
-        foreach (TriangleEntry entry in _entries)
-        {
-            snapshot.Add((
-                new ModelTriangle(entry.P1, entry.P2, entry.P3, entry.Color),
-                entry.Flags));
-        }
+        snapshot.AddRange(_entries.Select(entry => (new ModelTriangle(entry.P1, entry.P2, entry.P3, entry.Color), entry.Flags)));
 
         return snapshot;
     }

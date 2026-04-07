@@ -19,7 +19,7 @@ public sealed class ExportSchematicCommand : ICommand
 
     public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)
     {
-        if (arguments.Count < 2 || arguments.Count > 4)
+        if (arguments.Count is < 2 or > 4)
         {
             response = "Usage: exportschematic <model file (.obj/.stl)> <output json file> [forceObjColor(true/false)] [previewScale]";
             return false;
