@@ -30,7 +30,7 @@ An [EXILED](https://github.com/ExMod-Team/EXILED) plugin for SCP: Secret Laborat
 - [Mathematical Details: Parallelogram Construction](#mathematical-details-parallelogram-construction)
   - [Step 1 — Decompose vLeft](#step-1--decompose-vleft)
   - [Step 2 — Compute Inner Rectangle Sides](#step-2--compute-inner-rectangle-sides)
-  - [Step 3 — Invert to Find a, [README.md](README.md)b, x](#step-3--invert-to-find-a-b-x)
+  - [Step 3 — Invert to Find a, b, x](#step-3--invert-to-find-a-b-x)
   - [Step 4 — Apply the Transform](#step-4--apply-the-transform)
 - [Architecture Details](#architecture-details)
   - [Quad Counting](#quad-counting)
