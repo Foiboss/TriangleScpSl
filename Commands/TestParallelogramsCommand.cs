@@ -12,10 +12,16 @@ namespace TriangleScpSl.Commands;
 public class TestParallelogramsCommand : ICommand
 {
     const float AbsoluteToleranceUnits = 0.02f;
+    // max expected size (max length (v1+-v2))
+    const float MaxExpectedParallelogramSize = 25f;
 
     readonly List<Primitive> _points = [];
     readonly List<Primitive> _parallelograms = [];
-    readonly List<(float theta, float phi, Primitive stretch)> _stretches = [];
+    readonly StretchSpatialIndex _stretches = new(
+        cellSize: 0.05f,
+        maxAngularTolerance: AbsoluteToleranceUnits / MaxExpectedParallelogramSize * 2f
+        // *2f additional fallback; if error is bigger, tolerance-check will still work
+    );
 
     public string Command { get; } = "TestParallelograms";
     public string[] Aliases { get; } = [];
@@ -28,24 +34,24 @@ public class TestParallelogramsCommand : ICommand
         float bestT = 0f, bestP = 0f;
         float bestErr = float.MaxValue;
 
-        foreach (var (candT, candP, candStretch) in _stretches)
+        foreach (StretchSpatialIndex.Entry entry in _stretches.QueryNearby(trueTheta, truePhi))
         {
             float err = ParallelogramSpaceUtils.MaxVertexError(
-                v1World, v2World, trueTheta, truePhi, candT, candP);
+                v1World, v2World, trueTheta, truePhi, entry.Theta, entry.Phi);
 
             if (err <= AbsoluteToleranceUnits && err < bestErr)
             {
                 bestErr = err;
-                best = candStretch;
-                bestT = candT;
-                bestP = candP;
+                best = entry.Stretch;
+                bestT = entry.Theta;
+                bestP = entry.Phi;
             }
         }
 
         if (best != null) return (best, bestT, bestP);
 
         Primitive stretch = ParallelogramSpaceUtils.CreateStretch(trueTheta, truePhi);
-        _stretches.Add((trueTheta, truePhi, stretch));
+        _stretches.Add(trueTheta, truePhi, stretch);
         return (stretch, trueTheta, truePhi);
     }
 
@@ -55,8 +61,8 @@ public class TestParallelogramsCommand : ICommand
             if (p?.Base?.gameObject != null) p.Destroy();
         foreach (Primitive p in _points)
             if (p?.Base?.gameObject != null) p.Destroy();
-        foreach (var (_, _, s) in _stretches)
-            if (s.Base?.gameObject != null) s.Destroy();
+        foreach (StretchSpatialIndex.Entry entry in _stretches.All())
+            if (entry.Stretch?.Base?.gameObject != null) entry.Stretch.Destroy();
         _parallelograms.Clear();
         _points.Clear();
         _stretches.Clear();
@@ -87,7 +93,7 @@ public class TestParallelogramsCommand : ICommand
             Vector3 vLeft = Random.insideUnitSphere * Random.Range(1f, 10f);
             if (!VectorPhiSolver.TrySolve(vLeft, vUp, out float theta, out float phi))
                 continue;
-            
+
             _points.Add(Primitive.Create(PrimitiveType.Sphere, PrimitiveFlags.Visible, pos + vUp,   Vector3.zero, Vector3.one * 0.1f, true, Color.red));
             _points.Add(Primitive.Create(PrimitiveType.Sphere, PrimitiveFlags.Visible, pos - vUp,   Vector3.zero, Vector3.one * 0.1f, true, Color.green));
             _points.Add(Primitive.Create(PrimitiveType.Sphere, PrimitiveFlags.Visible, pos + vLeft, Vector3.zero, Vector3.one * 0.1f, true, Color.blue));
