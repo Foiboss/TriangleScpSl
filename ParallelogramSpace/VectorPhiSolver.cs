@@ -3,142 +3,156 @@ using UnityEngine;
 namespace TriangleScpSl.ParallelogramSpace;
 
 /// <summary>
-/// Finds angle phi such that after dividing x/cos(phi)*f and y/sin(phi)*f,
-/// the lengths of both transformed vectors are equal.
+///     Finds (theta, phi) such that after rotating by -theta around Z
+///     and scaling x/(cos(phi)*F), y/(sin(phi)*F),
+///     both vectors end up with equal length.
 /// </summary>
 public static class VectorPhiSolver
 {
     public const float F = 2f;
 
     /// <summary>
-    /// Applies the transform to a single vector:
-    /// x' = x / (cos(phi) * f)
-    /// y' = y / (sin(phi) * f)
-    /// z' = z  (unchanged)
+    ///     Rotate XY by -theta (Z unchanged).
     /// </summary>
-    static Vector3 Transform(Vector3 v, double phi)
+    static (double x, double y) RotateXY(Vector3 v, double theta)
     {
-        double cosPhi = Math.Cos(phi);
-        double sinPhi = Math.Sin(phi);
-
-        Vector3 returnVector;
-
-        if (Math.Abs(cosPhi) < 1e-12) // cos = 0
-        {
-            returnVector = v with { y = (float)(v.y / (sinPhi * F)) };
-        }
-        else if (Math.Abs(sinPhi) < 1e-12) // sin = 0
-        {
-            returnVector = v with { x = (float)(v.x / (cosPhi * F)) };
-        }
-        else // cos & sin != 0
-        {
-            returnVector = new Vector3(
-                (float)(v.x / (cosPhi * F)),
-                (float)(v.y / (sinPhi * F)),
-                v.z
-            );
-        }
-
-        return returnVector;
+        double c = Math.Cos(theta), s = Math.Sin(theta);
+        // R(-θ) = [[cos(theta), sin(theta)],[-sin(theta), cos(theta)]]
+        return (v.x * c + v.y * s, -v.x * s + v.y * c);
     }
 
-    static double LengthSquaredDiff(Vector3 v1, Vector3 v2, double phi)
+    /// <summary>
+    ///     For a given theta, solve the quadratic in t = cos(phi)^2 analytically.
+    ///     Returns true if a valid phi in (0, pi/2) exists.
+    /// </summary>
+    static bool TrySolveForPhi(Vector3 v1, Vector3 v2, double theta, out double phi)
     {
-        double c2 = Math.Cos(phi) * Math.Cos(phi);
-        double s2 = Math.Sin(phi) * Math.Sin(phi);
-        const double f2 = F * F;
+        phi = 0;
+        var (u1X, u1Y) = RotateXY(v1, theta);
+        var (u2X, u2Y) = RotateXY(v2, theta);
 
-        double ScaledLenSq(Vector3 v)
+        double a = u1X * u1X - u2X * u2X;
+        double b = u1Y * u1Y - u2Y * u2Y;
+        double c = (double)v1.z * v1.z - (double)v2.z * v2.z;
+        const double F2 = F * F;
+
+        // Quadratic: C * F^2 * t^2 + (a - b - c * f^2)*t - a = 0,  t = cos(phi)^2
+        double qa = c * F2;
+        double qb = a - b - c * F2;
+        double qc = -a;
+
+        double? bestT = null;
+
+        if (Math.Abs(qa) < 1e-15)
         {
-            double xPart = c2 < 1e-24 ? v.x * v.x             : v.x * v.x / (c2 * f2);
-            double yPart = s2 < 1e-24 ? v.y * v.y             : v.y * v.y / (s2 * f2);
-            return xPart + yPart + v.z * v.z;
+            // Linear
+            if (Math.Abs(qb) > 1e-15)
+            {
+                double t = -qc / qb;
+                if (t is > 1e-9 and < 1 - 1e-9)
+                    bestT = t;
+            }
+            else if (Math.Abs(qc) < 1e-12)
+            {
+                // Any phi works
+                bestT = 0.5; // phi = pi/4
+            }
+        }
+        else
+        {
+            double disc = qb * qb - 4.0 * qa * qc;
+            if (disc >= 0)
+            {
+                double sq = Math.Sqrt(disc);
+                double t1 = (-qb + sq) / (2.0 * qa);
+                double t2 = (-qb - sq) / (2.0 * qa);
+                bool ok1 = t1 is > 1e-9 and < 1 - 1e-9;
+                bool ok2 = t2 is > 1e-9 and < 1 - 1e-9;
+
+                switch (ok1)
+                {
+                    case true when ok2:
+                        bestT = Math.Abs(t1 - 0.5) < Math.Abs(t2 - 0.5) ? t1 : t2;
+                        break;
+                    case true:
+                        bestT = t1;
+                        break;
+                    default:
+                    {
+                        if (ok2) bestT = t2;
+                        break;
+                    }
+                }
+            }
         }
 
-        return ScaledLenSq(v1) - ScaledLenSq(v2);
+        if (bestT == null) return false;
+        phi = Math.Acos(Math.Sqrt(bestT.Value));
+        return true;
     }
 
-    /// <param name="v1">First input vector</param>
-    /// <param name="v2">Second input vector</param>
-    /// <param name="phi">Found angle in radians</param>
-    /// <param name="resultV1">Transformed v1</param>
-    /// <param name="resultV2">Transformed v2</param>
-    public static void Solve
-    (
+    /// <summary>
+    ///     Find theta that makes A(theta) and B(theta) have opposite signs.
+    ///     A(theta) = D/2 + H·cos(2 * theta + alpha), needs A * B &lt; 0 → pick theta where A crosses zero.
+    /// </summary>
+    static double FindOptimalTheta(Vector3 v1, Vector3 v2)
+    {
+        double a = (double)v1.x * v1.x - (double)v2.x * v2.x;
+        double b = (double)v1.y * v1.y - (double)v2.y * v2.y;
+        double e = (a - b) / 2.0;
+        double g = (double)v1.x * v1.y - (double)v2.x * v2.y;
+        double h = Math.Sqrt(e * e + g * g);
+
+        if (h < 1e-15) return Math.PI / 4;
+
+        // A(theta) = D/2 + H·cos(2 * theta + alpha) where alpha = atan2(G, E)
+        // Minimum when cos(2 * theta + alpha) = -1, i.e. 2 * theta + alpha = pi
+        double alpha = Math.Atan2(g, e);
+        return (Math.PI - alpha) / 2.0;
+    }
+    
+    /// <summary>
+    ///     Returns false instead of throwing when no solution exists.
+    /// </summary>
+    public static bool TrySolve(
         Vector3 v1, Vector3 v2,
-        out float phi,
-        out Vector3 resultV1, out Vector3 resultV2)
+        out float theta, out float phi)
     {
-        // Note: the equation |v1'|^2 = |v2'|^2 depends only on cos^2(phi) and sin^2(phi),
-        // so it is periodic with period pi/2. We search one root in (eps, pi/2 - eps),
-        // then check all quadrant variants to avoid divisions by zero on boundary.
+        theta = 0f;
+        phi = 0f;
 
-        const double eps = 1e-9;
-        const double hi = Math.PI / 2 - eps;
-        const int maxIter = 200;
+        // Try a small set of candidate thetas first — covers almost all cases cheaply
+        double[] candidates =
+        [
+            0,
+            FindOptimalTheta(v1, v2),
+            Math.PI / 4,
+            Math.PI / 2,
+            3 * Math.PI / 4,
+        ];
 
-        double fLo = LengthSquaredDiff(v1, v2, eps);
-        double fHi = LengthSquaredDiff(v1, v2, hi);
-
-        double? root = null;
-
-        if (Math.Abs(fLo) < 1e-9)
-            root = eps;
-        else if (Math.Abs(fHi) < 1e-9)
-            root = hi;
-        else if (fLo * fHi < 0)
+        foreach (double thetaD in candidates)
         {
-            // Bisection in (lo, hi)
-            double a = eps, b = hi;
-
-            for (var i = 0; i < maxIter; i++)
+            if (TrySolveForPhi(v1, v2, thetaD, out double phiD))
             {
-                double mid = (a + b) / 2.0;
-                double fMid = LengthSquaredDiff(v1, v2, mid);
-
-                if (Math.Abs(fMid) < 1e-12 || b - a < 1e-14)
-                {
-                    root = mid;
-                    break;
-                }
-
-                if (fLo * fMid < 0)
-                {
-                    b = mid;
-                }
-                else
-                {
-                    a = mid;
-                    fLo = fMid;
-                }
-            }
-
-            root ??= (a + b) / 2.0;
-        }
-
-        if (root == null)
-        {
-            // No sign change: vectors may already have the same length regardless of phi,
-            // or no solution exists in this quadrant. Try pi/4 as a fallback.
-            double diff = LengthSquaredDiff(v1, v2, Math.PI / 4);
-
-            if (Math.Abs(diff) < 1e-6)
-                root = Math.PI / 4;
-            else
-            {
-                throw new InvalidOperationException(
-                    "No phi found in (0, pi/2) that equalizes the vector lengths. " +
-                    "Check that v1 and v2 are not parallel projections of each other on x/y axes.");
+                theta = (float)thetaD;
+                phi = (float)phiD;
+                return true;
             }
         }
 
-        // The equation is the same for phi and pi-phi (cos^2 and sin^2 are symmetric),
-        // so any of these four angles is a valid solution; pick the principal one.
-        double phiD = root.Value;
+        // Brute-force fallback for the rare remaining cases
+        for (int i = 1; i <= 360; i++)
+        {
+            double thetaD = i * Math.PI / 360.0;
+            if (TrySolveForPhi(v1, v2, thetaD, out double phiD))
+            {
+                theta = (float)thetaD;
+                phi = (float)phiD;
+                return true;
+            }
+        }
 
-        phi = (float)phiD;
-        resultV1 = Transform(v1, phiD);
-        resultV2 = Transform(v2, phiD);
+        return false;
     }
 }

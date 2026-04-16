@@ -6,9 +6,9 @@ namespace TriangleScpSl.ParallelogramSpace;
 
 public static class ParallelogramSpaceUtils
 {
-    public static Primitive CreateStretch(float phi)
+    public static Primitive CreateStretch(float theta, float phi)
     {
-        return Primitive.Create(
+        var stretch = Primitive.Create(
             PrimitiveType.Quad,
             PrimitiveFlags.None,
             Vector3.zero,
@@ -17,32 +17,96 @@ public static class ParallelogramSpaceUtils
             true,
             null
         );
+        stretch.Rotation = Quaternion.Euler(0f, 0f, theta * Mathf.Rad2Deg);
+        return stretch;
     }
 
-    public static Primitive CreateParallelogram(Vector3 position, Vector3 v1, Vector3 v2, Primitive stretch, PrimitiveFlags flags, Color color)
+    /// <summary>
+    ///     Applies the full forward phi-transform (rotate -theta, then scale 1/(cos(phi)*F), 1/(sin(phi)*F).
+    ///     World vector → local vector in the stretch space.
+    /// </summary>
+    public static Vector3 ForwardTransform(Vector3 v, float theta, float phi)
     {
-        // Everything below is computed in the transformed space where |v1| == |v2| (rectangle)
-        Vector3 normal = Vector3.Cross(v1, v2).normalized;
+        double c = Mathf.Cos(theta), s = Mathf.Sin(theta);
+        double rx = v.x * c + v.y * s;
+        double ry = -v.x * s + v.y * c;
+        double cp = Mathf.Cos(phi), sp = Mathf.Sin(phi);
+        const double f = VectorPhiSolver.F;
+        return new Vector3(
+            (float)(rx / (cp * f)),
+            (float)(ry / (sp * f)),
+            v.z
+        );
+    }
 
+    /// <summary>
+    ///     Applies the inverse stretch (as Unity would apply to a child with scale (cos(phi)*F, sin(phi)*F, 1) and rotZ=θ).
+    ///     Local vector → world.
+    /// </summary>
+    public static Vector3 InverseTransform(Vector3 vLocal, float theta, float phi)
+    {
+        double cp = Mathf.Cos(phi), sp = Mathf.Sin(phi);
+        const double f = VectorPhiSolver.F;
+        double sx = vLocal.x * (cp * f);
+        double sy = vLocal.y * (sp * f);
+        double c = Mathf.Cos(theta), s = Mathf.Sin(theta);
+        // Inverse of R(-theta) is R(theta)
+        return new Vector3(
+            (float)(sx * c - sy * s),
+            (float)(sx * s + sy * c),
+            vLocal.z
+        );
+    }
+
+    /// <summary>
+    ///     Maximum displacement of the 4 vertices of the parallelogram when using
+    ///     a candidateStretch instead of the ideal (trueTheta, truePhi).
+    ///     v1World, v2World are the world-space edge vectors from center to corner
+    ///     (the parallelogram spans ±v1 ± v2 around its center).
+    /// </summary>
+    public static float MaxVertexError(
+        Vector3 v1World, Vector3 v2World,
+        float trueTheta, float truePhi,
+        float candTheta, float candPhi)
+    {
+        // Local coordinates of the 4 vertices in the TRUE stretch space
+        Vector3 v1Local = ForwardTransform(v1World, trueTheta, truePhi);
+        Vector3 v2Local = ForwardTransform(v2World, trueTheta, truePhi);
+        
+        // The 4 corners of the parallelogram (local, relative to center): ±v1Local ± v2Local
+        Vector3[] localVerts =
+        [
+            v1Local + v2Local, v1Local - v2Local,
+            -v1Local + v2Local, -v1Local - v2Local,
+        ];
+
+        float maxErr = 0f;
+        foreach (Vector3 lv in localVerts)
+        {
+            // Where the vertex should be (true parameters)
+            Vector3 trueWorld = InverseTransform(lv, trueTheta, truePhi);
+            // Where it will end up with the candidate stretch (but the same locals!)
+            Vector3 candWorld = InverseTransform(lv, candTheta, candPhi);
+            float err = (trueWorld - candWorld).magnitude;
+            if (err > maxErr) maxErr = err;
+        }
+        return maxErr;
+    }
+
+    public static Primitive CreateParallelogram(
+        Vector3 position, Vector3 v1, Vector3 v2,
+        Primitive stretch, PrimitiveFlags flags, Color color)
+    {
+        Vector3 normal = Vector3.Cross(v1, v2).normalized;
         float a = (v1 + v2).magnitude;
         float b = (v1 - v2).magnitude;
 
         var prim = Primitive.Create(
-            PrimitiveType.Quad,
-            flags,
-            position,
-            null,
-            new Vector3(a, b, 1f),
-            true,
-            color
-        );
+            PrimitiveType.Quad, flags, position, null, Vector3.one, true, color);
 
-        prim.Rotation = Quaternion.LookRotation(normal, (v1 - v2).normalized);
         prim.Transform.SetParent(stretch.Transform, true);
+        prim.Transform.localRotation = Quaternion.LookRotation(normal, (v1 - v2).normalized);
         prim.Transform.localScale = new Vector3(a, b, 1f);
-        
         return prim;
     }
-    
-    
 }

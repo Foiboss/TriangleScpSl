@@ -191,16 +191,7 @@ public class ParallelogramSpace
 
     void CreateParallelogram(Vector3 vLeft, Vector3 vUp, Vector3 center, PrimitiveFlags flags, Color color)
     {
-        VectorPhiSolver.Solve(vLeft, vUp, out float phi, out Vector3 v1, out Vector3 v2);
-
-        if (!_angleToStretch.TryGetValue(phi, out Primitive stretch))
-        {
-            stretch = ParallelogramSpaceUtils.CreateStretch(phi);
-            _angleToStretch[phi] = stretch;
-        }
-
-        Primitive parallelogram = ParallelogramSpaceUtils.CreateParallelogram(center, v1, v2, stretch, flags, color);
-        _parallelograms.Add(parallelogram);
+        //todo:
     }
 
     static Vector3 CalculateCenter(IReadOnlyList<ModelTriangle> triangles)
