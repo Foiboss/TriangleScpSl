@@ -4,24 +4,25 @@ using CommandSystem;
 using Exiled.API.Features;
 using TriangleScpSl.Core.Paths;
 using TriangleScpSl.Core.TriangulatedModel;
+using TriangleScpSl.ParallelogramSpace;
 using UnityEngine;
 
 namespace TriangleScpSl.Commands;
 
 [CommandHandler(typeof(RemoteAdminCommandHandler))]
-public sealed class ExportSchematicCommand : ICommand
+public sealed class ExportSchematicV2Command : ICommand
 {
     readonly Color _fallbackColor = Color.white;
 
-    public string Command { get; } = "ExportSchematic";
+    public string Command { get; } = "ExportSchematicV2";
     public string[] Aliases { get; } = [];
-    public string Description { get; } = "Exports .obj/.stl as ProjectMER schematic JSON. Usage: <model file> <output file> [forceObjColor(true/false)] [previewScale]";
+    public string Description { get; } = "Exports .obj/.stl as ProjectMER schematic JSON. Usage: <model file> <output file> [accuracy(0.001)] [previewScale]";
 
     public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)
     {
         if (arguments.Count is < 2 or > 4)
         {
-            response = "Usage: ExportSchematic <model file (.obj/.stl)> <output json file> [forceObjColor(true/false)] [previewScale]";
+            response = "Usage: ExportSchematicV2 <model file (.obj/.stl)> <output json file> [accuracy(0.001)] [previewScale]";
             return false;
         }
 
@@ -34,15 +35,16 @@ public sealed class ExportSchematicCommand : ICommand
             return false;
         }
 
-        var forceObjColor = false;
+        const bool forceObjColor = false;
+        float accuracy = 0.001f;
 
         if (arguments.Count >= 3)
         {
-            string rawForce = arguments.Array?[arguments.Offset + 2] ?? string.Empty;
+            string rawAccuracy = arguments.Array?[arguments.Offset + 2] ?? string.Empty;
 
-            if (!bool.TryParse(rawForce, out forceObjColor))
+            if (!float.TryParse(rawAccuracy, out accuracy))
             {
-                response = "Invalid forceObjColor value. Use true/false.";
+                response = "Invalid accuracy value";
                 return false;
             }
         }
@@ -66,7 +68,16 @@ public sealed class ExportSchematicCommand : ICommand
         if (player is not null)
             spawnPosition = player.Position + player.GameObject.transform.forward * 2.5f + Vector3.up * 1.2f;
 
-        if (!ModelFactory.TryCreateModel(requestedFile, spawnPosition, _fallbackColor, forceObjColor, out TriangulatedModel? model, out _, out string modelError, PrimitiveFlags.Visible))
+        if (!ModelFactoryV2.TryCreateModel(
+            requestedFile, 
+            spawnPosition, 
+            _fallbackColor, 
+            forceObjColor,
+            out ParallelogramSpace.ParallelogramSpace? parallelogramSpace,
+            out _, 
+            out string modelError, 
+            PrimitiveFlags.Visible, 
+            accuracy))
         {
             response = modelError;
             return false;
@@ -74,24 +85,24 @@ public sealed class ExportSchematicCommand : ICommand
 
         try
         {
-            model!.Scale = Vector3.one * previewScale;
+            parallelogramSpace!.Scale = Vector3.one * previewScale;
 
             TrianglePaths.EnsureSchematicDirectoryExists(outputFileName);
             string outputPath = TrianglePaths.GetSchematicOutputPath(outputFileName);
             string schematicName = TrianglePaths.GetSchematicFolderName(outputFileName);
 
-            if (!ProjectMerSchematicExporter.TryExport(model, outputPath, schematicName, out string exportError))
+            if (!ProjectMerSchematicExporter.TryExport(parallelogramSpace, outputPath, schematicName, out string exportError))
             {
                 response = $"Failed to export schematic: {exportError}";
                 return false;
             }
 
-            response = $"Schematic exported to LabAPI MER folder: {outputPath} (triangles={model.Count}, quads={model.QuadCount}, forceObjColor={forceObjColor}, previewScale={previewScale.ToString(CultureInfo.InvariantCulture)}).";
+            response = $"Schematic exported to LabAPI MER folder: {outputPath} (triangles={parallelogramSpace.Count}, quads={parallelogramSpace.QuadCount}, forceObjColor={forceObjColor}, previewScale={previewScale.ToString(CultureInfo.InvariantCulture)}).";
             return true;
         }
         finally
         {
-            model!.Destroy();
+            parallelogramSpace!.Destroy();
         }
     }
 

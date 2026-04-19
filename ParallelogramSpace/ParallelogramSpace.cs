@@ -15,7 +15,9 @@ public class ParallelogramSpace
     readonly StretchSpatialIndex _stretches;
     readonly List<Primitive> _parallelograms = [];
     readonly List<ParallelogramPrimitive> _fallbackParallelograms = [];
+    readonly List<ParallelogramSnapshot> _parallelogramSnapshots = [];
     readonly bool _invertWinding;
+    PrimitiveFlags _flags;
 
     Vector3 _position;
     Quaternion _rotation;
@@ -36,6 +38,7 @@ public class ParallelogramSpace
         _rotation = Quaternion.identity;
         _scale = Vector3.one * scale;
         _invertWinding = invertWinding;
+        _flags = flags;
 
         _baseQuad = Primitive.Create(
             PrimitiveType.Quad,
@@ -120,6 +123,12 @@ public class ParallelogramSpace
 
             foreach (Primitive parallelogram in _parallelograms) parallelogram.Color = value;
             foreach (ParallelogramPrimitive parallelogram in _fallbackParallelograms) parallelogram.Color = value;
+
+            for (var i = 0; i < _parallelogramSnapshots.Count; i++)
+            {
+                ParallelogramSnapshot snapshot = _parallelogramSnapshots[i];
+                _parallelogramSnapshots[i] = new ParallelogramSnapshot(snapshot.VUp, snapshot.VLeft, snapshot.Center, value, snapshot.Flags, snapshot.IsFallback);
+            }
         }
     }
 
@@ -130,13 +139,31 @@ public class ParallelogramSpace
             if (_isDestroyed)
                 return;
 
+            _flags = value;
+
             foreach (Primitive parallelogram in _parallelograms) parallelogram.Flags = value;
             foreach (ParallelogramPrimitive parallelogram in _fallbackParallelograms) parallelogram.Flags = value;
+
+            for (var i = 0; i < _parallelogramSnapshots.Count; i++)
+            {
+                ParallelogramSnapshot snapshot = _parallelogramSnapshots[i];
+                _parallelogramSnapshots[i] = new ParallelogramSnapshot(snapshot.VUp, snapshot.VLeft, snapshot.Center, snapshot.Color, value, snapshot.IsFallback);
+            }
         }
     }
 
     public Vector3 TransformPoint(Vector3 localPoint)
         => _position + _rotation * Vector3.Scale(localPoint, _scale);
+
+    public Vector3 InverseTransformPoint(Vector3 worldPoint)
+    {
+        Vector3 local = Quaternion.Inverse(_rotation) * (worldPoint - _position);
+
+        return new Vector3(
+            _scale.x != 0f ? local.x / _scale.x : 0f,
+            _scale.y != 0f ? local.y / _scale.y : 0f,
+            _scale.z != 0f ? local.z / _scale.z : 0f);
+    }
 
     public static ParallelogramSpace Create
     (
@@ -147,6 +174,138 @@ public class ParallelogramSpace
         float scale = 1f,
         bool invertWinding = false)
         => new(triangles, worldPosition, flags, absoluteToleranceUnits, scale, invertWinding);
+
+    public IReadOnlyList<(ModelTriangle Triangle, PrimitiveFlags Flags)> GetTriangleSnapshot()
+    {
+        if (_isDestroyed)
+            return [];
+
+        List<(ModelTriangle Triangle, PrimitiveFlags Flags)> snapshot = new(_localTriangles.Count);
+
+        foreach (ModelTriangle localTriangle in _localTriangles)
+        {
+            Vector3 p1 = TransformPoint(localTriangle.P1);
+            Vector3 p2 = TransformPoint(localTriangle.P2);
+            Vector3 p3 = TransformPoint(localTriangle.P3);
+
+            if (_invertWinding)
+                (p2, p3) = (p3, p2);
+
+            snapshot.Add((new ModelTriangle(p1, p2, p3, localTriangle.Color), _flags));
+        }
+
+        return snapshot;
+    }
+
+    public IReadOnlyList<ParallelogramSnapshot> GetParallelogramSnapshot()
+    {
+        if (_isDestroyed)
+            return [];
+
+        return _parallelogramSnapshots.ToArray();
+    }
+
+    public IReadOnlyList<PrimitiveSnapshot> GetPrimitiveSnapshot()
+    {
+        if (_isDestroyed)
+            return [];
+
+        List<PrimitiveSnapshot> snapshot = new(QuadCount);
+        Dictionary<Transform, int> indexByTransform = new(QuadCount);
+
+        int modelBaseIndex = snapshot.Count;
+        snapshot.Add(new PrimitiveSnapshot(
+            _baseQuad.Position,
+            _baseQuad.Rotation,
+            _baseQuad.Scale,
+            Vector3.zero,
+            Quaternion.identity,
+            Vector3.one,
+            _baseQuad.Color,
+            _baseQuad.Flags,
+            "ModelBase",
+            -1));
+        indexByTransform[_baseQuad.Transform] = modelBaseIndex;
+
+        foreach (StretchSpatialIndex.Entry entry in _stretches.All())
+        {
+            int stretchIndex = snapshot.Count;
+            Transform stretchTransform = entry.Stretch.Transform;
+            int parentIndex = indexByTransform.TryGetValue(stretchTransform.parent, out int foundParent) ? foundParent : modelBaseIndex;
+
+            snapshot.Add(new PrimitiveSnapshot(
+                entry.Stretch.Position,
+                entry.Stretch.Rotation,
+                entry.Stretch.Scale,
+                stretchTransform.localPosition,
+                stretchTransform.localRotation,
+                stretchTransform.localScale,
+                entry.Stretch.Color,
+                entry.Stretch.Flags,
+                "Stretch",
+                parentIndex));
+
+            indexByTransform[stretchTransform] = stretchIndex;
+        }
+
+        foreach (Primitive parallelogram in _parallelograms)
+        {
+            Transform parallelogramTransform = parallelogram.Transform;
+            int parentIndex = indexByTransform.TryGetValue(parallelogramTransform.parent, out int foundParent) ? foundParent : modelBaseIndex;
+
+            snapshot.Add(new PrimitiveSnapshot(
+                parallelogram.Position,
+                parallelogram.Rotation,
+                parallelogram.Scale,
+                parallelogramTransform.localPosition,
+                parallelogramTransform.localRotation,
+                parallelogramTransform.localScale,
+                parallelogram.Color,
+                parallelogram.Flags,
+                "Parallelogram",
+                parentIndex));
+        }
+
+        foreach (ParallelogramPrimitive fallback in _fallbackParallelograms)
+        {
+            Primitive fallbackBase = fallback.BasePrimitive;
+            Transform fallbackBaseTransform = fallbackBase.Transform;
+            int fallbackBaseParent = indexByTransform.TryGetValue(fallbackBaseTransform.parent, out int foundBaseParent) ? foundBaseParent : modelBaseIndex;
+
+            int fallbackBaseIndex = snapshot.Count;
+            snapshot.Add(new PrimitiveSnapshot(
+                fallbackBase.Position,
+                fallbackBase.Rotation,
+                fallbackBase.Scale,
+                fallbackBaseTransform.localPosition,
+                fallbackBaseTransform.localRotation,
+                fallbackBaseTransform.localScale,
+                fallbackBase.Color,
+                fallbackBase.Flags,
+                "FallbackBase",
+                fallbackBaseParent));
+
+            indexByTransform[fallbackBaseTransform] = fallbackBaseIndex;
+
+            Primitive fallbackQuad = fallback.QuadPrimitive;
+            Transform fallbackQuadTransform = fallbackQuad.Transform;
+            int fallbackQuadParent = indexByTransform.TryGetValue(fallbackQuadTransform.parent, out int foundQuadParent) ? foundQuadParent : fallbackBaseIndex;
+
+            snapshot.Add(new PrimitiveSnapshot(
+                fallbackQuad.Position,
+                fallbackQuad.Rotation,
+                fallbackQuad.Scale,
+                fallbackQuadTransform.localPosition,
+                fallbackQuadTransform.localRotation,
+                fallbackQuadTransform.localScale,
+                fallbackQuad.Color,
+                fallbackQuad.Flags,
+                "FallbackQuad",
+                fallbackQuadParent));
+        }
+
+        return snapshot;
+    }
 
     public void Destroy()
     {
@@ -167,12 +326,15 @@ public class ParallelogramSpace
         _stretches.Clear();
         _parallelograms.Clear();
         _fallbackParallelograms.Clear();
+        _parallelogramSnapshots.Clear();
         _localTriangles.Clear();
         _baseQuad.Destroy();
     }
 
     void BuildTriangles(PrimitiveFlags flags)
     {
+        _flags = flags;
+
         foreach (StretchSpatialIndex.Entry entry in _stretches.All())
             entry.Stretch.Destroy();
 
@@ -185,6 +347,7 @@ public class ParallelogramSpace
         _stretches.Clear();
         _parallelograms.Clear();
         _fallbackParallelograms.Clear();
+        _parallelogramSnapshots.Clear();
 
         foreach (ModelTriangle localTriangle in _localTriangles)
             CreateTriangle(localTriangle, flags);
@@ -212,6 +375,7 @@ public class ParallelogramSpace
             var parallelogram = ParallelogramPrimitive.Create(vUp, vLeft, center, color, flags);
             _fallbackParallelograms.Add(parallelogram);
             parallelogram.Transform.SetParent(_baseQuad.Transform);
+            _parallelogramSnapshots.Add(new ParallelogramSnapshot(vUp, vLeft, center, color, flags, true));
             return;
         }
 
@@ -256,6 +420,7 @@ public class ParallelogramSpace
 
         _parallelograms.Add(
             ParallelogramSpaceUtils.CreateParallelogram(center, v1ForStretch, v2ForStretch, stretch, flags, color));
+        _parallelogramSnapshots.Add(new ParallelogramSnapshot(vUp, vLeft, center, color, flags, false));
     }
 
     /// <summary>
@@ -298,5 +463,40 @@ public class ParallelogramSpace
         }
 
         return (min + max) / 2f;
+    }
+
+    public sealed class ParallelogramSnapshot(Vector3 vUp, Vector3 vLeft, Vector3 center, Color color, PrimitiveFlags flags, bool isFallback)
+    {
+        public Vector3 VUp { get; } = vUp;
+        public Vector3 VLeft { get; } = vLeft;
+        public Vector3 Center { get; } = center;
+        public Color Color { get; } = color;
+        public PrimitiveFlags Flags { get; } = flags;
+        public bool IsFallback { get; } = isFallback;
+    }
+    
+    public sealed class PrimitiveSnapshot
+    (
+        Vector3 position,
+        Quaternion rotation,
+        Vector3 scale,
+        Vector3 localPosition,
+        Quaternion localRotation,
+        Vector3 localScale,
+        Color color,
+        PrimitiveFlags flags,
+        string kind,
+        int parentIndex)
+    {
+        public Vector3 Position { get; } = position;
+        public Quaternion Rotation { get; } = rotation;
+        public Vector3 Scale { get; } = scale;
+        public Vector3 LocalPosition { get; } = localPosition;
+        public Quaternion LocalRotation { get; } = localRotation;
+        public Vector3 LocalScale { get; } = localScale;
+        public Color Color { get; } = color;
+        public PrimitiveFlags Flags { get; } = flags;
+        public string Kind { get; } = kind;
+        public int ParentIndex { get; } = parentIndex;
     }
 }

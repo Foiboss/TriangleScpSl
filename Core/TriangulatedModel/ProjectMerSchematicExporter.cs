@@ -10,6 +10,18 @@ namespace TriangleScpSl.Core.TriangulatedModel;
 public static class ProjectMerSchematicExporter
 {
     public static bool TryExport(TriangulatedModel model, string outputPath, string modelName, out string error)
+        => TryExportInternal(model.GetTriangleSnapshot(), model.InverseTransformPoint, model.Rotation, outputPath, modelName, out error);
+
+    public static bool TryExport(ParallelogramSpace.ParallelogramSpace model, string outputPath, string modelName, out string error)
+        => TryExportParallelogramSpaceInternal(model.GetPrimitiveSnapshot(), model.InverseTransformPoint, model.Rotation, outputPath, modelName, out error);
+
+    static bool TryExportInternal(
+        IReadOnlyList<(ModelTriangle Triangle, PrimitiveFlags Flags)> triangles,
+        Func<Vector3, Vector3> inverseTransformPoint,
+        Quaternion modelRotation,
+        string outputPath,
+        string modelName,
+        out string error)
     {
         error = string.Empty;
 
@@ -21,8 +33,6 @@ public static class ProjectMerSchematicExporter
 
         try
         {
-            IReadOnlyList<(ModelTriangle Triangle, PrimitiveFlags Flags)> triangles = model.GetTriangleSnapshot();
-
             if (triangles.Count == 0)
             {
                 error = "Model contains no triangles.";
@@ -77,8 +87,8 @@ public static class ProjectMerSchematicExporter
                         Name = $"(T.{triangleIndex + 1})P{part + 1}.Base",
                         ObjectId = baseId,
                         ParentId = modelObjectId,
-                        Position = model.InverseTransformPoint(basePos),
-                        Rotation = (Quaternion.Inverse(model.Rotation) * baseRot).eulerAngles,
+                        Position = inverseTransformPoint(basePos),
+                        Rotation = (Quaternion.Inverse(modelRotation) * baseRot).eulerAngles,
                         Scale = baseScale,
                         BlockType = 0,
                         IsPrimitive = false,
@@ -101,6 +111,107 @@ public static class ProjectMerSchematicExporter
                         Static = false,
                     });
                 }
+            }
+
+            string json = BuildJson(rootObjectId, blocks);
+            File.WriteAllText(outputPath, json, Encoding.UTF8);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+            return false;
+        }
+    }
+
+    static bool TryExportParallelogramSpaceInternal(
+        IReadOnlyList<ParallelogramSpace.ParallelogramSpace.PrimitiveSnapshot> primitives,
+        Func<Vector3, Vector3> inverseTransformPoint,
+        Quaternion modelRotation,
+        string outputPath,
+        string modelName,
+        out string error)
+    {
+        error = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(outputPath))
+        {
+            error = "Output path is empty.";
+            return false;
+        }
+
+        try
+        {
+            if (primitives.Count == 0)
+            {
+                error = "Model contains no primitives.";
+                return false;
+            }
+
+            string? outputDirectory = Path.GetDirectoryName(outputPath);
+
+            if (!string.IsNullOrWhiteSpace(outputDirectory))
+                Directory.CreateDirectory(outputDirectory);
+
+            int objectIdSeed = GeneratePositiveId() % 500000 + 1000;
+            int rootObjectId = objectIdSeed++;
+            int modelObjectId = objectIdSeed++;
+            int objectId = objectIdSeed;
+
+            List<SchematicBlock> blocks =
+            [
+                new()
+                {
+                    Name = string.IsNullOrWhiteSpace(modelName) ? "ParallelogramSpace" : modelName,
+                    ObjectId = modelObjectId,
+                    ParentId = rootObjectId,
+                    Position = Vector3.zero,
+                    Rotation = Vector3.zero,
+                    Scale = Vector3.one,
+                    BlockType = 0,
+                    IsPrimitive = false,
+                    Static = false,
+                },
+            ];
+
+            List<int> primitiveObjectIds = new(primitives.Count);
+            for (var i = 0; i < primitives.Count; i++)
+                primitiveObjectIds.Add(objectId++);
+
+            for (var i = 0; i < primitives.Count; i++)
+            {
+                var primitive = primitives[i];
+                int parentId = primitive.ParentIndex >= 0 && primitive.ParentIndex < primitiveObjectIds.Count
+                    ? primitiveObjectIds[primitive.ParentIndex]
+                    : modelObjectId;
+
+                Vector3 position = primitive.ParentIndex >= 0
+                    ? primitive.LocalPosition
+                    : inverseTransformPoint(primitive.Position);
+
+                Vector3 rotation = primitive.ParentIndex >= 0
+                    ? primitive.LocalRotation.eulerAngles
+                    : (Quaternion.Inverse(modelRotation) * primitive.Rotation).eulerAngles;
+
+                Vector3 scale = primitive.ParentIndex >= 0
+                    ? primitive.LocalScale
+                    : primitive.Scale;
+
+                blocks.Add(new SchematicBlock
+                {
+                    Name = $"(Q.{i + 1}){primitive.Kind}",
+                    ObjectId = primitiveObjectIds[i],
+                    ParentId = parentId,
+                    Position = position,
+                    Rotation = rotation,
+                    Scale = scale,
+                    BlockType = 1,
+                    IsPrimitive = true,
+                    PrimitiveType = (int)PrimitiveType.Quad,
+                    PrimitiveColor = ToRgbaHex(primitive.Color),
+                    PrimitiveFlags = (int)primitive.Flags,
+                    Static = false,
+                });
             }
 
             string json = BuildJson(rootObjectId, blocks);
@@ -212,10 +323,10 @@ public static class ProjectMerSchematicExporter
 
     static string FormatFloat(float value)
     {
-        if (Mathf.Abs(value) < 0.0000005f)
-            return "0.0";
+        if (Mathf.Abs(value) < 0.0000000005f)
+            return "0.000000000";
 
-        return value.ToString("0.0#####", CultureInfo.InvariantCulture);
+        return value.ToString("0.000000000", CultureInfo.InvariantCulture);
     }
 
     sealed class SchematicBlock

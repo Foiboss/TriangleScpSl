@@ -6,8 +6,6 @@ namespace TriangleScpSl.Core.Triangulation.Parallelogram;
 
 public class ParallelogramPrimitive
 {
-    readonly Primitive _quad;
-    readonly Primitive _baseQuad;
     Vector3 _p1, _p2, _p3, _p4;
     Color _color;
 
@@ -20,9 +18,9 @@ public class ParallelogramPrimitive
         _p3 = center - vUp;
         _p4 = center - vLeft;
 
-        _quad = Primitive.Create(PrimitiveType.Quad, flags, Vector3.zero, null, Vector3.one, true, color);
-        _baseQuad = Primitive.Create(PrimitiveType.Quad, PrimitiveFlags.None, Vector3.zero, null, Vector3.one, true, color);
-        ParallelogramByPoints.Create(vUp, vLeft, center, _quad, _baseQuad);
+        QuadPrimitive = Primitive.Create(PrimitiveType.Quad, flags, Vector3.zero, null, Vector3.one, true, color);
+        BasePrimitive = Primitive.Create(PrimitiveType.Quad, PrimitiveFlags.None, Vector3.zero, null, Vector3.one, true, color);
+        ParallelogramByPoints.Create(vUp, vLeft, center, QuadPrimitive, BasePrimitive);
     }
 
     public Color Color
@@ -31,28 +29,31 @@ public class ParallelogramPrimitive
         set
         {
             _color = value;
-            _quad.Color = value;
+            QuadPrimitive.Color = value;
         }
     }
 
     public PrimitiveFlags Flags
     {
-        get => _quad.Flags;
-        set => _quad.Flags = value;
+        get => QuadPrimitive.Flags;
+        set => QuadPrimitive.Flags = value;
     }
 
     public bool IsStatic
     {
-        get => _baseQuad.IsStatic;
+        get => BasePrimitive.IsStatic;
         set
         {
-            _baseQuad.IsStatic = value;   
-            _quad.IsStatic = value;   
+            BasePrimitive.IsStatic = value;   
+            QuadPrimitive.IsStatic = value;   
         }
     }
     
     
-    public Transform Transform => _baseQuad.Transform;
+    public Transform Transform => BasePrimitive.Transform;
+    public Primitive BasePrimitive { get; }
+    public Primitive QuadPrimitive { get; }
+
     public Vector3 Center => (_p1 + _p3) / 2f;
 
     public static ParallelogramPrimitive Create
@@ -66,13 +67,13 @@ public class ParallelogramPrimitive
         _p3 = center - vUp;
         _p4 = center - vLeft;
 
-        ParallelogramByPoints.Create(vUp, vLeft, center, _quad, _baseQuad);
+        ParallelogramByPoints.Create(vUp, vLeft, center, QuadPrimitive, BasePrimitive);
     }
 
     public void Destroy()
     {
-        _quad.Destroy();
-        _baseQuad.Destroy();
+        QuadPrimitive.Destroy();
+        BasePrimitive.Destroy();
     }
 
     public List<Vector3> GetPoints() => [_p1, _p2, _p3, _p4];

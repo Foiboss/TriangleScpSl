@@ -14,7 +14,7 @@ public class TriangulationV2Command : ICommand
 
     public string Command { get; } = "TriangulateV2";
     public string[] Aliases { get; } = [];
-    public string Description { get; } = "Displays a model Usage: <filename(.obj/.stl)> <true/false(force color)>";
+    public string Description { get; } = "Displays a model Usage: <filename(.obj/.stl)> <clusterization accuracy(0.001)>";
 
     void Clear()
     {
@@ -41,7 +41,7 @@ public class TriangulationV2Command : ICommand
 
         if (arguments.Count is < 1 or > 2)
         {
-            response = "Usage: triangulate <model file (.stl/.obj)> <clusterization accuracy>";
+            response = "Usage: triangulate <model file (.stl/.obj)> <clusterization accuracy (0.001)>";
             return false;
         }
 
