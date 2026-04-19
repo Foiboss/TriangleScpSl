@@ -41,6 +41,18 @@ public class ParallelogramPrimitive
         set => _quad.Flags = value;
     }
 
+    public bool IsStatic
+    {
+        get => _baseQuad.IsStatic;
+        set
+        {
+            _baseQuad.IsStatic = value;   
+            _quad.IsStatic = value;   
+        }
+    }
+    
+    
+    public Transform Transform => _baseQuad.Transform;
     public Vector3 Center => (_p1 + _p3) / 2f;
 
     public static ParallelogramPrimitive Create

@@ -41,27 +41,40 @@ public class TriangulationV2Command : ICommand
 
         if (arguments.Count is < 1 or > 2)
         {
-            response = "Usage: triangulate <model file (.stl/.obj)> <force color (true/false)>";
+            response = "Usage: triangulate <model file (.stl/.obj)> <clusterization accuracy>";
             return false;
         }
 
         string requestedFile = arguments.Array?[arguments.Offset] ?? string.Empty;
-        var forceObjColor = false;
+        const bool forceObjColor = false;
+        float accuracy = 0.001f;
 
         if (arguments.Count == 2)
         {
-            string rawFlag = arguments.Array?[arguments.Offset + 1] ?? string.Empty;
+            string rawAccuracy = arguments.Array?[arguments.Offset + 1] ?? string.Empty;
 
-            if (!bool.TryParse(rawFlag, out forceObjColor))
+            if (!float.TryParse(rawAccuracy, out accuracy))
             {
-                response = "Invalid OBJ color flag. Use: true/false";
+                response = "Invalid accuracy value";
                 return false;
             }
         }
 
         Vector3 spawnPosition = player.Position + player.GameObject.transform.forward * 2.5f + Vector3.up * 1.2f;
 
-        if (!ModelFactoryV2.TryCreateModel(requestedFile, spawnPosition, _forceColor, forceObjColor, out ParallelogramSpace.ParallelogramSpace? createdModel, out string fileName, out string error, PrimitiveFlags.Visible))
+        if (!ModelFactoryV2.TryCreateModel
+            (
+                requestedFile,
+                spawnPosition,
+                _forceColor,
+                forceObjColor,
+                out ParallelogramSpace.ParallelogramSpace? createdModel,
+                out string fileName,
+                out string error,
+                PrimitiveFlags.Visible,
+                accuracy
+            )
+        )
         {
             response = error;
             return false;

@@ -1,6 +1,7 @@
 using AdminToys;
 using Exiled.API.Features.Toys;
 using TriangleScpSl.Core.TriangulatedModel;
+using TriangleScpSl.Core.Triangulation.Parallelogram;
 using TriangleScpSl.Core.Triangulation.Triangle;
 using UnityEngine;
 
@@ -8,10 +9,12 @@ namespace TriangleScpSl.ParallelogramSpace;
 
 public class ParallelogramSpace
 {
+    readonly float _absoluteToleranceUnits;
     readonly Primitive _baseQuad;
     readonly List<ModelTriangle> _localTriangles = [];
-    readonly Dictionary<float, Primitive> _angleToStretch = [];
+    readonly StretchSpatialIndex _stretches;
     readonly List<Primitive> _parallelograms = [];
+    readonly List<ParallelogramPrimitive> _fallbackParallelograms = [];
     readonly bool _invertWinding;
 
     Vector3 _position;
@@ -24,9 +27,11 @@ public class ParallelogramSpace
         IReadOnlyList<ModelTriangle> triangles,
         Vector3 worldPosition,
         PrimitiveFlags flags = PrimitiveFlags.Visible,
+        float absoluteToleranceUnits = 0.001f,
         float scale = 1f,
         bool invertWinding = false)
     {
+        _absoluteToleranceUnits = absoluteToleranceUnits;
         _position = worldPosition;
         _rotation = Quaternion.identity;
         _scale = Vector3.one * scale;
@@ -42,18 +47,28 @@ public class ParallelogramSpace
             Color.clear);
 
         if (triangles.Count == 0)
+        {
+            _stretches = new StretchSpatialIndex(0.05f, 0.1f);
             return;
+        }
 
         Vector3 modelCenter = CalculateCenter(triangles);
 
         foreach (ModelTriangle tri in triangles)
             _localTriangles.Add(new ModelTriangle(tri.P1 - modelCenter, tri.P2 - modelCenter, tri.P3 - modelCenter, tri.Color));
 
+        float maxSize = ComputeMaxParallelogramSize();
+        _stretches = new StretchSpatialIndex(
+            cellSize: 0.05f,
+            maxAngularTolerance: absoluteToleranceUnits / maxSize * 2f
+        );
+
         BuildTriangles(flags);
+      
     }
 
     public int Count => _localTriangles.Count;
-    public int QuadCount => _angleToStretch.Count + _parallelograms.Count + 1; // +1 for model base quad
+    public int QuadCount => _stretches.Count + _parallelograms.Count + _fallbackParallelograms.Count * 2 + 1; // +1 for model base quad
 
     public Vector3 Position
     {
@@ -103,7 +118,7 @@ public class ParallelogramSpace
             if (_isDestroyed)
                 return;
 
-            foreach (Primitive parallelograms in _parallelograms) parallelograms.Color = value;
+            foreach (Primitive parallelogram in _parallelograms) parallelogram.Color = value;
         }
     }
 
@@ -114,31 +129,22 @@ public class ParallelogramSpace
             if (_isDestroyed)
                 return;
 
-            foreach (Primitive parallelograms in _parallelograms) parallelograms.Flags = value;
+            foreach (Primitive parallelogram in _parallelograms) parallelogram.Flags = value;
         }
     }
 
     public Vector3 TransformPoint(Vector3 localPoint)
         => _position + _rotation * Vector3.Scale(localPoint, _scale);
 
-    public Vector3 InverseTransformPoint(Vector3 worldPoint)
-    {
-        Vector3 local = Quaternion.Inverse(_rotation) * (worldPoint - _position);
-
-        return new Vector3(
-            _scale.x != 0f ? local.x / _scale.x : 0f,
-            _scale.y != 0f ? local.y / _scale.y : 0f,
-            _scale.z != 0f ? local.z / _scale.z : 0f);
-    }
-
     public static ParallelogramSpace Create
     (
         IReadOnlyList<ModelTriangle> triangles,
         Vector3 worldPosition,
         PrimitiveFlags flags = PrimitiveFlags.Visible,
+        float absoluteToleranceUnits = 0.001f,
         float scale = 1f,
         bool invertWinding = false)
-        => new(triangles, worldPosition, flags, scale, invertWinding);
+        => new(triangles, worldPosition, flags, absoluteToleranceUnits, scale, invertWinding);
 
     public void Destroy()
     {
@@ -147,28 +153,36 @@ public class ParallelogramSpace
 
         _isDestroyed = true;
 
-        foreach (KeyValuePair<float, Primitive> stretch in _angleToStretch)
-            stretch.Value.Destroy();
+        foreach (StretchSpatialIndex.Entry entry in _stretches.All())
+            entry.Stretch.Destroy();
 
         foreach (Primitive parallelogram in _parallelograms)
             parallelogram.Destroy();
+        
+        foreach (ParallelogramPrimitive parallelogram in _fallbackParallelograms)
+            parallelogram.Destroy();
 
-        _angleToStretch.Clear();
+        _stretches.Clear();
         _parallelograms.Clear();
+        _fallbackParallelograms.Clear();
         _localTriangles.Clear();
         _baseQuad.Destroy();
     }
 
     void BuildTriangles(PrimitiveFlags flags)
     {
-        foreach (KeyValuePair<float, Primitive> stretch in _angleToStretch)
-            stretch.Value.Destroy();
+        foreach (StretchSpatialIndex.Entry entry in _stretches.All())
+            entry.Stretch.Destroy();
 
         foreach (Primitive parallelogram in _parallelograms)
             parallelogram.Destroy();
-
-        _angleToStretch.Clear();
+        
+        foreach (ParallelogramPrimitive parallelogram in _fallbackParallelograms)
+            parallelogram.Destroy();
+        
+        _stretches.Clear();
         _parallelograms.Clear();
+        _fallbackParallelograms.Clear();
 
         foreach (ModelTriangle localTriangle in _localTriangles)
             CreateTriangle(localTriangle, flags);
@@ -191,7 +205,89 @@ public class ParallelogramSpace
 
     void CreateParallelogram(Vector3 vLeft, Vector3 vUp, Vector3 center, PrimitiveFlags flags, Color color)
     {
-        //todo:
+        if (!VectorPhiSolver.TrySolve(vLeft, vUp, out float theta, out float phi))
+        {
+            var parallelogram = ParallelogramPrimitive.Create(vUp, vLeft, center, color, flags);
+            _fallbackParallelograms.Add(parallelogram);
+            parallelogram.Transform.SetParent(_baseQuad.Transform);
+            return;
+        }
+
+        Primitive? bestStretch = null;
+        float bestTheta = 0f, bestPhi = 0f;
+        float bestErr = float.MaxValue;
+
+        foreach (StretchSpatialIndex.Entry entry in _stretches.QueryNearby(theta, phi))
+        {
+            float err = ParallelogramSpaceUtils.MaxVertexError(
+                vLeft, vUp, theta, phi, entry.Theta, entry.Phi);
+
+            if (err <= _absoluteToleranceUnits && err < bestErr)
+            {
+                bestErr = err;
+                bestStretch = entry.Stretch;
+                bestTheta = entry.Theta;
+                bestPhi = entry.Phi;
+            }
+        }
+
+        Primitive stretch;
+        float stretchTheta, stretchPhi;
+
+        if (bestStretch != null)
+        {
+            stretch = bestStretch;
+            stretchTheta = bestTheta;
+            stretchPhi = bestPhi;
+        }
+        else
+        {
+            stretch = ParallelogramSpaceUtils.CreateStretch(theta, phi);
+            _stretches.Add(theta, phi, stretch);
+            stretch.Transform.SetParent(_baseQuad.Transform);
+            stretchTheta = theta;
+            stretchPhi = phi;
+        }
+
+        Vector3 v1ForStretch = ParallelogramSpaceUtils.ForwardTransform(vLeft, stretchTheta, stretchPhi);
+        Vector3 v2ForStretch = ParallelogramSpaceUtils.ForwardTransform(vUp, stretchTheta, stretchPhi);
+
+        _parallelograms.Add(
+            ParallelogramSpaceUtils.CreateParallelogram(center, v1ForStretch, v2ForStretch, stretch, flags, color));
+        
+        Exiled.API.Features.Log.Debug(
+            $"PG: trueθ={theta:F3} trueφ={phi:F3} " +
+            $"usedθ={stretchTheta:F3} usedφ={stretchPhi:F3} " +
+            $"err={bestErr:F4} " +
+            $"|vLeft|={vLeft.magnitude:F2} |vUp|={vUp.magnitude:F2}");
+    }
+
+    /// <summary>
+    ///     Computes the maximum parallelogram size (max diagonal: max of (v1+v2).magnitude, (v1-v2).magnitude)
+    ///     across all parallelograms that will be generated from the local triangles.
+    ///     Used to derive the angular tolerance for stretch clustering.
+    /// </summary>
+    float ComputeMaxParallelogramSize()
+    {
+        float maxSize = 0.01f; // avoid division by zero
+        foreach (ModelTriangle localTriangle in _localTriangles)
+        {
+            Vector3 p1 = TransformPoint(localTriangle.P1);
+            Vector3 p2 = TransformPoint(localTriangle.P2);
+            Vector3 p3 = TransformPoint(localTriangle.P3);
+
+            if (_invertWinding) (p2, p3) = (p3, p2);
+
+            Vector3[][] data = TriangleParallelogramBuilder.GetParallelogramsInfo(p1, p2, p3);
+            for (var i = 0; i < 3; i++)
+            {
+                Vector3 v1 = data[i][0];
+                Vector3 v2 = data[i][1];
+                float size = Mathf.Max((v1 + v2).magnitude, (v1 - v2).magnitude);
+                if (size > maxSize) maxSize = size;
+            }
+        }
+        return maxSize;
     }
 
     static Vector3 CalculateCenter(IReadOnlyList<ModelTriangle> triangles)

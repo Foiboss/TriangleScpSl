@@ -17,7 +17,7 @@ public static class VectorPhiSolver
     static (double x, double y) RotateXY(Vector3 v, double theta)
     {
         double c = Math.Cos(theta), s = Math.Sin(theta);
-        // R(-θ) = [[cos(theta), sin(theta)],[-sin(theta), cos(theta)]]
+        // R(-theta) = [[cos(theta), sin(theta)],[-sin(theta), cos(theta)]]
         return (v.x * c + v.y * s, -v.x * s + v.y * c);
     }
 

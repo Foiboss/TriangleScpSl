@@ -44,8 +44,10 @@ public static class ModelFactoryV2
     (
         IReadOnlyList<ModelTriangle> triangles,
         Vector3 worldPosition,
-        PrimitiveFlags flags = PrimitiveFlags.Visible)
-        => ParallelogramSpace.Create(triangles, worldPosition, flags);
+        PrimitiveFlags flags = PrimitiveFlags.Visible,
+        float absoluteToleranceUnits = 0.05f
+        )
+        => ParallelogramSpace.Create(triangles, worldPosition, flags, absoluteToleranceUnits);
 
     public static bool TryCreateModel
     (
@@ -56,7 +58,8 @@ public static class ModelFactoryV2
         out ParallelogramSpace? model,
         out string normalizedFileName,
         out string error,
-        PrimitiveFlags flags = PrimitiveFlags.Visible)
+        PrimitiveFlags flags = PrimitiveFlags.Visible,
+        float absoluteToleranceUnits = 0.001f)
     {
         model = null;
 
@@ -70,9 +73,7 @@ public static class ModelFactoryV2
                 error = $"Failed to parse OBJ: {parseError}";
                 return false;
             }
-
-            FixWinding(parsedObjTriangles);
-            model = CreateModel(parsedObjTriangles, worldPosition, flags);
+            model = CreateModel(parsedObjTriangles, worldPosition, flags, absoluteToleranceUnits);
 
             if (forceObjColor)
                 model.Color = color;
@@ -84,8 +85,6 @@ public static class ModelFactoryV2
                 error = $"Failed to parse STL: {parseError}";
                 return false;
             }
-
-            FixWinding(parsedStlTriangles);
             model = CreateModel(parsedStlTriangles, worldPosition, flags);
         }
 
@@ -98,14 +97,5 @@ public static class ModelFactoryV2
         }
 
         return true;
-    }
-
-    static void FixWinding(List<ModelTriangle> triangles)
-    {
-        for (var i = 0; i < triangles.Count; i++)
-        {
-            ModelTriangle t = triangles[i];
-            triangles[i] = new ModelTriangle(t.P1, t.P3, t.P2, t.Color);
-        }
     }
 }
