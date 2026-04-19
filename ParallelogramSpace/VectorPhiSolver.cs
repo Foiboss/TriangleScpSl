@@ -87,7 +87,7 @@ public static class VectorPhiSolver
         }
 
         if (bestT == null) return false;
-        phi = Math.Acos(Math.Sqrt(bestT.Value));
+        phi = Math.Acos(Math.Sqrt(Math.Min(1.0, bestT.Value)));
         return true;
     }
 

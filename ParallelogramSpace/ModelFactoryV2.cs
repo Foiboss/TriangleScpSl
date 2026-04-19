@@ -85,7 +85,7 @@ public static class ModelFactoryV2
                 error = $"Failed to parse STL: {parseError}";
                 return false;
             }
-            model = CreateModel(parsedStlTriangles, worldPosition, flags);
+            model = CreateModel(parsedStlTriangles, worldPosition, flags, absoluteToleranceUnits);
         }
 
         if (model.Count == 0)

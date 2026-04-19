@@ -119,6 +119,7 @@ public class ParallelogramSpace
                 return;
 
             foreach (Primitive parallelogram in _parallelograms) parallelogram.Color = value;
+            foreach (ParallelogramPrimitive parallelogram in _fallbackParallelograms) parallelogram.Color = value;
         }
     }
 
@@ -130,6 +131,7 @@ public class ParallelogramSpace
                 return;
 
             foreach (Primitive parallelogram in _parallelograms) parallelogram.Flags = value;
+            foreach (ParallelogramPrimitive parallelogram in _fallbackParallelograms) parallelogram.Flags = value;
         }
     }
 
@@ -254,12 +256,6 @@ public class ParallelogramSpace
 
         _parallelograms.Add(
             ParallelogramSpaceUtils.CreateParallelogram(center, v1ForStretch, v2ForStretch, stretch, flags, color));
-        
-        Exiled.API.Features.Log.Debug(
-            $"PG: trueθ={theta:F3} trueφ={phi:F3} " +
-            $"usedθ={stretchTheta:F3} usedφ={stretchPhi:F3} " +
-            $"err={bestErr:F4} " +
-            $"|vLeft|={vLeft.magnitude:F2} |vUp|={vUp.magnitude:F2}");
     }
 
     /// <summary>
