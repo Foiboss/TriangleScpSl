@@ -59,6 +59,33 @@ public static class ModelFactory
     {
         model = null;
 
+        if (!TryLoadTriangles(requestedFile, color, forceObjColor, out List<ModelTriangle> triangles, out normalizedFileName, out error))
+            return false;
+
+        model = CreateModel(triangles, worldPosition, flags);
+
+        if (model.Count == 0)
+        {
+            model.Destroy();
+            model = null;
+            error = "No valid non-degenerate triangles found in model file.";
+            return false;
+        }
+
+        return true;
+    }
+
+    public static bool TryLoadTriangles
+    (
+        string requestedFile,
+        Color color,
+        bool forceObjColor,
+        out List<ModelTriangle> triangles,
+        out string normalizedFileName,
+        out string error)
+    {
+        triangles = [];
+
         if (!TryResolveModelPath(requestedFile, out string modelPath, out normalizedFileName, out error))
             return false;
 
@@ -71,10 +98,16 @@ public static class ModelFactory
             }
 
             FixWinding(parsedObjTriangles);
-            model = CreateModel(parsedObjTriangles, worldPosition, flags);
+            triangles = parsedObjTriangles;
 
             if (forceObjColor)
-                model.Color = color;
+            {
+                for (var i = 0; i < triangles.Count; i++)
+                {
+                    ModelTriangle tri = triangles[i];
+                    triangles[i] = new ModelTriangle(tri.P1, tri.P2, tri.P3, color);
+                }
+            }
         }
         else
         {
@@ -85,13 +118,11 @@ public static class ModelFactory
             }
 
             FixWinding(parsedStlTriangles);
-            model = CreateModel(parsedStlTriangles, worldPosition, flags);
+            triangles = parsedStlTriangles;
         }
 
-        if (model.Count == 0)
+        if (triangles.Count == 0)
         {
-            model.Destroy();
-            model = null;
             error = "No valid non-degenerate triangles found in model file.";
             return false;
         }

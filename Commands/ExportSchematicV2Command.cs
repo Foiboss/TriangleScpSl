@@ -1,8 +1,10 @@
+using System.Collections;
 using System.Globalization;
 using AdminToys;
 using CommandSystem;
 using Exiled.API.Features;
 using TriangleScpSl.Core.Paths;
+using TriangleScpSl.Core.Runtime;
 using TriangleScpSl.Core.TriangulatedModel;
 using TriangleScpSl.ParallelogramSpace;
 using UnityEngine;
@@ -13,6 +15,9 @@ namespace TriangleScpSl.Commands;
 public sealed class ExportSchematicV2Command : ICommand
 {
     readonly Color _fallbackColor = Color.white;
+    Coroutine? _exportCoroutine;
+    bool _isExporting;
+    ParallelogramSpace.ParallelogramSpace? _activeModel;
 
     public string Command { get; } = "ExportSchematicV2";
     public string[] Aliases { get; } = [];
@@ -20,6 +25,13 @@ public sealed class ExportSchematicV2Command : ICommand
 
     public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)
     {
+        if (_isExporting)
+        {
+            CancelCurrentExport();
+            response = "Export cancelled.";
+            return true;
+        }
+
         if (arguments.Count is < 2 or > 4)
         {
             response = "Usage: ExportSchematicV2 <model file (.obj/.stl)> <output json file> [accuracy(0.001)] [previewScale]";
@@ -35,8 +47,7 @@ public sealed class ExportSchematicV2Command : ICommand
             return false;
         }
 
-        const bool forceObjColor = false;
-        float accuracy = 0.001f;
+        var accuracy = 0.001f;
 
         if (arguments.Count >= 3)
         {
@@ -62,53 +73,99 @@ public sealed class ExportSchematicV2Command : ICommand
             }
         }
 
-        Player? player = Player.Get(sender);
         Vector3 spawnPosition = Vector3.zero;
+        
+        int buildBatch = Mathf.Max(1, Plugin.Instance?.Config.ExportBuildBatchSize ?? 64);
+        int writeBatch = Mathf.Max(1, Plugin.Instance?.Config.ExportWriteBatchSize ?? 256);
 
-        if (player is not null)
-            spawnPosition = player.Position + player.GameObject.transform.forward * 2.5f + Vector3.up * 1.2f;
+        _isExporting = true;
+        _exportCoroutine = CoroutineHost.Run(ExportRoutine(requestedFile, outputFileName, spawnPosition, accuracy, previewScale, buildBatch, writeBatch));
 
-        if (!ModelFactoryV2.TryCreateModel(
-            requestedFile,
-            spawnPosition,
-            _fallbackColor,
-            forceObjColor,
-            out ParallelogramSpace.ParallelogramSpace? parallelogramSpace,
-            out _,
-            out string modelError,
-            PrimitiveFlags.Visible,
-            accuracy))
-        {
-            response = modelError;
-            return false;
-        }
+        response = "Export started asynchronously. Run command again to cancel current export.";
+        return true;
+    }
 
+    IEnumerator ExportRoutine
+    (
+        string requestedFile,
+        string outputFileName,
+        Vector3 spawnPosition,
+        float accuracy,
+        float previewScale,
+        int buildBatch,
+        int writeBatch)
+    {
         try
         {
-            parallelogramSpace!.Scale = Vector3.one * previewScale;
+            if (!ModelFactoryV2.TryLoadTriangles(requestedFile, _fallbackColor, false, out List<ModelTriangle> triangles, out _, out string modelError))
+            {
+                Log.Warn($"[ExportSchematicV2] {modelError}");
+                yield break;
+            }
+
+            _activeModel = ParallelogramSpace.ParallelogramSpace.CreateDeferred(
+                triangles,
+                spawnPosition,
+                PrimitiveFlags.None,
+                accuracy);
+
+            yield return _activeModel.BuildTrianglesCoroutine(PrimitiveFlags.None, buildBatch);
+
+            if (_activeModel.Count == 0)
+            {
+                Log.Warn("[ExportSchematicV2] Model has no valid non-degenerate triangles.");
+                yield break;
+            }
+
+            _activeModel.Scale = Vector3.one * previewScale;
 
             TrianglePaths.EnsureSchematicDirectoryExists(outputFileName);
             string outputPath = TrianglePaths.GetSchematicOutputPath(outputFileName);
             string schematicName = TrianglePaths.GetSchematicFolderName(outputFileName);
 
-            if (!ProjectMerSchematicExporter.TryExport(parallelogramSpace, outputPath, schematicName, out string exportError))
+            var completed = false;
+            var exportSucceeded = false;
+            var exportError = string.Empty;
+
+            yield return ProjectMerSchematicExporter.ExportCoroutine(
+                _activeModel,
+                outputPath,
+                schematicName,
+                writeBatch,
+                (success, error) =>
+                {
+                    exportSucceeded = success;
+                    exportError = error;
+                    completed = true;
+                });
+
+            if (!completed || !exportSucceeded)
             {
-                response = $"Failed to export schematic: {exportError}";
-                return false;
+                Log.Warn($"[ExportSchematicV2] Failed to export schematic: {exportError}");
+                yield break;
             }
 
-            response = $"Schematic exported to LabAPI MER folder: {outputPath} (triangles={parallelogramSpace.Count}, quads={parallelogramSpace.QuadCount}, previewScale={previewScale.ToString(CultureInfo.InvariantCulture)}).";
-            return true;
-        }
-        catch (Exception ex)
-        {
-            response = $"Export error: {ex.Message}";
-            return false;
+            Log.Info($"[ExportSchematicV2] Exported: {outputPath} (triangles={_activeModel.Count}, quads={_activeModel.QuadCount}, previewScale={previewScale.ToString(CultureInfo.InvariantCulture)}).");
         }
         finally
         {
-            parallelogramSpace?.Destroy();
+            _activeModel?.Destroy();
+            _activeModel = null;
+            _exportCoroutine = null;
+            _isExporting = false;
         }
+    }
+
+    void CancelCurrentExport()
+    {
+        if (_exportCoroutine is not null)
+            CoroutineHost.Stop(_exportCoroutine);
+
+        _exportCoroutine = null;
+        _isExporting = false;
+
+        _activeModel?.Destroy();
+        _activeModel = null;
     }
 
     static bool TryNormalizeOutputName(string raw, out string fileName)

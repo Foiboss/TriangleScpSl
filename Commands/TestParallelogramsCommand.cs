@@ -18,8 +18,8 @@ public class TestParallelogramsCommand : ICommand
     readonly List<Primitive> _points = [];
     readonly List<Primitive> _parallelograms = [];
     readonly StretchSpatialIndex _stretches = new(
-        cellSize: 0.05f,
-        maxAngularTolerance: AbsoluteToleranceUnits / MaxExpectedParallelogramSize * 2f
+        0.05f,
+        AbsoluteToleranceUnits / MaxExpectedParallelogramSize * 2f
         // *2f additional fallback; if error is bigger, tolerance-check will still work
     );
 
@@ -27,12 +27,13 @@ public class TestParallelogramsCommand : ICommand
     public string[] Aliases { get; } = [];
     public string Description { get; } = "Parallelograms with adaptive stretch clustering";
 
-    (Primitive stretch, float theta, float phi) FindOrCreateStretch(
+    (Primitive stretch, float theta, float phi) FindOrCreateStretch
+    (
         Vector3 v1World, Vector3 v2World, float trueTheta, float truePhi)
     {
         Primitive? best = null;
         float bestT = 0f, bestP = 0f;
-        float bestErr = float.MaxValue;
+        var bestErr = float.MaxValue;
 
         foreach (StretchSpatialIndex.Entry entry in _stretches.QueryNearby(trueTheta, truePhi))
         {
@@ -58,11 +59,16 @@ public class TestParallelogramsCommand : ICommand
     void ClearAll()
     {
         foreach (Primitive p in _parallelograms)
-            if (p?.Base?.gameObject != null) p.Destroy();
+            if (p?.Base?.gameObject != null)
+                p.Destroy();
+
         foreach (Primitive p in _points)
-            if (p?.Base?.gameObject != null) p.Destroy();
+            if (p?.Base?.gameObject != null)
+                p.Destroy();
+
         foreach (StretchSpatialIndex.Entry entry in _stretches.All())
-            if (entry.Stretch?.Base?.gameObject != null) entry.Stretch.Destroy();
+            if (entry.Stretch?.Base?.gameObject != null)
+                entry.Stretch.Destroy();
         _parallelograms.Clear();
         _points.Clear();
         _stretches.Clear();
@@ -78,11 +84,16 @@ public class TestParallelogramsCommand : ICommand
         }
 
         Player? player = Player.Get(sender);
-        if (player is null) { response = "Players only"; return false; }
+
+        if (player is null)
+        {
+            response = "Players only";
+            return false;
+        }
 
         if (!int.TryParse(
-                arguments.Count > 0 ? arguments.Array?[arguments.Offset] : null,
-                out int amount))
+            arguments.Count > 0 ? arguments.Array?[arguments.Offset] : null,
+            out int amount))
             amount = 1;
 
         for (var i = 0; i < amount; i++)
@@ -91,11 +102,12 @@ public class TestParallelogramsCommand : ICommand
 
             Vector3 vUp = Random.insideUnitSphere * Random.Range(1f, 10f);
             Vector3 vLeft = Random.insideUnitSphere * Random.Range(1f, 10f);
+
             if (!VectorPhiSolver.TrySolve(vLeft, vUp, out float theta, out float phi))
                 continue;
 
-            _points.Add(Primitive.Create(PrimitiveType.Sphere, PrimitiveFlags.Visible, pos + vUp,   Vector3.zero, Vector3.one * 0.1f, true, Color.red));
-            _points.Add(Primitive.Create(PrimitiveType.Sphere, PrimitiveFlags.Visible, pos - vUp,   Vector3.zero, Vector3.one * 0.1f, true, Color.green));
+            _points.Add(Primitive.Create(PrimitiveType.Sphere, PrimitiveFlags.Visible, pos + vUp, Vector3.zero, Vector3.one * 0.1f, true, Color.red));
+            _points.Add(Primitive.Create(PrimitiveType.Sphere, PrimitiveFlags.Visible, pos - vUp, Vector3.zero, Vector3.one * 0.1f, true, Color.green));
             _points.Add(Primitive.Create(PrimitiveType.Sphere, PrimitiveFlags.Visible, pos + vLeft, Vector3.zero, Vector3.one * 0.1f, true, Color.blue));
             _points.Add(Primitive.Create(PrimitiveType.Sphere, PrimitiveFlags.Visible, pos - vLeft, Vector3.zero, Vector3.one * 0.1f, true, Color.yellow));
 

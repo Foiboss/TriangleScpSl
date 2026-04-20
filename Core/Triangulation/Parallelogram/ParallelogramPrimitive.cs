@@ -10,7 +10,7 @@ public class ParallelogramPrimitive
     Color _color;
 
     public ParallelogramPrimitive
-    (Vector3 vUp, Vector3 vLeft, Vector3 center, Color color, PrimitiveFlags flags)
+        (Vector3 vUp, Vector3 vLeft, Vector3 center, Color color, PrimitiveFlags flags)
     {
         _color = color;
         _p1 = center + vUp;
@@ -44,12 +44,11 @@ public class ParallelogramPrimitive
         get => BasePrimitive.IsStatic;
         set
         {
-            BasePrimitive.IsStatic = value;   
-            QuadPrimitive.IsStatic = value;   
+            BasePrimitive.IsStatic = value;
+            QuadPrimitive.IsStatic = value;
         }
     }
-    
-    
+
     public Transform Transform => BasePrimitive.Transform;
     public Primitive BasePrimitive { get; }
     public Primitive QuadPrimitive { get; }

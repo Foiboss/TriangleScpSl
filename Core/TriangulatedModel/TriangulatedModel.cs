@@ -1,3 +1,4 @@
+using System.Collections;
 using Exiled.API.Features.Toys;
 using TriangleScpSl.Core.Triangulation.Triangle;
 using UnityEngine;
@@ -12,11 +13,11 @@ public class TriangulatedModel
     readonly Primitive _baseQuad;
     readonly List<ModelTriangle> _localTriangles = [];
     readonly List<TrianglePrimitive> _triangles = [];
+    readonly bool _invertWinding;
 
     Vector3 _position;
     Quaternion _rotation;
     Vector3 _scale;
-    readonly bool _invertWinding;
     bool _isDestroyed;
 
     public TriangulatedModel
@@ -25,7 +26,8 @@ public class TriangulatedModel
         Vector3 worldPosition,
         AdminToys.PrimitiveFlags flags = AdminToys.PrimitiveFlags.Visible,
         float scale = 1f,
-        bool invertWinding = false)
+        bool invertWinding = false,
+        bool buildImmediately = true)
     {
         _position = worldPosition;
         _rotation = Quaternion.identity;
@@ -47,14 +49,13 @@ public class TriangulatedModel
         Vector3 modelCenter = CalculateCenter(triangles);
 
         foreach (ModelTriangle tri in triangles)
-        {
             _localTriangles.Add(new ModelTriangle(tri.P1 - modelCenter, tri.P2 - modelCenter, tri.P3 - modelCenter, tri.Color));
-        }
 
-        BuildTriangles(flags);
+        if (buildImmediately)
+            BuildTriangles(flags);
     }
 
-    public int Count => _triangles.Count;
+    public int Count => _localTriangles.Count;
     public int QuadCount => _isDestroyed ? 0 : Count * 6 + 1; // +1 for model base quad
 
     public Vector3 Position
@@ -95,21 +96,8 @@ public class TriangulatedModel
             _baseQuad.Scale = value;
         }
     }
-    
+
     public Transform Transform => _baseQuad.Transform;
-
-    public Vector3 TransformPoint(Vector3 localPoint)
-        => _position + (_rotation * Vector3.Scale(localPoint, _scale));
-
-    public Vector3 InverseTransformPoint(Vector3 worldPoint)
-    {
-        Vector3 local = Quaternion.Inverse(_rotation) * (worldPoint - _position);
-
-        return new Vector3(
-            _scale.x != 0f ? local.x / _scale.x : 0f,
-            _scale.y != 0f ? local.y / _scale.y : 0f,
-            _scale.z != 0f ? local.z / _scale.z : 0f);
-    }
 
     public Color Color
     {
@@ -133,6 +121,19 @@ public class TriangulatedModel
         }
     }
 
+    public Vector3 TransformPoint(Vector3 localPoint)
+        => _position + _rotation * Vector3.Scale(localPoint, _scale);
+
+    public Vector3 InverseTransformPoint(Vector3 worldPoint)
+    {
+        Vector3 local = Quaternion.Inverse(_rotation) * (worldPoint - _position);
+
+        return new Vector3(
+            _scale.x != 0f ? local.x / _scale.x : 0f,
+            _scale.y != 0f ? local.y / _scale.y : 0f,
+            _scale.z != 0f ? local.z / _scale.z : 0f);
+    }
+
     public static TriangulatedModel Create
     (
         IReadOnlyList<ModelTriangle> triangles,
@@ -141,6 +142,41 @@ public class TriangulatedModel
         float scale = 1f,
         bool invertWinding = false)
         => new(triangles, worldPosition, flags, scale, invertWinding);
+
+    public static TriangulatedModel CreateDeferred
+    (
+        IReadOnlyList<ModelTriangle> triangles,
+        Vector3 worldPosition,
+        AdminToys.PrimitiveFlags flags = AdminToys.PrimitiveFlags.Visible,
+        float scale = 1f,
+        bool invertWinding = false)
+        => new(triangles, worldPosition, flags, scale, invertWinding, false);
+
+    public IEnumerator BuildTrianglesCoroutine(AdminToys.PrimitiveFlags flags, int trianglesPerFrame)
+    {
+        if (_isDestroyed)
+            yield break;
+
+        trianglesPerFrame = Mathf.Max(1, trianglesPerFrame);
+
+        _triangles.Clear();
+        var processed = 0;
+
+        foreach (ModelTriangle localTriangle in _localTriangles)
+        {
+            if (_isDestroyed)
+                yield break;
+
+            _triangles.Add(CreateTriangle(localTriangle, flags));
+            processed++;
+
+            if (processed >= trianglesPerFrame)
+            {
+                processed = 0;
+                yield return null;
+            }
+        }
+    }
 
     public void Destroy()
     {

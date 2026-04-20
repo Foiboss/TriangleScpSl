@@ -25,7 +25,7 @@ public static class VectorPhiSolver
         // R(-theta) = [[cos(theta), sin(theta)],[-sin(theta), cos(theta)]]
         return (v.x * c + v.y * s, -v.x * s + v.y * c);
     }
-    
+
     static bool TrySolveForPhi(Vector3 v1, Vector3 v2, double theta, out double phi)
     {
         phi = 0;
@@ -104,7 +104,6 @@ public static class VectorPhiSolver
 
         if (h < Epsilon) return Math.PI / 4;
 
-        // A(theta) = D/2 + H·cos(2 * theta + alpha) where alpha = atan2(G, E)
         // Minimum when cos(2 * theta + alpha) = -1, i.e. 2 * theta + alpha = pi
         double alpha = Math.Atan2(g, e);
         return (Math.PI - alpha) / 2.0;

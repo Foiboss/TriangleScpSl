@@ -1,6 +1,9 @@
 using AdminToys;
 using CommandSystem;
 using Exiled.API.Features;
+using System.Collections;
+using TriangleScpSl.Core.Runtime;
+using TriangleScpSl.Core.TriangulatedModel;
 using TriangleScpSl.ParallelogramSpace;
 using UnityEngine;
 
@@ -9,6 +12,8 @@ namespace TriangleScpSl.Commands;
 [CommandHandler(typeof(RemoteAdminCommandHandler))]
 public class TriangulationV2Command : ICommand
 {
+    Coroutine? _buildCoroutine;
+    bool _isBuilding;
     ParallelogramSpace.ParallelogramSpace? _model;
 
     public string Command { get; } = "TriangulateV2";
@@ -17,12 +22,24 @@ public class TriangulationV2Command : ICommand
 
     void Clear()
     {
+        if (_buildCoroutine is not null)
+            CoroutineHost.Stop(_buildCoroutine);
+
+        _buildCoroutine = null;
+        _isBuilding = false;
         _model?.Destroy();
         _model = null;
     }
 
     public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)
     {
+        if (_isBuilding)
+        {
+            Clear();
+            response = "Model build cancelled.";
+            return true;
+        }
+
         if (_model is not null)
         {
             Clear();
@@ -45,7 +62,7 @@ public class TriangulationV2Command : ICommand
         }
 
         string requestedFile = arguments.Array?[arguments.Offset] ?? string.Empty;
-        float accuracy = 0.001f;
+        var accuracy = 0.001f;
 
         if (arguments.Count == 2)
         {
@@ -60,24 +77,46 @@ public class TriangulationV2Command : ICommand
 
         Vector3 spawnPosition = player.Position + player.GameObject.transform.forward * 2.5f + Vector3.up * 1.2f;
 
-        if (!ModelFactoryV2.TryCreateModel(
-                requestedFile,
-                spawnPosition,
-                Color.white,
-                false,
-                out ParallelogramSpace.ParallelogramSpace? createdModel,
-                out string fileName,
-                out string error,
-                PrimitiveFlags.Visible,
-                accuracy))
+        if (!ModelFactoryV2.TryLoadTriangles(requestedFile, Color.white, false, out List<ModelTriangle> triangles, out string fileName, out string error))
         {
             response = error;
             return false;
         }
 
-        _model = createdModel;
+        var createdModel = ParallelogramSpace.ParallelogramSpace.CreateDeferred(
+            triangles,
+            spawnPosition,
+            PrimitiveFlags.Visible,
+            accuracy);
 
-        response = $"Created model '{fileName}': triangles={createdModel!.Count}, quads={createdModel.QuadCount}. Run command again to destroy.";
+        _model = createdModel;
+        _isBuilding = true;
+
+        int batchSize = Mathf.Max(1, Plugin.Instance?.Config.TriangulateV2BuildBatchSize ?? 16);
+        _buildCoroutine = CoroutineHost.Run(BuildRoutine(createdModel, fileName, batchSize));
+
+        response = $"Started building model '{fileName}' asynchronously. Run command again to cancel while building.";
         return true;
+    }
+
+    IEnumerator BuildRoutine(ParallelogramSpace.ParallelogramSpace model, string fileName, int batchSize)
+    {
+        yield return model.BuildTrianglesCoroutine(PrimitiveFlags.Visible, batchSize);
+
+        _buildCoroutine = null;
+        _isBuilding = false;
+
+        if (!ReferenceEquals(_model, model))
+            yield break;
+
+        if (model.Count == 0)
+        {
+            model.Destroy();
+            _model = null;
+            Log.Warn($"[TriangulateV2] Model '{fileName}' has no valid triangles after async build.");
+            yield break;
+        }
+
+        Log.Info($"[TriangulateV2] Created model '{fileName}': triangles={model.Count}, quads={model.QuadCount}.");
     }
 }

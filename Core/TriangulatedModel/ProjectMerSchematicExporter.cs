@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Globalization;
 using System.Text;
 using AdminToys;
@@ -15,7 +16,263 @@ public static class ProjectMerSchematicExporter
     public static bool TryExport(ParallelogramSpace.ParallelogramSpace model, string outputPath, string modelName, out string error)
         => TryExportParallelogramSpaceInternal(model.GetPrimitiveSnapshot(), model.InverseTransformPoint, model.Rotation, outputPath, modelName, out error);
 
-    static bool TryExportInternal(
+    public static IEnumerator ExportCoroutine
+    (
+        TriangulatedModel model,
+        string outputPath,
+        string modelName,
+        int trianglesPerFrame,
+        Action<bool, string> onCompleted)
+    {
+        IReadOnlyList<(ModelTriangle Triangle, PrimitiveFlags Flags)> triangles = model.GetTriangleSnapshot();
+        Func<Vector3, Vector3> inverseTransformPoint = model.InverseTransformPoint;
+        Quaternion modelRotation = model.Rotation;
+
+        if (triangles.Count == 0)
+        {
+            onCompleted(false, "Model contains no triangles.");
+            yield break;
+        }
+
+        if (string.IsNullOrWhiteSpace(outputPath))
+        {
+            onCompleted(false, "Output path is empty.");
+            yield break;
+        }
+
+        string? outputDirectory = Path.GetDirectoryName(outputPath);
+
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(outputDirectory))
+                Directory.CreateDirectory(outputDirectory);
+        }
+        catch (Exception ex)
+        {
+            onCompleted(false, ex.Message);
+            yield break;
+        }
+
+        trianglesPerFrame = Mathf.Max(1, trianglesPerFrame);
+
+        int objectIdSeed = GeneratePositiveId() % 500000 + 1000;
+        int rootObjectId = objectIdSeed++;
+        int modelObjectId = objectIdSeed++;
+        int objectId = objectIdSeed;
+
+        List<SchematicBlock> blocks =
+        [
+            new()
+            {
+                Name = string.IsNullOrWhiteSpace(modelName) ? "TriangulatedModel" : modelName,
+                ObjectId = modelObjectId,
+                ParentId = rootObjectId,
+                Position = Vector3.zero,
+                Rotation = Vector3.zero,
+                Scale = Vector3.one,
+                BlockType = 0,
+                IsPrimitive = false,
+                Static = false,
+            },
+        ];
+
+        var processedTriangles = 0;
+
+        for (var triangleIndex = 0; triangleIndex < triangles.Count; triangleIndex++)
+        {
+            (ModelTriangle tri, PrimitiveFlags flags) = triangles[triangleIndex];
+            Vector3[][] parallelograms = TriangleParallelogramBuilder.GetParallelogramsInfo(tri.P1, tri.P2, tri.P3);
+
+            for (var part = 0; part < 3; part++)
+            {
+                Vector3 vUp = parallelograms[part][0];
+                Vector3 vLeft = parallelograms[part][1];
+                Vector3 center = parallelograms[part][2];
+
+                BuildParallelogramTransforms(vUp, vLeft, center, out Vector3 basePos, out Quaternion baseRot, out Vector3 baseScale, out Quaternion childLocalRot, out Vector3 childLocalScale);
+
+                int baseId = objectId++;
+                int quadId = objectId++;
+
+                blocks.Add(new SchematicBlock
+                {
+                    Name = $"(T.{triangleIndex + 1})P{part + 1}.Base",
+                    ObjectId = baseId,
+                    ParentId = modelObjectId,
+                    Position = inverseTransformPoint(basePos),
+                    Rotation = (Quaternion.Inverse(modelRotation) * baseRot).eulerAngles,
+                    Scale = baseScale,
+                    BlockType = 0,
+                    IsPrimitive = false,
+                    Static = false,
+                });
+
+                blocks.Add(new SchematicBlock
+                {
+                    Name = $"(T.{triangleIndex + 1})P{part + 1}",
+                    ObjectId = quadId,
+                    ParentId = baseId,
+                    Position = Vector3.zero,
+                    Rotation = childLocalRot.eulerAngles,
+                    Scale = childLocalScale,
+                    BlockType = 1,
+                    IsPrimitive = true,
+                    PrimitiveType = (int)PrimitiveType.Quad,
+                    PrimitiveColor = ToRgbaHex(tri.Color),
+                    PrimitiveFlags = (int)flags,
+                    Static = false,
+                });
+            }
+
+            processedTriangles++;
+
+            if (processedTriangles >= trianglesPerFrame)
+            {
+                processedTriangles = 0;
+                yield return null;
+            }
+        }
+
+        try
+        {
+            string json = BuildJson(rootObjectId, blocks);
+            File.WriteAllText(outputPath, json, Encoding.UTF8);
+            onCompleted(true, string.Empty);
+        }
+        catch (Exception ex)
+        {
+            onCompleted(false, ex.Message);
+        }
+    }
+
+    public static IEnumerator ExportCoroutine
+    (
+        ParallelogramSpace.ParallelogramSpace model,
+        string outputPath,
+        string modelName,
+        int primitivesPerFrame,
+        Action<bool, string> onCompleted)
+    {
+        IReadOnlyList<ParallelogramSpace.ParallelogramSpace.PrimitiveSnapshot> primitives = model.GetPrimitiveSnapshot();
+        Func<Vector3, Vector3> inverseTransformPoint = model.InverseTransformPoint;
+        Quaternion modelRotation = model.Rotation;
+
+        if (primitives.Count == 0)
+        {
+            onCompleted(false, "Model contains no primitives.");
+            yield break;
+        }
+
+        if (string.IsNullOrWhiteSpace(outputPath))
+        {
+            onCompleted(false, "Output path is empty.");
+            yield break;
+        }
+
+        string? outputDirectory = Path.GetDirectoryName(outputPath);
+
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(outputDirectory))
+                Directory.CreateDirectory(outputDirectory);
+        }
+        catch (Exception ex)
+        {
+            onCompleted(false, ex.Message);
+            yield break;
+        }
+
+        primitivesPerFrame = Mathf.Max(1, primitivesPerFrame);
+
+        int objectIdSeed = GeneratePositiveId() % 500000 + 1000;
+        int rootObjectId = objectIdSeed++;
+        int modelObjectId = objectIdSeed++;
+        int objectId = objectIdSeed;
+
+        List<SchematicBlock> blocks =
+        [
+            new()
+            {
+                Name = string.IsNullOrWhiteSpace(modelName) ? "ParallelogramSpace" : modelName,
+                ObjectId = modelObjectId,
+                ParentId = rootObjectId,
+                Position = Vector3.zero,
+                Rotation = Vector3.zero,
+                Scale = Vector3.one,
+                BlockType = 0,
+                IsPrimitive = false,
+                Static = false,
+            },
+        ];
+
+        List<int> primitiveObjectIds = new(primitives.Count);
+
+        for (var i = 0; i < primitives.Count; i++)
+        {
+            primitiveObjectIds.Add(objectId++);
+        }
+
+        var processedPrimitives = 0;
+
+        for (var i = 0; i < primitives.Count; i++)
+        {
+            ParallelogramSpace.ParallelogramSpace.PrimitiveSnapshot primitive = primitives[i];
+
+            int parentId = primitive.ParentIndex >= 0 && primitive.ParentIndex < primitiveObjectIds.Count
+                ? primitiveObjectIds[primitive.ParentIndex]
+                : modelObjectId;
+
+            Vector3 position = primitive.ParentIndex >= 0
+                ? primitive.LocalPosition
+                : inverseTransformPoint(primitive.Position);
+
+            Vector3 rotation = primitive.ParentIndex >= 0
+                ? primitive.LocalRotation.eulerAngles
+                : (Quaternion.Inverse(modelRotation) * primitive.Rotation).eulerAngles;
+
+            Vector3 scale = primitive.ParentIndex >= 0
+                ? primitive.LocalScale
+                : primitive.Scale;
+
+            blocks.Add(new SchematicBlock
+            {
+                Name = $"(Q.{i + 1}){primitive.Kind}",
+                ObjectId = primitiveObjectIds[i],
+                ParentId = parentId,
+                Position = position,
+                Rotation = rotation,
+                Scale = scale,
+                BlockType = 1,
+                IsPrimitive = true,
+                PrimitiveType = (int)PrimitiveType.Quad,
+                PrimitiveColor = ToRgbaHex(primitive.Color),
+                PrimitiveFlags = (int)primitive.Flags,
+                Static = false,
+            });
+
+            processedPrimitives++;
+
+            if (processedPrimitives >= primitivesPerFrame)
+            {
+                processedPrimitives = 0;
+                yield return null;
+            }
+        }
+
+        try
+        {
+            string json = BuildJson(rootObjectId, blocks);
+            File.WriteAllText(outputPath, json, Encoding.UTF8);
+            onCompleted(true, string.Empty);
+        }
+        catch (Exception ex)
+        {
+            onCompleted(false, ex.Message);
+        }
+    }
+
+    static bool TryExportInternal
+    (
         IReadOnlyList<(ModelTriangle Triangle, PrimitiveFlags Flags)> triangles,
         Func<Vector3, Vector3> inverseTransformPoint,
         Quaternion modelRotation,
@@ -124,7 +381,8 @@ public static class ProjectMerSchematicExporter
         }
     }
 
-    static bool TryExportParallelogramSpaceInternal(
+    static bool TryExportParallelogramSpaceInternal
+    (
         IReadOnlyList<ParallelogramSpace.ParallelogramSpace.PrimitiveSnapshot> primitives,
         Func<Vector3, Vector3> inverseTransformPoint,
         Quaternion modelRotation,
@@ -175,12 +433,16 @@ public static class ProjectMerSchematicExporter
             ];
 
             List<int> primitiveObjectIds = new(primitives.Count);
-            for (var i = 0; i < primitives.Count; i++)
-                primitiveObjectIds.Add(objectId++);
 
             for (var i = 0; i < primitives.Count; i++)
             {
-                var primitive = primitives[i];
+                primitiveObjectIds.Add(objectId++);
+            }
+
+            for (var i = 0; i < primitives.Count; i++)
+            {
+                ParallelogramSpace.ParallelogramSpace.PrimitiveSnapshot? primitive = primitives[i];
+
                 int parentId = primitive.ParentIndex >= 0 && primitive.ParentIndex < primitiveObjectIds.Count
                     ? primitiveObjectIds[primitive.ParentIndex]
                     : modelObjectId;

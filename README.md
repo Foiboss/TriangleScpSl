@@ -8,7 +8,7 @@ An [EXILED](https://github.com/ExMod-Team/EXILED) plugin for SCP: Secret Laborat
 ## Current project info
 
 - Plugin name: `TriangleScpSl`
-- Version: `2.2.0`
+- Version: `3.0.0`
 - Author: `Foibos`
 - Target framework: `net48`
 - EXILED package: `ExMod.Exiled 9.13.3`
@@ -20,6 +20,7 @@ An [EXILED](https://github.com/ExMod-Team/EXILED) plugin for SCP: Secret Laborat
   - [V2 — Shared stretch primitives](#v2--shared-stretch-primitives)
   - [Primitive count](#primitive-count)
 - [Installation](#installation)
+- [Configuration](#configuration)
 - [Commands](#commands)
   - [Triangulate](#triangulate)
   - [TriangulateV2](#triangulatev2)
@@ -98,7 +99,7 @@ QuadCount = StretchCount + ParallelogramCount + FallbackCount * 2 + 1
 
 ### `Triangulate`
 
-Spawns a V1 model near the player. Running the command again destroys the currently spawned model.
+Spawns a V1 model near the player. Building is spread across multiple frames to avoid server lag. Running the command again while building cancels the build; running it again after the model is visible destroys it.
 
 ```text
 triangulate <model file (.stl/.obj)> [force color (true/false)]
@@ -109,10 +110,11 @@ triangulate <model file (.stl/.obj)> [force color (true/false)]
 - `.stl` is appended automatically if the extension is omitted.
 - File is loaded from `EXILED/Plugins/BlenderModels/`.
 - Optional second argument forces all triangles to a single fallback color (cyan).
+- Batch size per frame is controlled by `TriangulateBuildBatchSize` in the config (default `32`).
 
 ### `TriangulateV2`
 
-Spawns a V2 model near the player using shared stretch primitives. Running the command again destroys the currently spawned model.
+Spawns a V2 model near the player using shared stretch primitives. Building is spread across multiple frames to avoid server lag. Running the command again while building cancels the build; running it again after the model is visible destroys it.
 
 ```text
 TriangulateV2 <model file (.stl/.obj)> [accuracy]
@@ -123,6 +125,7 @@ TriangulateV2 <model file (.stl/.obj)> [accuracy]
 - `.stl` is appended automatically if the extension is omitted.
 - File is loaded from `EXILED/Plugins/BlenderModels/`.
 - `accuracy`: maximum allowed vertex error in world units when reusing a stretch (default `0.001`). Lower values increase fidelity and quad count; higher values reduce quad count at the cost of precision.
+- Batch size per frame is controlled by `TriangulateV2BuildBatchSize` in the config (default `16`).
 
 ### `TriangleExample`
 
@@ -130,7 +133,7 @@ Spawns a randomly generated triangle near the player with colored vertex markers
 
 ### `ExportSchematic`
 
-Exports an STL or OBJ model as a V1 ProjectMER schematic JSON file.
+Exports an STL or OBJ model as a V1 ProjectMER schematic JSON file. Both building and JSON writing are spread across multiple frames to avoid server lag. Running the command again while exporting cancels the export.
 
 ```text
 exportschematic <model file (.stl/.obj)> <output json> [forceObjColor(true/false)] [previewScale]
@@ -139,10 +142,13 @@ exportschematic <model file (.stl/.obj)> <output json> [forceObjColor(true/false
 - Output must be a file name only (no path), e.g. `mymodel.json`.
 - The schematic is written to the LabAPI ProjectMER Schematics folder.
 - `previewScale` is a positive float (default `1`).
+- Can be run from the server console (no player required).
+- Build batch size is controlled by `ExportBuildBatchSize` in the config (default `64`).
+- Write batch size is controlled by `ExportWriteBatchSize` in the config (default `256`).
 
 ### `ExportSchematicV2`
 
-Exports an STL or OBJ model as a V2 ProjectMER schematic JSON file using shared stretch primitives.
+Exports an STL or OBJ model as a V2 ProjectMER schematic JSON file using shared stretch primitives. Both building and JSON writing are spread across multiple frames to avoid server lag. Running the command again while exporting cancels the export.
 
 ```text
 ExportSchematicV2 <model file (.stl/.obj)> <output json> [accuracy] [previewScale]
@@ -153,6 +159,24 @@ ExportSchematicV2 <model file (.stl/.obj)> <output json> [accuracy] [previewScal
 - The schematic is written to the LabAPI ProjectMER Schematics folder.
 - `accuracy`: maximum allowed vertex error in world units (default `0.001`).
 - `previewScale`: positive float scale applied before export (default `1`).
+- Can be run from the server console (no player required).
+- Build batch size is controlled by `ExportBuildBatchSize` in the config (default `64`).
+- Write batch size is controlled by `ExportWriteBatchSize` in the config (default `256`).
+
+## Configuration
+
+The plugin exposes the following options in the EXILED config file:
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `is_enabled` | `true` | Enable or disable the plugin |
+| `debug` | `false` | Enable debug logging |
+| `triangulate_build_batch_size` | `32` | Triangles built per frame for the V1 `Triangulate` command |
+| `triangulate_v2_build_batch_size` | `16` | Triangles built per frame for the `TriangulateV2` command |
+| `export_build_batch_size` | `64` | Triangles built per frame for `ExportSchematicV2` build phase |
+| `export_write_batch_size` | `256` | Primitives written per frame for `ExportSchematicV2` write phase |
+
+Smaller batch sizes reduce per-frame CPU time but increase total build time. Larger values finish faster but may cause brief server hitches on very large models.
 
 ## API
 
@@ -212,6 +236,8 @@ Members:
 - `Flags` — write-only; sets primitive flags of all triangles
 - `GetTriangleSnapshot()` — returns a snapshot as `IReadOnlyList<(ModelTriangle, PrimitiveFlags)>`
 - `Create(...)` — static factory, mirrors the constructor
+- `CreateDeferred(...)` — creates the model without spawning primitives; call `BuildTrianglesCoroutine` afterwards
+- `BuildTrianglesCoroutine(flags, trianglesPerFrame)` — coroutine that spawns primitives in batches
 - `Destroy()` — destroys all underlying primitives
 
 Constructor signature:
@@ -222,7 +248,8 @@ TriangulatedModel(
     Vector3 worldPosition,
     PrimitiveFlags flags = PrimitiveFlags.Visible,
     float scale = 1f,
-    bool invertWinding = false)
+    bool invertWinding = false,
+    bool buildImmediately = true)
 ```
 
 `invertWinding` swaps the second and third vertices of every triangle, reversing the face normals. When loading files via `ModelFactory`, the winding correction for the coordinate system is applied automatically — `invertWinding` is purely for user-level control on top of that.

@@ -4,6 +4,7 @@ using TriangleScpSl.Core.TriangulatedModel;
 using TriangleScpSl.Core.Triangulation.Parallelogram;
 using TriangleScpSl.Core.Triangulation.Triangle;
 using UnityEngine;
+using System.Collections;
 
 namespace TriangleScpSl.ParallelogramSpace;
 
@@ -31,7 +32,8 @@ public class ParallelogramSpace
         PrimitiveFlags flags = PrimitiveFlags.Visible,
         float absoluteToleranceUnits = 0.001f,
         float scale = 1f,
-        bool invertWinding = false)
+        bool invertWinding = false,
+        bool buildImmediately = true)
     {
         _absoluteToleranceUnits = absoluteToleranceUnits;
         _position = worldPosition;
@@ -67,7 +69,8 @@ public class ParallelogramSpace
             absoluteToleranceUnits / maxSize * 2f
         );
 
-        BuildTriangles(flags);
+        if (buildImmediately)
+            BuildTriangles(flags);
     }
 
     public int Count => _localTriangles.Count;
@@ -174,6 +177,16 @@ public class ParallelogramSpace
         float scale = 1f,
         bool invertWinding = false)
         => new(triangles, worldPosition, flags, absoluteToleranceUnits, scale, invertWinding);
+
+    public static ParallelogramSpace CreateDeferred
+    (
+        IReadOnlyList<ModelTriangle> triangles,
+        Vector3 worldPosition,
+        PrimitiveFlags flags = PrimitiveFlags.Visible,
+        float absoluteToleranceUnits = 0.001f,
+        float scale = 1f,
+        bool invertWinding = false)
+        => new(triangles, worldPosition, flags, absoluteToleranceUnits, scale, invertWinding, false);
 
     public IReadOnlyList<(ModelTriangle Triangle, PrimitiveFlags Flags)> GetTriangleSnapshot()
     {
@@ -341,6 +354,38 @@ public class ParallelogramSpace
 
         foreach (ModelTriangle localTriangle in _localTriangles)
             CreateTriangle(localTriangle, flags);
+    }
+
+    public IEnumerator BuildTrianglesCoroutine(PrimitiveFlags flags, int trianglesPerFrame)
+    {
+        if (_isDestroyed)
+            yield break;
+
+        trianglesPerFrame = Mathf.Max(1, trianglesPerFrame);
+        _flags = flags;
+
+        ClearAllPrimitives();
+        _stretches.Clear();
+        _parallelograms.Clear();
+        _fallbackParallelograms.Clear();
+        _parallelogramSnapshots.Clear();
+
+        var processed = 0;
+
+        foreach (ModelTriangle localTriangle in _localTriangles)
+        {
+            if (_isDestroyed)
+                yield break;
+
+            CreateTriangle(localTriangle, flags);
+            processed++;
+
+            if (processed >= trianglesPerFrame)
+            {
+                processed = 0;
+                yield return null;
+            }
+        }
     }
 
     void ClearAllPrimitives()
