@@ -167,25 +167,33 @@ ExportSchematicV2 <model file (.stl/.obj)> <output json> [accuracy] [previewScal
 
 The plugin exposes the following options in the EXILED config file:
 
-| Key | Default | Description |
-|-----|---------|-------------|
-| `is_enabled` | `true` | Enable or disable the plugin |
-| `debug` | `false` | Enable debug logging |
-| `triangulate_build_batch_size` | `32` | Triangles built per frame for the V1 `Triangulate` command |
-| `triangulate_v2_build_batch_size` | `16` | Triangles built per frame for the `TriangulateV2` command |
-| `export_build_batch_size` | `64` | Triangles built per frame for `ExportSchematicV2` build phase |
-| `export_write_batch_size` | `256` | Primitives written per frame for `ExportSchematicV2` write phase |
+| Key                               | Default | Description                                                      |
+|-----------------------------------|---------|------------------------------------------------------------------|
+| `is_enabled`                      | `true`  | Enable or disable the plugin                                     |
+| `debug`                           | `false` | Enable debug logging                                             |
+| `triangulate_build_batch_size`    | `32`    | Triangles built per frame for the V1 `Triangulate` command       |
+| `triangulate_v2_build_batch_size` | `16`    | Triangles built per frame for the `TriangulateV2` command        |
+| `export_build_batch_size`         | `64`    | Triangles built per frame for `ExportSchematicV2` build phase    |
+| `export_write_batch_size`         | `256`   | Primitives written per frame for `ExportSchematicV2` write phase |
 
 Smaller batch sizes reduce per-frame CPU time but increase total build time. Larger values finish faster but may cause brief server hitches on very large models.
 
 ## API
+
+### `ModelFactory`
+
+Static class that loads STL/OBJ files from `EXILED/Plugins/BlenderModels/` and constructs models.
+
+- `TryLoadTriangles(file, color, forceObjColor, out triangles, out fileName, out error)` — loads a file, applies the winding correction required by the V1 pipeline, returns a flat `List<ModelTriangle>`
+- `CreateModel(triangles, position, flags)` → `TriangulatedModel` — creates a V1 model
+- `CreateModel(triangles, position, flags, tolerance)` → `ParallelogramSpace` — creates a V2 model
 
 ### `ModelTriangle`
 
 A readonly struct that stores three vertices and a color.
 
 ```csharp
-using TriangleScpSl.Core.TriangulatedModel;
+using TriangleScpSl.Core.ModelFactory;
 using UnityEngine;
 
 var tri = new ModelTriangle(p1, p2, p3, Color.white);
@@ -199,6 +207,7 @@ Loads and displays a 3-D mesh from a list of `ModelTriangle` values using the V1
 
 ```csharp
 using AdminToys;
+using TriangleScpSl.Core.ModelFactory;
 using TriangleScpSl.Core.TriangulatedModel;
 using UnityEngine;
 
@@ -260,7 +269,8 @@ Loads and displays a 3-D mesh from a list of `ModelTriangle` values using the V2
 
 ```csharp
 using AdminToys;
-using TriangleScpSl.ParallelogramSpace;
+using TriangleScpSl.Core.ModelFactory;
+using TriangleScpSl.Core.ParallelogramSpace;
 using UnityEngine;
 
 List<ModelTriangle> triangles = [new(p1, p2, p3, Color.white)];

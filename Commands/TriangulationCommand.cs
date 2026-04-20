@@ -12,7 +12,7 @@ namespace TriangleScpSl.Commands;
 [CommandHandler(typeof(RemoteAdminCommandHandler))]
 public class TriangulationCommand : ICommand
 {
-    readonly Color _forceColor = Color.cyan;
+    readonly Color _forceColor = Color.white;
     Coroutine? _buildCoroutine;
     bool _isBuilding;
     TriangulatedModel? _model;

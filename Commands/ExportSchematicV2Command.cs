@@ -8,7 +8,6 @@ using TriangleScpSl.Core.ParallelogramSpace;
 using TriangleScpSl.Core.Paths;
 using TriangleScpSl.Core.ProjectMerExport;
 using TriangleScpSl.Core.Runtime;
-using TriangleScpSl.Core.TriangulatedModel;
 using UnityEngine;
 
 namespace TriangleScpSl.Commands;
@@ -99,7 +98,7 @@ public sealed class ExportSchematicV2Command : ICommand
     {
         try
         {
-            if (!ModelFactory.TryLoadTriangles(requestedFile, _fallbackColor, false, out List<ModelTriangle> triangles, out _, out string modelError))
+            if (!ModelFactory.TryLoadTrianglesRaw(requestedFile, _fallbackColor, false, out List<ModelTriangle> triangles, out _, out string modelError))
             {
                 Log.Warn($"[ExportSchematicV2] {modelError}");
                 yield break;

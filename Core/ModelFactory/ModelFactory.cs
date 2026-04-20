@@ -69,6 +69,22 @@ public static class ModelFactory
         out string normalizedFileName,
         out string error)
     {
+        if (!TryLoadTrianglesRaw(requestedFile, color, forceObjColor, out triangles, out normalizedFileName, out error))
+            return false;
+
+        FixWinding(triangles);
+        return true;
+    }
+
+    internal static bool TryLoadTrianglesRaw
+    (
+        string requestedFile,
+        Color color,
+        bool forceObjColor,
+        out List<ModelTriangle> triangles,
+        out string normalizedFileName,
+        out string error)
+    {
         triangles = [];
 
         if (!TryResolveModelPath(requestedFile, out string modelPath, out normalizedFileName, out error))
@@ -82,7 +98,6 @@ public static class ModelFactory
                 return false;
             }
 
-            FixWinding(parsedObjTriangles);
             triangles = parsedObjTriangles;
 
             if (forceObjColor)
@@ -102,7 +117,6 @@ public static class ModelFactory
                 return false;
             }
 
-            FixWinding(parsedStlTriangles);
             triangles = parsedStlTriangles;
         }
 
