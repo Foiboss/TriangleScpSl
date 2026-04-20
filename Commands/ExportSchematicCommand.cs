@@ -104,8 +104,8 @@ public sealed class ExportSchematicCommand : ICommand
                 yield break;
             }
 
-            _activeModel = TriangulatedModel.CreateDeferred(triangles, spawnPosition, PrimitiveFlags.None);
-            yield return _activeModel.BuildTrianglesCoroutine(PrimitiveFlags.None, buildBatch);
+            _activeModel = TriangulatedModel.CreateDeferred(triangles, spawnPosition, PrimitiveFlags.Visible);
+            yield return _activeModel.BuildTrianglesCoroutine(PrimitiveFlags.Visible, buildBatch);
 
             if (_activeModel.Count == 0)
             {

@@ -107,10 +107,10 @@ public sealed class ExportSchematicV2Command : ICommand
             _activeModel = ParallelogramSpace.CreateDeferred(
                 triangles,
                 spawnPosition,
-                PrimitiveFlags.None,
+                PrimitiveFlags.Visible,
                 accuracy);
 
-            yield return _activeModel.BuildTrianglesCoroutine(PrimitiveFlags.None, buildBatch);
+            yield return _activeModel.BuildTrianglesCoroutine(PrimitiveFlags.Visible, buildBatch);
 
             if (_activeModel.Count == 0)
             {
