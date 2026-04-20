@@ -9,7 +9,6 @@ namespace TriangleScpSl.Commands;
 [CommandHandler(typeof(RemoteAdminCommandHandler))]
 public class TriangulationV2Command : ICommand
 {
-    readonly Color _forceColor = Color.cyan;
     ParallelogramSpace.ParallelogramSpace? _model;
 
     public string Command { get; } = "TriangulateV2";
@@ -46,7 +45,6 @@ public class TriangulationV2Command : ICommand
         }
 
         string requestedFile = arguments.Array?[arguments.Offset] ?? string.Empty;
-        const bool forceObjColor = false;
         float accuracy = 0.001f;
 
         if (arguments.Count == 2)
@@ -62,19 +60,16 @@ public class TriangulationV2Command : ICommand
 
         Vector3 spawnPosition = player.Position + player.GameObject.transform.forward * 2.5f + Vector3.up * 1.2f;
 
-        if (!ModelFactoryV2.TryCreateModel
-            (
+        if (!ModelFactoryV2.TryCreateModel(
                 requestedFile,
                 spawnPosition,
-                _forceColor,
-                forceObjColor,
+                Color.white,
+                false,
                 out ParallelogramSpace.ParallelogramSpace? createdModel,
                 out string fileName,
                 out string error,
                 PrimitiveFlags.Visible,
-                accuracy
-            )
-        )
+                accuracy))
         {
             response = error;
             return false;
@@ -82,7 +77,7 @@ public class TriangulationV2Command : ICommand
 
         _model = createdModel;
 
-        response = $"Created model '{fileName}': triangles={createdModel!.Count}, quads={createdModel.QuadCount}, forceObjColor={forceObjColor}. Run command again to destroy.";
+        response = $"Created model '{fileName}': triangles={createdModel!.Count}, quads={createdModel.QuadCount}. Run command again to destroy.";
         return true;
     }
 }

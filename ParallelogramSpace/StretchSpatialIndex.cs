@@ -9,10 +9,10 @@ public class StretchSpatialIndex
     readonly float _cellSize; // radians
     readonly int _searchRadius; // cells to scan in each direction
 
-    /// <param name="cellSize">Size of a cell in radians. 0.05 is a reasonable default.</param>
+    /// <param name="cellSize">Size of a cell in radians. 0.05 is a reasonable default</param>
     /// <param name="maxAngularTolerance">
-    ///     Worst-case angular distance between an acceptable candidate and the query point.
-    ///     Determines how many neighboring cells to scan.
+    ///     Worst-case angular distance between an acceptable candidate and the query point
+    ///     Determines how many neighboring cells to scan
     /// </param>
     public StretchSpatialIndex(float cellSize = 0.05f, float maxAngularTolerance = 0.1f)
     {
@@ -20,15 +20,7 @@ public class StretchSpatialIndex
         _searchRadius = Mathf.Max(1, Mathf.CeilToInt(maxAngularTolerance / cellSize));
     }
 
-    public int Count
-    {
-        get
-        {
-            var n = 0;
-            foreach (List<Entry>? list in _cells.Values) n += list.Count;
-            return n;
-        }
-    }
+    public int Count { get; private set; }
 
     (int, int) CellOf(float theta, float phi)
         => (Mathf.FloorToInt(theta / _cellSize), Mathf.FloorToInt(phi / _cellSize));
@@ -44,11 +36,12 @@ public class StretchSpatialIndex
         }
 
         list.Add(new Entry(theta, phi, stretch));
+        Count++;
     }
 
     /// <summary>
-    ///     Enumerate all entries in the cell containing (theta, phi) and its neighbors
-    ///     within _searchRadius. Caller filters by actual geometric error.
+    ///     Enumerate all entries in the cell containing (theta, phi) and its neighbors within _searchRadius
+    ///     Caller filters by actual geometric error
     /// </summary>
     public IEnumerable<Entry> QueryNearby(float theta, float phi)
     {
@@ -57,7 +50,9 @@ public class StretchSpatialIndex
         for (int dt = -_searchRadius; dt <= _searchRadius; dt++)
         for (int dp = -_searchRadius; dp <= _searchRadius; dp++)
         {
-            if (_cells.TryGetValue((ct + dt, cp + dp), out List<Entry>? list))
+            (int, int) key = (ct + dt, cp + dp);
+
+            if (_cells.TryGetValue(key, out List<Entry>? list))
             {
                 foreach (Entry e in list)
                     yield return e;
@@ -67,12 +62,14 @@ public class StretchSpatialIndex
 
     public IEnumerable<Entry> All()
     {
-        foreach (List<Entry>? list in _cells.Values)
-        foreach (Entry e in list)
-            yield return e;
+        return _cells.Values.SelectMany(list => list);
     }
 
-    public void Clear() => _cells.Clear();
+    public void Clear()
+    {
+        _cells.Clear();
+        Count = 0;
+    }
 
     public readonly struct Entry(float theta, float phi, Primitive stretch)
     {

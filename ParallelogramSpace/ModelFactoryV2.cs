@@ -14,7 +14,14 @@ public static class ModelFactoryV2
         normalizedFileName = string.Empty;
         error = string.Empty;
 
-        string fileName = Path.GetFileName(requestedFile ?? string.Empty);
+        // Validate input
+        if (string.IsNullOrWhiteSpace(requestedFile))
+        {
+            error = "Model file name cannot be empty.";
+            return false;
+        }
+
+        string fileName = Path.GetFileName(requestedFile);
 
         if (!string.Equals(requestedFile, fileName, StringComparison.Ordinal))
         {
@@ -45,8 +52,8 @@ public static class ModelFactoryV2
         IReadOnlyList<ModelTriangle> triangles,
         Vector3 worldPosition,
         PrimitiveFlags flags = PrimitiveFlags.Visible,
-        float absoluteToleranceUnits = 0.05f
-        )
+        float absoluteToleranceUnits = 0.001f
+    )
         => ParallelogramSpace.Create(triangles, worldPosition, flags, absoluteToleranceUnits);
 
     public static bool TryCreateModel
@@ -73,6 +80,7 @@ public static class ModelFactoryV2
                 error = $"Failed to parse OBJ: {parseError}";
                 return false;
             }
+
             model = CreateModel(parsedObjTriangles, worldPosition, flags, absoluteToleranceUnits);
 
             if (forceObjColor)
@@ -85,6 +93,7 @@ public static class ModelFactoryV2
                 error = $"Failed to parse STL: {parseError}";
                 return false;
             }
+
             model = CreateModel(parsedStlTriangles, worldPosition, flags, absoluteToleranceUnits);
         }
 

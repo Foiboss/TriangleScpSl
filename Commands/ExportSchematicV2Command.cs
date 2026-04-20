@@ -69,14 +69,14 @@ public sealed class ExportSchematicV2Command : ICommand
             spawnPosition = player.Position + player.GameObject.transform.forward * 2.5f + Vector3.up * 1.2f;
 
         if (!ModelFactoryV2.TryCreateModel(
-            requestedFile, 
-            spawnPosition, 
-            _fallbackColor, 
+            requestedFile,
+            spawnPosition,
+            _fallbackColor,
             forceObjColor,
             out ParallelogramSpace.ParallelogramSpace? parallelogramSpace,
-            out _, 
-            out string modelError, 
-            PrimitiveFlags.Visible, 
+            out _,
+            out string modelError,
+            PrimitiveFlags.Visible,
             accuracy))
         {
             response = modelError;
@@ -97,12 +97,17 @@ public sealed class ExportSchematicV2Command : ICommand
                 return false;
             }
 
-            response = $"Schematic exported to LabAPI MER folder: {outputPath} (triangles={parallelogramSpace.Count}, quads={parallelogramSpace.QuadCount}, forceObjColor={forceObjColor}, previewScale={previewScale.ToString(CultureInfo.InvariantCulture)}).";
+            response = $"Schematic exported to LabAPI MER folder: {outputPath} (triangles={parallelogramSpace.Count}, quads={parallelogramSpace.QuadCount}, previewScale={previewScale.ToString(CultureInfo.InvariantCulture)}).";
             return true;
+        }
+        catch (Exception ex)
+        {
+            response = $"Export error: {ex.Message}";
+            return false;
         }
         finally
         {
-            parallelogramSpace!.Destroy();
+            parallelogramSpace?.Destroy();
         }
     }
 

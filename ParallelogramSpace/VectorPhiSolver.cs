@@ -4,15 +4,20 @@ namespace TriangleScpSl.ParallelogramSpace;
 
 /// <summary>
 ///     Finds (theta, phi) such that after rotating by -theta around Z
-///     and scaling x/(cos(phi)*F), y/(sin(phi)*F),
-///     both vectors end up with equal length.
+///     and scaling x/(cos(phi)*F), y/(sin(phi)*F)
+///     both vectors end up with equal length
 /// </summary>
 public static class VectorPhiSolver
 {
     public const float F = 2f;
 
+    // Tolerance thresholds
+    const double Epsilon = 1e-15;
+    const double EpsilonLarge = 1e-12;
+    const double TBoundaryTolerance = 1e-9;
+
     /// <summary>
-    ///     Rotate XY by -theta (Z unchanged).
+    ///     Rotate XY by -theta (Z unchanged)
     /// </summary>
     static (double x, double y) RotateXY(Vector3 v, double theta)
     {
@@ -20,11 +25,7 @@ public static class VectorPhiSolver
         // R(-theta) = [[cos(theta), sin(theta)],[-sin(theta), cos(theta)]]
         return (v.x * c + v.y * s, -v.x * s + v.y * c);
     }
-
-    /// <summary>
-    ///     For a given theta, solve the quadratic in t = cos(phi)^2 analytically.
-    ///     Returns true if a valid phi in (0, pi/2) exists.
-    /// </summary>
+    
     static bool TrySolveForPhi(Vector3 v1, Vector3 v2, double theta, out double phi)
     {
         phi = 0;
@@ -43,16 +44,17 @@ public static class VectorPhiSolver
 
         double? bestT = null;
 
-        if (Math.Abs(qa) < 1e-15)
+        if (Math.Abs(qa) < Epsilon)
         {
             // Linear
-            if (Math.Abs(qb) > 1e-15)
+            if (Math.Abs(qb) > Epsilon)
             {
                 double t = -qc / qb;
-                if (t is > 1e-9 and < 1 - 1e-9)
+
+                if (t is > TBoundaryTolerance and < 1 - TBoundaryTolerance)
                     bestT = t;
             }
-            else if (Math.Abs(qc) < 1e-12)
+            else if (Math.Abs(qc) < EpsilonLarge)
             {
                 // Any phi works
                 bestT = 0.5; // phi = pi/4
@@ -61,13 +63,14 @@ public static class VectorPhiSolver
         else
         {
             double disc = qb * qb - 4.0 * qa * qc;
+
             if (disc >= 0)
             {
                 double sq = Math.Sqrt(disc);
                 double t1 = (-qb + sq) / (2.0 * qa);
                 double t2 = (-qb - sq) / (2.0 * qa);
-                bool ok1 = t1 is > 1e-9 and < 1 - 1e-9;
-                bool ok2 = t2 is > 1e-9 and < 1 - 1e-9;
+                bool ok1 = t1 is > TBoundaryTolerance and < 1 - TBoundaryTolerance;
+                bool ok2 = t2 is > TBoundaryTolerance and < 1 - TBoundaryTolerance;
 
                 switch (ok1)
                 {
@@ -91,10 +94,6 @@ public static class VectorPhiSolver
         return true;
     }
 
-    /// <summary>
-    ///     Find theta that makes A(theta) and B(theta) have opposite signs.
-    ///     A(theta) = D/2 + H·cos(2 * theta + alpha), needs A * B &lt; 0 → pick theta where A crosses zero.
-    /// </summary>
     static double FindOptimalTheta(Vector3 v1, Vector3 v2)
     {
         double a = (double)v1.x * v1.x - (double)v2.x * v2.x;
@@ -103,25 +102,26 @@ public static class VectorPhiSolver
         double g = (double)v1.x * v1.y - (double)v2.x * v2.y;
         double h = Math.Sqrt(e * e + g * g);
 
-        if (h < 1e-15) return Math.PI / 4;
+        if (h < Epsilon) return Math.PI / 4;
 
         // A(theta) = D/2 + H·cos(2 * theta + alpha) where alpha = atan2(G, E)
         // Minimum when cos(2 * theta + alpha) = -1, i.e. 2 * theta + alpha = pi
         double alpha = Math.Atan2(g, e);
         return (Math.PI - alpha) / 2.0;
     }
-    
+
     /// <summary>
-    ///     Returns false instead of throwing when no solution exists.
+    ///     Returns false when no solution exists
     /// </summary>
-    public static bool TrySolve(
+    public static bool TrySolve
+    (
         Vector3 v1, Vector3 v2,
         out float theta, out float phi)
     {
         theta = 0f;
         phi = 0f;
 
-        // Try a small set of candidate thetas first — covers almost all cases cheaply
+        // Try a small set of candidate thetas first: covers almost all cases cheaply
         double[] candidates =
         [
             0,
@@ -142,9 +142,10 @@ public static class VectorPhiSolver
         }
 
         // Brute-force fallback for the rare remaining cases
-        for (int i = 1; i <= 360; i++)
+        for (var i = 1; i <= 360; i++)
         {
             double thetaD = i * Math.PI / 360.0;
+
             if (TrySolveForPhi(v1, v2, thetaD, out double phiD))
             {
                 theta = (float)thetaD;
