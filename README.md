@@ -309,6 +309,8 @@ Members:
 - `GetParallelogramSnapshot()` — raw parallelogram data as `IReadOnlyList<ParallelogramSnapshot>`
 - `GetPrimitiveSnapshot()` — full hierarchy of all quads as `IReadOnlyList<PrimitiveSnapshot>` (used by the schematic exporter)
 - `Create(...)` — static factory, mirrors the constructor
+- `CreateDeferred(...)` — creates the model without spawning primitives; call `BuildTrianglesCoroutine` afterwards
+- `BuildTrianglesCoroutine(flags, trianglesPerFrame)` — coroutine that spawns primitives in batches
 - `Destroy()` — destroys all underlying primitives
 
 Constructor signature:

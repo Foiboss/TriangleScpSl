@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace TriangleScpSl.ParallelogramSpace;
+namespace TriangleScpSl.Core.ParallelogramSpace;
 
 /// <summary>
 ///     Finds (theta, phi) such that after rotating by -theta around Z

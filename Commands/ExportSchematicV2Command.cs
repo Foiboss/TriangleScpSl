@@ -3,10 +3,12 @@ using System.Globalization;
 using AdminToys;
 using CommandSystem;
 using Exiled.API.Features;
+using TriangleScpSl.Core.ModelFactory;
+using TriangleScpSl.Core.ParallelogramSpace;
 using TriangleScpSl.Core.Paths;
+using TriangleScpSl.Core.ProjectMerExport;
 using TriangleScpSl.Core.Runtime;
 using TriangleScpSl.Core.TriangulatedModel;
-using TriangleScpSl.ParallelogramSpace;
 using UnityEngine;
 
 namespace TriangleScpSl.Commands;
@@ -17,7 +19,7 @@ public sealed class ExportSchematicV2Command : ICommand
     readonly Color _fallbackColor = Color.white;
     Coroutine? _exportCoroutine;
     bool _isExporting;
-    ParallelogramSpace.ParallelogramSpace? _activeModel;
+    ParallelogramSpace? _activeModel;
 
     public string Command { get; } = "ExportSchematicV2";
     public string[] Aliases { get; } = [];
@@ -74,7 +76,7 @@ public sealed class ExportSchematicV2Command : ICommand
         }
 
         Vector3 spawnPosition = Vector3.zero;
-        
+
         int buildBatch = Mathf.Max(1, Plugin.Instance?.Config.ExportBuildBatchSize ?? 64);
         int writeBatch = Mathf.Max(1, Plugin.Instance?.Config.ExportWriteBatchSize ?? 256);
 
@@ -97,13 +99,13 @@ public sealed class ExportSchematicV2Command : ICommand
     {
         try
         {
-            if (!ModelFactoryV2.TryLoadTriangles(requestedFile, _fallbackColor, false, out List<ModelTriangle> triangles, out _, out string modelError))
+            if (!ModelFactory.TryLoadTriangles(requestedFile, _fallbackColor, false, out List<ModelTriangle> triangles, out _, out string modelError))
             {
                 Log.Warn($"[ExportSchematicV2] {modelError}");
                 yield break;
             }
 
-            _activeModel = ParallelogramSpace.ParallelogramSpace.CreateDeferred(
+            _activeModel = ParallelogramSpace.CreateDeferred(
                 triangles,
                 spawnPosition,
                 PrimitiveFlags.None,

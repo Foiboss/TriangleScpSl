@@ -2,15 +2,16 @@ using System.Collections;
 using System.Globalization;
 using System.Text;
 using AdminToys;
+using TriangleScpSl.Core.ModelFactory;
 using TriangleScpSl.Core.Triangulation.Parallelogram;
 using TriangleScpSl.Core.Triangulation.Triangle;
 using UnityEngine;
 
-namespace TriangleScpSl.Core.TriangulatedModel;
+namespace TriangleScpSl.Core.ProjectMerExport;
 
 public static class ProjectMerSchematicExporter
 {
-    public static bool TryExport(TriangulatedModel model, string outputPath, string modelName, out string error)
+    public static bool TryExport(TriangulatedModel.TriangulatedModel model, string outputPath, string modelName, out string error)
         => TryExportInternal(model.GetTriangleSnapshot(), model.InverseTransformPoint, model.Rotation, outputPath, modelName, out error);
 
     public static bool TryExport(ParallelogramSpace.ParallelogramSpace model, string outputPath, string modelName, out string error)
@@ -18,7 +19,7 @@ public static class ProjectMerSchematicExporter
 
     public static IEnumerator ExportCoroutine
     (
-        TriangulatedModel model,
+        TriangulatedModel.TriangulatedModel model,
         string outputPath,
         string modelName,
         int trianglesPerFrame,

@@ -1,12 +1,11 @@
 using AdminToys;
 using TriangleScpSl.Core.FileToTriangles;
 using TriangleScpSl.Core.Paths;
-using TriangleScpSl.Core.TriangulatedModel;
 using UnityEngine;
 
-namespace TriangleScpSl.ParallelogramSpace;
+namespace TriangleScpSl.Core.ModelFactory;
 
-public static class ModelFactoryV2
+public static class ModelFactory
 {
     static bool TryResolveModelPath(string? requestedFile, out string modelPath, out string normalizedFileName, out string error)
     {
@@ -46,44 +45,20 @@ public static class ModelFactoryV2
         return true;
     }
 
-    public static ParallelogramSpace CreateModel
+    public static TriangulatedModel.TriangulatedModel CreateModel
+    (
+        IReadOnlyList<ModelTriangle> triangles,
+        Vector3 worldPosition,
+        PrimitiveFlags flags = PrimitiveFlags.Visible)
+        => TriangulatedModel.TriangulatedModel.Create(triangles, worldPosition, flags);
+
+    public static ParallelogramSpace.ParallelogramSpace CreateModel
     (
         IReadOnlyList<ModelTriangle> triangles,
         Vector3 worldPosition,
         PrimitiveFlags flags = PrimitiveFlags.Visible,
-        float absoluteToleranceUnits = 0.001f
-    )
-        => ParallelogramSpace.Create(triangles, worldPosition, flags, absoluteToleranceUnits);
-
-    public static bool TryCreateModel
-    (
-        string requestedFile,
-        Vector3 worldPosition,
-        Color color,
-        bool forceObjColor,
-        out ParallelogramSpace? model,
-        out string normalizedFileName,
-        out string error,
-        PrimitiveFlags flags = PrimitiveFlags.Visible,
         float absoluteToleranceUnits = 0.001f)
-    {
-        model = null;
-
-        if (!TryLoadTriangles(requestedFile, color, forceObjColor, out List<ModelTriangle> triangles, out normalizedFileName, out error))
-            return false;
-
-        model = CreateModel(triangles, worldPosition, flags, absoluteToleranceUnits);
-
-        if (model.Count == 0)
-        {
-            model.Destroy();
-            model = null;
-            error = "No valid non-degenerate triangles found in model file.";
-            return false;
-        }
-
-        return true;
-    }
+        => ParallelogramSpace.ParallelogramSpace.Create(triangles, worldPosition, flags, absoluteToleranceUnits);
 
     public static bool TryLoadTriangles
     (
@@ -107,6 +82,7 @@ public static class ModelFactoryV2
                 return false;
             }
 
+            FixWinding(parsedObjTriangles);
             triangles = parsedObjTriangles;
 
             if (forceObjColor)
@@ -126,6 +102,7 @@ public static class ModelFactoryV2
                 return false;
             }
 
+            FixWinding(parsedStlTriangles);
             triangles = parsedStlTriangles;
         }
 
@@ -136,5 +113,14 @@ public static class ModelFactoryV2
         }
 
         return true;
+    }
+
+    static void FixWinding(List<ModelTriangle> triangles)
+    {
+        for (var i = 0; i < triangles.Count; i++)
+        {
+            ModelTriangle t = triangles[i];
+            triangles[i] = new ModelTriangle(t.P1, t.P3, t.P2, t.Color);
+        }
     }
 }

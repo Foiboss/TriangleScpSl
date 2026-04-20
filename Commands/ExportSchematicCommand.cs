@@ -3,8 +3,10 @@ using AdminToys;
 using CommandSystem;
 using Exiled.API.Features;
 using System.Collections;
+using TriangleScpSl.Core.ModelFactory;
 using TriangleScpSl.Core.Runtime;
 using TriangleScpSl.Core.Paths;
+using TriangleScpSl.Core.ProjectMerExport;
 using TriangleScpSl.Core.TriangulatedModel;
 using UnityEngine;
 
@@ -73,7 +75,7 @@ public sealed class ExportSchematicCommand : ICommand
         }
 
         Vector3 spawnPosition = Vector3.zero;
-        
+
         int buildBatch = Mathf.Max(1, Plugin.Instance?.Config.ExportBuildBatchSize ?? 64);
         int writeBatch = Mathf.Max(1, Plugin.Instance?.Config.ExportWriteBatchSize ?? 256);
 

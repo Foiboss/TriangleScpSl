@@ -1,5 +1,6 @@
 using System.Collections;
 using Exiled.API.Features.Toys;
+using TriangleScpSl.Core.ModelFactory;
 using TriangleScpSl.Core.Triangulation.Triangle;
 using UnityEngine;
 
@@ -158,6 +159,9 @@ public class TriangulatedModel
             yield break;
 
         trianglesPerFrame = Mathf.Max(1, trianglesPerFrame);
+
+        foreach (TrianglePrimitive triangle in _triangles)
+            triangle.Destroy();
 
         _triangles.Clear();
         var processed = 0;

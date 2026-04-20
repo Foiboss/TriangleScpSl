@@ -2,7 +2,7 @@ using AdminToys;
 using CommandSystem;
 using Exiled.API.Features;
 using Exiled.API.Features.Toys;
-using TriangleScpSl.ParallelogramSpace;
+using TriangleScpSl.Core.ParallelogramSpace;
 using UnityEngine;
 using Random = UnityEngine.Random;
 

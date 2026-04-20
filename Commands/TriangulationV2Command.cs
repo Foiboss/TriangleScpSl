@@ -2,9 +2,10 @@ using AdminToys;
 using CommandSystem;
 using Exiled.API.Features;
 using System.Collections;
+using TriangleScpSl.Core.ModelFactory;
+using TriangleScpSl.Core.ParallelogramSpace;
 using TriangleScpSl.Core.Runtime;
 using TriangleScpSl.Core.TriangulatedModel;
-using TriangleScpSl.ParallelogramSpace;
 using UnityEngine;
 
 namespace TriangleScpSl.Commands;
@@ -14,7 +15,7 @@ public class TriangulationV2Command : ICommand
 {
     Coroutine? _buildCoroutine;
     bool _isBuilding;
-    ParallelogramSpace.ParallelogramSpace? _model;
+    ParallelogramSpace? _model;
 
     public string Command { get; } = "TriangulateV2";
     public string[] Aliases { get; } = [];
@@ -77,13 +78,13 @@ public class TriangulationV2Command : ICommand
 
         Vector3 spawnPosition = player.Position + player.GameObject.transform.forward * 2.5f + Vector3.up * 1.2f;
 
-        if (!ModelFactoryV2.TryLoadTriangles(requestedFile, Color.white, false, out List<ModelTriangle> triangles, out string fileName, out string error))
+        if (!ModelFactory.TryLoadTriangles(requestedFile, Color.white, false, out List<ModelTriangle> triangles, out string fileName, out string error))
         {
             response = error;
             return false;
         }
 
-        var createdModel = ParallelogramSpace.ParallelogramSpace.CreateDeferred(
+        var createdModel = ParallelogramSpace.CreateDeferred(
             triangles,
             spawnPosition,
             PrimitiveFlags.Visible,
@@ -99,7 +100,7 @@ public class TriangulationV2Command : ICommand
         return true;
     }
 
-    IEnumerator BuildRoutine(ParallelogramSpace.ParallelogramSpace model, string fileName, int batchSize)
+    IEnumerator BuildRoutine(ParallelogramSpace model, string fileName, int batchSize)
     {
         yield return model.BuildTrianglesCoroutine(PrimitiveFlags.Visible, batchSize);
 

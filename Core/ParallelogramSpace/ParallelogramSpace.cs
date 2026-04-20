@@ -1,12 +1,12 @@
+using System.Collections;
 using AdminToys;
 using Exiled.API.Features.Toys;
-using TriangleScpSl.Core.TriangulatedModel;
+using TriangleScpSl.Core.ModelFactory;
 using TriangleScpSl.Core.Triangulation.Parallelogram;
 using TriangleScpSl.Core.Triangulation.Triangle;
 using UnityEngine;
-using System.Collections;
 
-namespace TriangleScpSl.ParallelogramSpace;
+namespace TriangleScpSl.Core.ParallelogramSpace;
 
 public class ParallelogramSpace
 {
@@ -74,7 +74,7 @@ public class ParallelogramSpace
     }
 
     public int Count => _localTriangles.Count;
-    public int QuadCount => _stretches.Count + _parallelograms.Count + _fallbackParallelograms.Count * 2 + 1; // +1 for model base quad
+    public int QuadCount => _isDestroyed ? 0 : _stretches.Count + _parallelograms.Count + _fallbackParallelograms.Count * 2 + 1; // +1 for model base quad
 
     public Vector3 Position
     {
