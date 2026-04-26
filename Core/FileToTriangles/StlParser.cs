@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Text;
 using TriangleScpSl.Core.ModelFactory;
-using TriangleScpSl.Core.TriangulatedModel;
 using UnityEngine;
 
 namespace TriangleScpSl.Core.FileToTriangles;
