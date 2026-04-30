@@ -105,7 +105,7 @@ public class TriangulateCommand : ICommand
         if (!ReferenceEquals(_model, model))
             yield break;
 
-        if (model.Count == 0)
+        if (model.ParallelogramCount == 0)
         {
             model.Destroy();
             _model = null;
@@ -113,6 +113,6 @@ public class TriangulateCommand : ICommand
             yield break;
         }
 
-        Log.Info($"[Triangulate] Created model '{fileName}': triangles={model.Count}, quads={model.QuadCount}, forceObjColor={forceObjColor}.");
+        Log.Info($"[Triangulate] Created model '{fileName}': triangles={model.ParallelogramCount}, quads={model.QuadCount}, forceObjColor={forceObjColor}.");
     }
 }

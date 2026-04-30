@@ -7,7 +7,7 @@ namespace TriangleScpSl.Core.Models;
 
 public abstract class ModelBase
 {
-    public abstract int Count { get; }
+    public abstract int ParallelogramCount { get; }
     public abstract int QuadCount { get; }
     public abstract Vector3 Position { get; set; }
     public abstract Quaternion Rotation { get; set; }

@@ -107,7 +107,7 @@ public sealed class ExportSchematicCommand : ICommand
             _activeModel = ExactModel.CreateDeferred(triangles, spawnPosition, PrimitiveFlags.Visible);
             yield return _activeModel.BuildTrianglesCoroutine(PrimitiveFlags.Visible, buildBatch);
 
-            if (_activeModel.Count == 0)
+            if (_activeModel.ParallelogramCount == 0)
             {
                 Log.Warn("[ExportSchematic] Model has no valid non-degenerate triangles.");
                 yield break;
@@ -141,7 +141,7 @@ public sealed class ExportSchematicCommand : ICommand
                 yield break;
             }
 
-            Log.Info($"[ExportSchematic] Exported: {outputPath} (triangles={_activeModel.Count}, quads={_activeModel.QuadCount}, forceObjColor={forceObjColor}, previewScale={previewScale.ToString(CultureInfo.InvariantCulture)}).");
+            Log.Info($"[ExportSchematic] Exported: {outputPath} (triangles={_activeModel.ParallelogramCount}, quads={_activeModel.QuadCount}, forceObjColor={forceObjColor}, previewScale={previewScale.ToString(CultureInfo.InvariantCulture)}).");
         }
         finally
         {

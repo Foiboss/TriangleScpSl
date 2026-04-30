@@ -15,8 +15,7 @@ public class ExactModel
     : ModelBase
 {
     readonly Primitive _baseQuad;
-    readonly List<ModelTriangle> _localTriangles = [];
-    readonly List<Color> _triangleColors = [];
+    readonly List<ModelParallelogram> _modelParallelograms = [];
     readonly List<ParallelogramPrimitive> _parallelograms = [];
     readonly bool _invertWinding;
     AdminToys.PrimitiveFlags _currentFlags;
@@ -55,16 +54,52 @@ public class ExactModel
 
         foreach (ModelTriangle tri in triangles)
         {
-            _localTriangles.Add(new ModelTriangle(tri.P1, tri.P2, tri.P3, tri.Color));
-            _triangleColors.Add(tri.Color);
+            (ModelParallelogram para1, ModelParallelogram para2, ModelParallelogram para3) = GetParallelograms(tri, tri.Color, flags);
+            _modelParallelograms.Add(para1);
+            _modelParallelograms.Add(para2);
+            _modelParallelograms.Add(para3);
         }
 
         if (buildImmediately)
             BuildTriangles(flags);
     }
+    
+    public ExactModel
+    (
+        IReadOnlyList<ModelParallelogram> parallelograms,
+        Vector3 worldPosition,
+        AdminToys.PrimitiveFlags flags = AdminToys.PrimitiveFlags.Visible,
+        float scale = 1f,
+        bool invertWinding = false,
+        bool buildImmediately = true)
+    {
+        _position = worldPosition;
+        _rotation = Quaternion.identity;
+        _scale = Vector3.one * scale;
+        _invertWinding = invertWinding;
+        _currentFlags = flags;
 
-    public override int Count => _localTriangles.Count;
-    public override int QuadCount => _isDestroyed ? 0 : Count * 6 + 1; // +1 for model base quad
+        _baseQuad = Primitive.Create(
+            PrimitiveType.Quad,
+            AdminToys.PrimitiveFlags.None,
+            _position,
+            Vector3.zero,
+            _scale,
+            true,
+            Color.clear);
+
+        if (parallelograms.Count == 0)
+            return;
+
+        foreach (ModelParallelogram parallelogram in parallelograms)
+            _modelParallelograms.Add(parallelogram);
+
+        if (buildImmediately)
+            BuildTriangles(flags);
+    }
+
+    public override int ParallelogramCount => _modelParallelograms.Count;
+    public override int QuadCount => _isDestroyed ? 0 : ParallelogramCount * 2 + 1; // +1 for model base quad
 
     public override Vector3 Position
     {
@@ -114,10 +149,8 @@ public class ExactModel
             if (_isDestroyed)
                 return;
 
-            for (var i = 0; i < _triangleColors.Count; i++)
-            {
-                _triangleColors[i] = value;
-            }
+            foreach (ModelParallelogram modelParallelogram in _modelParallelograms)
+                modelParallelogram.Color = value;
 
             foreach (ParallelogramPrimitive parallelogram in _parallelograms)
                 parallelogram.Color = value;
@@ -203,13 +236,17 @@ public class ExactModel
         _parallelograms.Clear();
         var processed = 0;
 
-        for (var triangleIndex = 0; triangleIndex < _localTriangles.Count; triangleIndex++)
+        foreach (ModelParallelogram modelParallelogram in _modelParallelograms)
         {
             if (_isDestroyed)
                 yield break;
 
-            ModelTriangle localTriangle = _localTriangles[triangleIndex];
-            AddParallelograms(localTriangle, _triangleColors[triangleIndex], flags);
+            _parallelograms.Add(ParallelogramPrimitive.Create(
+                modelParallelogram.VUp, 
+                modelParallelogram.VLeft, 
+                modelParallelogram.Center, 
+                modelParallelogram.Color, 
+                flags));
             processed++;
 
             if (processed >= trianglesPerFrame)
@@ -231,8 +268,7 @@ public class ExactModel
             parallelogram.Destroy();
 
         _parallelograms.Clear();
-        _localTriangles.Clear();
-        _triangleColors.Clear();
+        _modelParallelograms.Clear();
         _baseQuad.Destroy();
     }
 
@@ -291,43 +327,23 @@ public class ExactModel
         return blocks;
     }
 
-    public IReadOnlyList<(ModelTriangle Triangle, AdminToys.PrimitiveFlags Flags)> GetTriangleSnapshot()
-    {
-        if (_isDestroyed || _parallelograms.Count == 0)
-            return [];
-
-        List<(ModelTriangle Triangle, AdminToys.PrimitiveFlags Flags)> snapshot = new(_localTriangles.Count);
-
-        for (var i = 0; i < _localTriangles.Count; i++)
-        {
-            ModelTriangle tri = _localTriangles[i];
-            snapshot.Add((new ModelTriangle(tri.P1, tri.P2, tri.P3, _triangleColors[i]), _currentFlags));
-        }
-
-        return snapshot;
-    }
-
-    public List<ParallelogramPrimitive> GetParallelogramSnapshot()
-    {
-        if (_isDestroyed || _parallelograms.Count == 0)
-            return [];
-
-        return [.._parallelograms];
-    }
-
     void BuildTriangles(AdminToys.PrimitiveFlags flags)
     {
         _currentFlags = flags;
         _parallelograms.Clear();
 
-        for (var triangleIndex = 0; triangleIndex < _localTriangles.Count; triangleIndex++)
+        foreach (ModelParallelogram modelParallelogram in _modelParallelograms)
         {
-            ModelTriangle localTriangle = _localTriangles[triangleIndex];
-            AddParallelograms(localTriangle, _triangleColors[triangleIndex], flags);
+            _parallelograms.Add(ParallelogramPrimitive.Create(
+                modelParallelogram.VUp, 
+                modelParallelogram.VLeft, 
+                modelParallelogram.Center, 
+                modelParallelogram.Color, 
+                flags));
         }
     }
 
-    void AddParallelograms(ModelTriangle localTriangle, Color color, AdminToys.PrimitiveFlags flags)
+    (ModelParallelogram para1, ModelParallelogram para2, ModelParallelogram para3) GetParallelograms(ModelTriangle localTriangle, Color color, AdminToys.PrimitiveFlags flags)
     {
         Vector3 p1 = TransformPoint(localTriangle.P1);
         Vector3 p2 = TransformPoint(localTriangle.P2);
@@ -338,8 +354,10 @@ public class ExactModel
 
         Vector3[][] data = TriangleParallelogramBuilder.GetParallelogramsInfo(p1, p2, p3);
 
-        _parallelograms.Add(ParallelogramPrimitive.Create(data[0][0], data[0][1], data[0][2], color, flags));
-        _parallelograms.Add(ParallelogramPrimitive.Create(data[1][0], data[1][1], data[1][2], color, flags));
-        _parallelograms.Add(ParallelogramPrimitive.Create(data[2][0], data[2][1], data[2][2], color, flags));
+        var para1 = new ModelParallelogram { VLeft = data[0][0], VUp = data[0][1], Center = data[0][2], Color = color };
+        var para2 = new ModelParallelogram { VLeft = data[1][0], VUp = data[1][1], Center = data[1][2], Color = color };
+        var para3 = new ModelParallelogram { VLeft = data[2][0], VUp = data[2][1], Center = data[2][2], Color = color };
+
+        return (para1, para2, para3);
     }
 }

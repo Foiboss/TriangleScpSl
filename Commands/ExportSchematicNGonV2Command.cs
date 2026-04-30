@@ -109,7 +109,7 @@ public sealed class ExportSchematicNGonV2Command : ICommand
 
             yield return _activeModel.BuildTrianglesCoroutine(PrimitiveFlags.Visible, buildBatch);
 
-            if (_activeModel.Count == 0)
+            if (_activeModel.ParallelogramCount == 0)
             {
                 Log.Warn("[ExportSchematicNGonV2] Model has no valid non-degenerate triangles.");
                 yield break;
@@ -143,7 +143,7 @@ public sealed class ExportSchematicNGonV2Command : ICommand
                 yield break;
             }
 
-            Log.Info($"[ExportSchematicNGonV2] Exported: {outputPath} (triangles={_activeModel.Count}, quads={_activeModel.QuadCount}, accuracy={accuracy.ToString(CultureInfo.InvariantCulture)}, previewScale={previewScale.ToString(CultureInfo.InvariantCulture)}).");
+            Log.Info($"[ExportSchematicNGonV2] Exported: {outputPath} (triangles={_activeModel.ParallelogramCount}, quads={_activeModel.QuadCount}, accuracy={accuracy.ToString(CultureInfo.InvariantCulture)}, previewScale={previewScale.ToString(CultureInfo.InvariantCulture)}).");
         }
         finally
         {

@@ -73,7 +73,7 @@ public class ApproximateModel
             BuildTriangles(flags);
     }
 
-    public override int Count => _localTriangles.Count;
+    public override int ParallelogramCount => _localTriangles.Count;
     public override int QuadCount => _isDestroyed ? 0 : _stretches.Count + _parallelograms.Count + _fallbackParallelograms.Count * 2 + 1; // +1 for model base quad
 
     public override Vector3 Position
