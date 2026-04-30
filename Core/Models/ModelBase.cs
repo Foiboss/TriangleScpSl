@@ -14,7 +14,7 @@ public abstract class ModelBase
     public abstract Vector3 Scale { get; set; }
     public abstract Transform Transform { get; }
     public abstract Color Color { set; }
-    public abstract PrimitiveFlags Flags { set; }
+    public abstract PrimitiveFlags Flags { get; set; }
     public abstract string ProjectMerDefaultName { get; }
 
     public abstract Vector3 TransformPoint(Vector3 localPoint);

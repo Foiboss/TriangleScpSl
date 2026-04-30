@@ -15,6 +15,7 @@ public class ApproximateModel
     readonly float _absoluteToleranceUnits;
     readonly Primitive _baseQuad;
     readonly List<ModelTriangle> _localTriangles = [];
+    readonly List<ModelParallelogram> _localParallelograms = [];
     readonly StretchSpatialIndex _stretches;
     readonly List<Primitive> _parallelograms = [];
     readonly List<ParallelogramPrimitive> _fallbackParallelograms = [];
@@ -73,7 +74,53 @@ public class ApproximateModel
             BuildTriangles(flags);
     }
 
-    public override int ParallelogramCount => _localTriangles.Count;
+    public ApproximateModel
+    (
+        IReadOnlyList<ModelParallelogram> parallelograms,
+        Vector3 worldPosition,
+        PrimitiveFlags flags = PrimitiveFlags.Visible,
+        float absoluteToleranceUnits = 0.001f,
+        float scale = 1f,
+        bool invertWinding = false,
+        bool buildImmediately = true)
+    {
+        _absoluteToleranceUnits = absoluteToleranceUnits;
+        _position = worldPosition;
+        _rotation = Quaternion.identity;
+        _scale = Vector3.one * scale;
+        _invertWinding = invertWinding;
+        _flags = flags;
+
+        _baseQuad = Primitive.Create(
+            PrimitiveType.Quad,
+            PrimitiveFlags.None,
+            _position,
+            Vector3.zero,
+            _scale,
+            true,
+            Color.clear);
+
+        if (parallelograms.Count == 0)
+        {
+            _stretches = new StretchSpatialIndex(0.05f, 0.1f);
+            return;
+        }
+
+        foreach (ModelParallelogram p in parallelograms)
+            _localParallelograms.Add(p);
+
+        float maxSize = ComputeMaxParallelogramSize();
+
+        _stretches = new StretchSpatialIndex(
+            0.05f,
+            absoluteToleranceUnits / maxSize * 2f
+        );
+
+        if (buildImmediately)
+            BuildTriangles(flags);
+    }
+
+    public override int ParallelogramCount => _localTriangles.Count + _localParallelograms.Count;
     public override int QuadCount => _isDestroyed ? 0 : _stretches.Count + _parallelograms.Count + _fallbackParallelograms.Count * 2 + 1; // +1 for model base quad
 
     public override Vector3 Position
@@ -126,6 +173,7 @@ public class ApproximateModel
 
             foreach (Primitive parallelogram in _parallelograms) parallelogram.Color = value;
             foreach (ParallelogramPrimitive parallelogram in _fallbackParallelograms) parallelogram.Color = value;
+            foreach (ModelParallelogram p in _localParallelograms) p.Color = value;
 
             for (var i = 0; i < _parallelogramSnapshots.Count; i++)
             {
@@ -137,6 +185,7 @@ public class ApproximateModel
 
     public override PrimitiveFlags Flags
     {
+        get => _flags;
         set
         {
             if (_isDestroyed)
@@ -357,6 +406,7 @@ public class ApproximateModel
         _fallbackParallelograms.Clear();
         _parallelogramSnapshots.Clear();
         _localTriangles.Clear();
+        _localParallelograms.Clear();
         _baseQuad.Destroy();
     }
 
@@ -376,6 +426,9 @@ public class ApproximateModel
 
         foreach (ModelTriangle localTriangle in _localTriangles)
             CreateTriangle(localTriangle, flags);
+
+        foreach (ModelParallelogram p in _localParallelograms)
+            CreateParallelogram(p.VLeft, p.VUp, p.Center, flags, p.Color);
     }
 
     public override IEnumerator BuildTrianglesCoroutine(PrimitiveFlags flags, int trianglesPerFrame)
@@ -400,6 +453,21 @@ public class ApproximateModel
                 yield break;
 
             CreateTriangle(localTriangle, flags);
+            processed++;
+
+            if (processed >= trianglesPerFrame)
+            {
+                processed = 0;
+                yield return null;
+            }
+        }
+
+        foreach (ModelParallelogram p in _localParallelograms)
+        {
+            if (_isDestroyed)
+                yield break;
+
+            CreateParallelogram(p.VLeft, p.VUp, p.Center, flags, p.Color);
             processed++;
 
             if (processed >= trianglesPerFrame)
@@ -588,6 +656,12 @@ public class ApproximateModel
                 float size = Mathf.Max((v1 + v2).magnitude, (v1 - v2).magnitude);
                 if (size > maxSize) maxSize = size;
             }
+        }
+
+        foreach (ModelParallelogram p in _localParallelograms)
+        {
+            float size = Mathf.Max((p.VLeft + p.VUp).magnitude, (p.VLeft - p.VUp).magnitude);
+            if (size > maxSize) maxSize = size;
         }
 
         return maxSize;

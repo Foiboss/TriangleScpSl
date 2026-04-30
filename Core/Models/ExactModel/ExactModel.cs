@@ -18,7 +18,7 @@ public class ExactModel
     readonly List<ModelParallelogram> _modelParallelograms = [];
     readonly List<ParallelogramPrimitive> _parallelograms = [];
     readonly bool _invertWinding;
-    AdminToys.PrimitiveFlags _currentFlags;
+    AdminToys.PrimitiveFlags _flags;
 
     Vector3 _position;
     Quaternion _rotation;
@@ -38,7 +38,7 @@ public class ExactModel
         _rotation = Quaternion.identity;
         _scale = Vector3.one * scale;
         _invertWinding = invertWinding;
-        _currentFlags = flags;
+        _flags = flags;
 
         _baseQuad = Primitive.Create(
             PrimitiveType.Quad,
@@ -54,7 +54,7 @@ public class ExactModel
 
         foreach (ModelTriangle tri in triangles)
         {
-            (ModelParallelogram para1, ModelParallelogram para2, ModelParallelogram para3) = GetParallelograms(tri, tri.Color, flags);
+            (ModelParallelogram para1, ModelParallelogram para2, ModelParallelogram para3) = GetParallelograms(tri, tri.Color);
             _modelParallelograms.Add(para1);
             _modelParallelograms.Add(para2);
             _modelParallelograms.Add(para3);
@@ -77,7 +77,7 @@ public class ExactModel
         _rotation = Quaternion.identity;
         _scale = Vector3.one * scale;
         _invertWinding = invertWinding;
-        _currentFlags = flags;
+        _flags = flags;
 
         _baseQuad = Primitive.Create(
             PrimitiveType.Quad,
@@ -159,12 +159,13 @@ public class ExactModel
 
     public override AdminToys.PrimitiveFlags Flags
     {
+        get => _flags;
         set
         {
             if (_isDestroyed)
                 return;
 
-            _currentFlags = value;
+            _flags = value;
 
             foreach (ParallelogramPrimitive parallelogram in _parallelograms)
                 parallelogram.Flags = value;
@@ -227,7 +228,7 @@ public class ExactModel
         if (_isDestroyed)
             yield break;
 
-        _currentFlags = flags;
+        _flags = flags;
         trianglesPerFrame = Mathf.Max(1, trianglesPerFrame);
 
         foreach (ParallelogramPrimitive parallelogram in _parallelograms)
@@ -329,7 +330,7 @@ public class ExactModel
 
     void BuildTriangles(AdminToys.PrimitiveFlags flags)
     {
-        _currentFlags = flags;
+        _flags = flags;
         _parallelograms.Clear();
 
         foreach (ModelParallelogram modelParallelogram in _modelParallelograms)
@@ -343,7 +344,7 @@ public class ExactModel
         }
     }
 
-    (ModelParallelogram para1, ModelParallelogram para2, ModelParallelogram para3) GetParallelograms(ModelTriangle localTriangle, Color color, AdminToys.PrimitiveFlags flags)
+    (ModelParallelogram para1, ModelParallelogram para2, ModelParallelogram para3) GetParallelograms(ModelTriangle localTriangle, Color color)
     {
         Vector3 p1 = TransformPoint(localTriangle.P1);
         Vector3 p2 = TransformPoint(localTriangle.P2);
