@@ -1,23 +1,9 @@
 using Exiled.API.Features;
+using TriangleScpSl.Core.ModelFactory;
+using TriangleScpSl.Core.Triangulation.Triangle;
 using UnityEngine;
 
 namespace TriangleScpSl.Core.NGons;
-
-public struct ParallelogramInfo
-{
-    public Vector3 Center;
-    public Vector3 VLeft;
-    public Vector3 VUp;
-    public Color Color;
-}
-
-public struct TriangleInfo
-{
-    public Vector3 V0;
-    public Vector3 V1;
-    public Vector3 V2;
-    public Color Color;
-}
 
 // Processes an array of convex n-gons and returns:
 //   - List<ParallelogramInfo>: all parallelograms (n-3 per n-gon).
@@ -28,19 +14,18 @@ public struct TriangleInfo
 // The remaining 3 vertices become TriangleInfo; CCW order is preserved throughout.
 public static class ParallelogramProcessor
 {
-    public static (List<ParallelogramInfo> parallelograms, List<TriangleInfo> triangles) Process
+    public static List<ModelParallelogram> Process
     (
         IEnumerable<ConvexNGon> nGons)
     {
-        var paras = new List<ParallelogramInfo>();
-        var tris = new List<TriangleInfo>();
-
+        List<ModelParallelogram> parallelograms = [];
+        
         foreach (ConvexNGon ngon in nGons)
-            ProcessOne(ngon, paras, tris);
-        return (paras, tris);
+            ProcessOne(ngon, parallelograms);
+        return parallelograms;
     }
 
-    static void ProcessOne(ConvexNGon nGon, List<ParallelogramInfo> paras, List<TriangleInfo> tris)
+    static void ProcessOne(ConvexNGon nGon, List<ModelParallelogram> parallelograms)
     {
         List<Vector3> verts = nGon.Vertices;
         if (verts.Count < 3) return;
@@ -60,10 +45,7 @@ public static class ParallelogramProcessor
         // Triangle fast-path.
         if (poly.Count == 3)
         {
-            tris.Add(new TriangleInfo
-            {
-                V0 = poly[0], V1 = poly[1], V2 = poly[2], Color = color,
-            });
+            AddTriangle(poly[0], poly[1], poly[2], color, parallelograms);
             return;
         }
 
@@ -93,7 +75,7 @@ public static class ParallelogramProcessor
                 ? toA
                 : b - center;
 
-            paras.Add(new ParallelogramInfo
+            parallelograms.Add(new ModelParallelogram
             {
                 Center = center,
                 VLeft = vLeft,
@@ -105,12 +87,23 @@ public static class ParallelogramProcessor
         }
 
         // Final triangle — the three remaining vertices in CCW order (preserved by removals).
-        tris.Add(new TriangleInfo
-        {
-            V0 = poly[0], V1 = poly[1], V2 = poly[2], Color = color,
-        });
+        AddTriangle(poly[0], poly[1], poly[2], color, parallelograms);
     }
-
+    
+    static void AddTriangle(Vector3 p1, Vector3 p2, Vector3 p3, Color color, List<ModelParallelogram> parallelograms)
+    {
+        Vector3[][] triangleParallelograms = TriangleParallelogramBuilder.GetParallelogramsInfo(p1, p2, p3);
+        for (int i = 0; i < 3; i++)
+            parallelograms.Add(
+                new ModelParallelogram
+                {
+                    VLeft = triangleParallelograms[i][0],
+                    VUp = triangleParallelograms[i][1],
+                    Center = triangleParallelograms[i][2],
+                    Color = color,
+                });
+    }
+    
     // helpers
 
     static int FindParallelogramVertex(List<Vector3> poly, Vector3 normal, float eps = 1e-5f)

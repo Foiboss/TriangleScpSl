@@ -19,11 +19,11 @@ public static class NGonModelBuilder
     (
         string requestedFile,
         Color defaultColor,
-        out List<ModelTriangle> triangles,
+        out List<ModelParallelogram> parallelograms,
         out string normalizedFileName,
         out string error)
     {
-        triangles = [];
+        parallelograms = [];
         normalizedFileName = string.Empty;
         error = string.Empty;
 
@@ -92,11 +92,9 @@ public static class NGonModelBuilder
             }
 
             List<ConvexNGon> convexNgons = ConvexNGonDecomposer.Decompose(ngons);
-            var (parallelograms, triangleInfos) = ParallelogramProcessor.Process(convexNgons);
+            parallelograms = ParallelogramProcessor.Process(convexNgons);
 
-            triangles = ToModelTriangles(parallelograms, triangleInfos);
-
-            if (triangles.Count == 0)
+            if (parallelograms.Count == 0)
             {
                 error = "No valid triangles produced from model polygons.";
                 return false;
@@ -114,37 +112,5 @@ public static class NGonModelBuilder
             error = $"Failed to parse model: {ex.Message}";
             return false;
         }
-    }
-
-    // Converts the NGon pipeline output to a flat ModelTriangle list.
-    // Each ParallelogramInfo becomes 2 triangles (split along the vUp diagonal).
-    // Each TriangleInfo becomes 1 triangle.
-    // All resulting triangles are CCW relative to their face normal.
-    static List<ModelTriangle> ToModelTriangles
-    (
-        List<ParallelogramInfo> parallelograms,
-        List<TriangleInfo> triangleInfos)
-    {
-        var result = new List<ModelTriangle>(triangleInfos.Count + parallelograms.Count * 2);
-        result.AddRange(triangleInfos.Select(tri => new ModelTriangle(tri.V0, tri.V1, tri.V2, tri.Color)));
-
-        foreach (ParallelogramInfo para in parallelograms)
-        {
-            // Four vertices of the rhombus (split along vUp diagonal):
-            //   v1 = center + vUp  (top)
-            //   v2 = center + vLeft
-            //   v3 = center - vUp  (bottom)
-            //   v4 = center - vLeft
-            // CCW winding is guaranteed because cross(vUp, vLeft) · normal > 0.
-            Vector3 v1 = para.Center + para.VUp;
-            Vector3 v2 = para.Center + para.VLeft;
-            Vector3 v3 = para.Center - para.VUp;
-            Vector3 v4 = para.Center - para.VLeft;
-
-            result.Add(new ModelTriangle(v1, v2, v3, para.Color)); // top-left triangle
-            result.Add(new ModelTriangle(v1, v3, v4, para.Color)); // bottom-right triangle
-        }
-
-        return result;
     }
 }

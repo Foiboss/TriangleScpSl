@@ -95,14 +95,14 @@ public sealed class ExportSchematicNGonV2Command : ICommand
     {
         try
         {
-            if (!NGonModelBuilder.TryLoad(requestedFile, Color.white, out List<ModelTriangle> triangles, out _, out string modelError))
+            if (!NGonModelBuilder.TryLoad(requestedFile, Color.white, out List<ModelParallelogram> parallelograms, out _, out string modelError))
             {
                 Log.Warn($"[ExportSchematicNGonV2] {modelError}");
                 yield break;
             }
 
             _activeModel = ApproximateModel.CreateDeferred(
-                triangles,
+                parallelograms,
                 Vector3.zero,
                 PrimitiveFlags.Visible,
                 accuracy);

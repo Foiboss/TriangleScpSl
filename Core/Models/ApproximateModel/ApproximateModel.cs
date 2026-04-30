@@ -189,6 +189,26 @@ public class ApproximateModel
         float scale = 1f,
         bool invertWinding = false)
         => new(triangles, worldPosition, flags, absoluteToleranceUnits, scale, invertWinding, false);
+    
+    public static ApproximateModel Create
+    (
+        IReadOnlyList<ModelParallelogram> parallelograms,
+        Vector3 worldPosition,
+        PrimitiveFlags flags = PrimitiveFlags.Visible,
+        float absoluteToleranceUnits = 0.001f,
+        float scale = 1f,
+        bool invertWinding = false)
+        => new(parallelograms, worldPosition, flags, absoluteToleranceUnits, scale, invertWinding);
+
+    public static ApproximateModel CreateDeferred
+    (
+        IReadOnlyList<ModelParallelogram> parallelograms,
+        Vector3 worldPosition,
+        PrimitiveFlags flags = PrimitiveFlags.Visible,
+        float absoluteToleranceUnits = 0.001f,
+        float scale = 1f,
+        bool invertWinding = false)
+        => new(parallelograms, worldPosition, flags, absoluteToleranceUnits, scale, invertWinding, false);
 
     public IReadOnlyList<(ModelTriangle Triangle, PrimitiveFlags Flags)> GetTriangleSnapshot()
     {

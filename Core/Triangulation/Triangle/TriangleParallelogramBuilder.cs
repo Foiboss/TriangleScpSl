@@ -4,6 +4,9 @@ namespace TriangleScpSl.Core.Triangulation.Triangle;
 
 public static class TriangleParallelogramBuilder
 {
+    /// <summary>
+    /// returns for i = 0..2 [i][0] - vLeft, [i][1] - vUp, [i][2] - center
+    /// </summary>
     public static Vector3[][] GetParallelogramsInfo(Vector3 a, Vector3 b, Vector3 c)
     {
         Vector3 halfAb = (a + b) / 2f;

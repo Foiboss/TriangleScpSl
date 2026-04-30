@@ -64,14 +64,14 @@ public class TriangulateNGonCommand : ICommand
 
         string requestedFile = arguments.Array?[arguments.Offset] ?? string.Empty;
 
-        if (!NGonModelBuilder.TryLoad(requestedFile, Color.white, out List<ModelTriangle> triangles, out string fileName, out string error))
+        if (!NGonModelBuilder.TryLoad(requestedFile, Color.white, out List<ModelParallelogram> parallelograms, out string fileName, out string error))
         {
             response = error;
             return false;
         }
 
         Vector3 spawnPosition = player.Position + player.GameObject.transform.forward * 2.5f + Vector3.up * 1.2f;
-        var createdModel = ExactModel.CreateDeferred(triangles, spawnPosition, PrimitiveFlags.Visible, 1f, true);
+        var createdModel = ExactModel.CreateDeferred(parallelograms, spawnPosition, PrimitiveFlags.Visible, 1f, true);
         _model = createdModel;
         _isBuilding = true;
 

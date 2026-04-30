@@ -170,6 +170,24 @@ public class ExactModel
         float scale = 1f,
         bool invertWinding = false)
         => new(triangles, worldPosition, flags, scale, invertWinding, false);
+    
+    public static ExactModel Create
+    (
+        IReadOnlyList<ModelParallelogram> parallelograms,
+        Vector3 worldPosition,
+        AdminToys.PrimitiveFlags flags = AdminToys.PrimitiveFlags.Visible,
+        float scale = 1f,
+        bool invertWinding = false)
+        => new(parallelograms, worldPosition, flags, scale, invertWinding);
+
+    public static ExactModel CreateDeferred
+    (
+        IReadOnlyList<ModelParallelogram> parallelograms,
+        Vector3 worldPosition,
+        AdminToys.PrimitiveFlags flags = AdminToys.PrimitiveFlags.Visible,
+        float scale = 1f,
+        bool invertWinding = false)
+        => new(parallelograms, worldPosition, flags, scale, invertWinding, false);
 
     public override IEnumerator BuildTrianglesCoroutine(AdminToys.PrimitiveFlags flags, int trianglesPerFrame)
     {

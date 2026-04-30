@@ -10,7 +10,7 @@ using UnityEngine;
 namespace TriangleScpSl.Commands;
 
 [CommandHandler(typeof(RemoteAdminCommandHandler))]
-public class TriangulationV2Command : ICommand
+public class TriangulateV2Command : ICommand
 {
     Coroutine? _buildCoroutine;
     bool _isBuilding;

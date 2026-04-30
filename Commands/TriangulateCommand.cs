@@ -10,7 +10,7 @@ using UnityEngine;
 namespace TriangleScpSl.Commands;
 
 [CommandHandler(typeof(RemoteAdminCommandHandler))]
-public class TriangulationCommand : ICommand
+public class TriangulateCommand : ICommand
 {
     readonly Color _forceColor = Color.white;
     Coroutine? _buildCoroutine;

@@ -76,7 +76,7 @@ public class TriangulateNGonV2Command : ICommand
             }
         }
 
-        if (!NGonModelBuilder.TryLoad(requestedFile, Color.white, out List<ModelTriangle> triangles, out string fileName, out string error))
+        if (!NGonModelBuilder.TryLoad(requestedFile, Color.white, out List<ModelParallelogram> parallelograms, out string fileName, out string error))
         {
             response = error;
             return false;
@@ -85,7 +85,7 @@ public class TriangulateNGonV2Command : ICommand
         Vector3 spawnPosition = player.Position + player.GameObject.transform.forward * 2.5f + Vector3.up * 1.2f;
 
         var createdModel = ApproximateModel.CreateDeferred(
-            triangles,
+            parallelograms,
             spawnPosition,
             PrimitiveFlags.Visible,
             accuracy);

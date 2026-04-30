@@ -81,13 +81,13 @@ public sealed class ExportSchematicNGonCommand : ICommand
     {
         try
         {
-            if (!NGonModelBuilder.TryLoad(requestedFile, Color.white, out List<ModelTriangle> triangles, out _, out string modelError))
+            if (!NGonModelBuilder.TryLoad(requestedFile, Color.white, out List<ModelParallelogram> parallelograms, out _, out string modelError))
             {
                 Log.Warn($"[ExportSchematicNGon] {modelError}");
                 yield break;
             }
 
-            _activeModel = ExactModel.CreateDeferred(triangles, Vector3.zero, PrimitiveFlags.Visible, 1f, true);
+            _activeModel = ExactModel.CreateDeferred(parallelograms, Vector3.zero, PrimitiveFlags.Visible, 1f, true);
             yield return _activeModel.BuildTrianglesCoroutine(PrimitiveFlags.Visible, buildBatch);
 
             if (_activeModel.Count == 0)
