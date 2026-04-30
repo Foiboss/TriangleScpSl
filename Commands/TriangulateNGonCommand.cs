@@ -11,15 +11,15 @@ using UnityEngine;
 namespace TriangleScpSl.Commands;
 
 [CommandHandler(typeof(RemoteAdminCommandHandler))]
-public class TriangulateNgonCommand : ICommand
+public class TriangulateNGonCommand : ICommand
 {
     Coroutine? _buildCoroutine;
     bool _isBuilding;
     ExactModel? _model;
 
-    public string Command { get; } = "TriangulateNgon";
+    public string Command { get; } = "TriangulateNGon";
     public string[] Aliases { get; } = [];
-    public string Description { get; } = "Displays an OBJ/FBX model using ExactModel. Usage: <filename(.obj|.fbx)>";
+    public string Description { get; } = "Displays an OBJ model using ExactModel. Usage: <filename(.obj)>";
 
     void Clear()
     {
@@ -37,7 +37,7 @@ public class TriangulateNgonCommand : ICommand
         if (_isBuilding)
         {
             Clear();
-            response = "Model build cancelled.";
+            response = "Model build canceled.";
             return true;
         }
 
@@ -58,13 +58,13 @@ public class TriangulateNgonCommand : ICommand
 
         if (arguments.Count != 1)
         {
-            response = "Usage: TriangulateNgon <model file (.obj|.fbx)>";
+            response = "Usage: TriangulateNGon <model file (.obj)>";
             return false;
         }
 
         string requestedFile = arguments.Array?[arguments.Offset] ?? string.Empty;
 
-        if (!NgonModelBuilder.TryLoad(requestedFile, Color.white, out List<ModelTriangle> triangles, out string fileName, out string error))
+        if (!NGonModelBuilder.TryLoad(requestedFile, Color.white, out List<ModelTriangle> triangles, out string fileName, out string error))
         {
             response = error;
             return false;
@@ -78,7 +78,7 @@ public class TriangulateNgonCommand : ICommand
         int batchSize = Mathf.Max(1, Plugin.Instance?.Config.TriangulateNgonBuildBatchSize ?? 32);
         _buildCoroutine = CoroutineHost.Run(BuildRoutine(createdModel, fileName, batchSize));
 
-        response = $"Started building OBJ/FBX model '{fileName}' asynchronously. Run command again to cancel.";
+        response = $"Started building OBJ model '{fileName}' asynchronously. Run command again to cancel.";
         return true;
     }
 
@@ -96,10 +96,10 @@ public class TriangulateNgonCommand : ICommand
         {
             model.Destroy();
             _model = null;
-            Log.Warn($"[TriangulateNgon] Model '{fileName}' has no valid triangles after async build.");
+            Log.Warn($"[TriangulateNGon] Model '{fileName}' has no valid triangles after async build.");
             yield break;
         }
 
-        Log.Info($"[TriangulateNgon] Created model '{fileName}': triangles={model.Count}, quads={model.QuadCount}.");
+        Log.Info($"[TriangulateNGon] Created model '{fileName}': triangles={model.Count}, quads={model.QuadCount}.");
     }
 }

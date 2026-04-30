@@ -35,7 +35,7 @@ public sealed class ExportSchematicV2Command : ICommand
 
         if (arguments.Count is < 2 or > 4)
         {
-            response = "Usage: ExportSchematicV2 <model file (.obj/.stl)> <output json file> [accuracy(0.001)] [previewScale]";
+            response = "Usage: ExportSchematicV2 <model file (.obj/.stl)> <output JSON file> [accuracy(0.001)] [previewScale]";
             return false;
         }
 

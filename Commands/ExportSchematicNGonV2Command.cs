@@ -4,7 +4,7 @@ using AdminToys;
 using CommandSystem;
 using Exiled.API.Features;
 using TriangleScpSl.Core.ModelFactory;
-using TriangleScpSl.Core.Models.ExactModel;
+using TriangleScpSl.Core.Models.ApproximateModel;
 using TriangleScpSl.Core.NGons;
 using TriangleScpSl.Core.Paths;
 using TriangleScpSl.Core.ProjectMerExport;
@@ -14,15 +14,15 @@ using UnityEngine;
 namespace TriangleScpSl.Commands;
 
 [CommandHandler(typeof(RemoteAdminCommandHandler))]
-public sealed class ExportSchematicNgonCommand : ICommand
+public sealed class ExportSchematicNGonV2Command : ICommand
 {
     Coroutine? _exportCoroutine;
     bool _isExporting;
-    ExactModel? _activeModel;
+    ApproximateModel? _activeModel;
 
-    public string Command { get; } = "ExportSchematicNgon";
+    public string Command { get; } = "ExportSchematicNGonV2";
     public string[] Aliases { get; } = [];
-    public string Description { get; } = "Exports an OBJ/FBX as ProjectMER schematic JSON using ExactModel. Usage: <model file (.obj|.fbx)> <output json file> [previewScale]";
+    public string Description { get; } = "Exports an OBJ as ProjectMER schematic JSON using ApproximateModel. Usage: <model file (.obj)> <output JSON file> [accuracy(0.001)] [previewScale]";
 
     public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)
     {
@@ -33,9 +33,9 @@ public sealed class ExportSchematicNgonCommand : ICommand
             return true;
         }
 
-        if (arguments.Count is < 2 or > 3)
+        if (arguments.Count is < 2 or > 4)
         {
-            response = "Usage: ExportSchematicNgon <model file (.obj|.fbx)> <output json file> [previewScale]";
+            response = "Usage: ExportSchematicNGonV2 <model file (.obj)> <output JSON file> [accuracy(0.001)] [previewScale]";
             return false;
         }
 
@@ -48,11 +48,24 @@ public sealed class ExportSchematicNgonCommand : ICommand
             return false;
         }
 
-        var previewScale = 1f;
+        var accuracy = 0.001f;
 
         if (arguments.Count >= 3)
         {
-            string rawScale = arguments.Array?[arguments.Offset + 2] ?? string.Empty;
+            string rawAccuracy = arguments.Array?[arguments.Offset + 2] ?? string.Empty;
+
+            if (!float.TryParse(rawAccuracy, out accuracy))
+            {
+                response = "Invalid accuracy value.";
+                return false;
+            }
+        }
+
+        var previewScale = 1f;
+
+        if (arguments.Count >= 4)
+        {
+            string rawScale = arguments.Array?[arguments.Offset + 3] ?? string.Empty;
 
             if (!float.TryParse(rawScale, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out previewScale) || previewScale <= 0f)
             {
@@ -65,33 +78,40 @@ public sealed class ExportSchematicNgonCommand : ICommand
         int writeBatch = Mathf.Max(1, Plugin.Instance?.Config.ExportWriteBatchSize ?? 256);
 
         _isExporting = true;
-        _exportCoroutine = CoroutineHost.Run(ExportRoutine(requestedFile, outputFileName, previewScale, buildBatch, writeBatch));
+        _exportCoroutine = CoroutineHost.Run(ExportRoutine(requestedFile, outputFileName, accuracy, previewScale, buildBatch, writeBatch));
 
         response = "Export started asynchronously. Run command again to cancel.";
         return true;
     }
 
-    IEnumerator ExportRoutine(
+    IEnumerator ExportRoutine
+    (
         string requestedFile,
         string outputFileName,
+        float accuracy,
         float previewScale,
         int buildBatch,
         int writeBatch)
     {
         try
         {
-            if (!NgonModelBuilder.TryLoad(requestedFile, Color.white, out List<ModelTriangle> triangles, out _, out string modelError))
+            if (!NGonModelBuilder.TryLoad(requestedFile, Color.white, out List<ModelTriangle> triangles, out _, out string modelError))
             {
-                Log.Warn($"[ExportSchematicNgon] {modelError}");
+                Log.Warn($"[ExportSchematicNGonV2] {modelError}");
                 yield break;
             }
 
-            _activeModel = ExactModel.CreateDeferred(triangles, Vector3.zero, PrimitiveFlags.Visible, 1f, true);
+            _activeModel = ApproximateModel.CreateDeferred(
+                triangles,
+                Vector3.zero,
+                PrimitiveFlags.Visible,
+                accuracy);
+
             yield return _activeModel.BuildTrianglesCoroutine(PrimitiveFlags.Visible, buildBatch);
 
             if (_activeModel.Count == 0)
             {
-                Log.Warn("[ExportSchematicNgon] Model has no valid non-degenerate triangles.");
+                Log.Warn("[ExportSchematicNGonV2] Model has no valid non-degenerate triangles.");
                 yield break;
             }
 
@@ -119,11 +139,11 @@ public sealed class ExportSchematicNgonCommand : ICommand
 
             if (!completed || !exportSucceeded)
             {
-                Log.Warn($"[ExportSchematicNgon] Failed to export schematic: {exportError}");
+                Log.Warn($"[ExportSchematicNGonV2] Failed to export schematic: {exportError}");
                 yield break;
             }
 
-            Log.Info($"[ExportSchematicNgon] Exported: {outputPath} (triangles={_activeModel.Count}, quads={_activeModel.QuadCount}, previewScale={previewScale.ToString(CultureInfo.InvariantCulture)}).");
+            Log.Info($"[ExportSchematicNGonV2] Exported: {outputPath} (triangles={_activeModel.Count}, quads={_activeModel.QuadCount}, accuracy={accuracy.ToString(CultureInfo.InvariantCulture)}, previewScale={previewScale.ToString(CultureInfo.InvariantCulture)}).");
         }
         finally
         {

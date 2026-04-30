@@ -3,7 +3,7 @@ using UnityEngine;
 namespace TriangleScpSl.Core.NGons;
 
 // Convex n-gon: vertices (CCW relative to normal), color, plane normal.
-public struct ConvexNgon
+public struct ConvexNGon
 {
     public List<Vector3> Vertices;
     public Color Color;
@@ -17,20 +17,20 @@ public struct ConvexNgon
 // 4. Greedily merge adjacent pieces while the union stays convex (4-approximation of optimal decomposition).
 // 5. Project pieces back to 3D, inheriting color and normal from the source face.
 // Works with simple (no self-intersections, no holes) near-planar polygons.
-public static class ConvexNgonDecomposer
+public static class ConvexNGonDecomposer
 {
-    public static List<ConvexNgon> Decompose(IEnumerable<NgonRaw> ngons)
+    public static List<ConvexNGon> Decompose(IEnumerable<NGonRaw> nGons)
     {
-        var result = new List<ConvexNgon>();
+        var result = new List<ConvexNGon>();
 
-        foreach (NgonRaw ngon in ngons)
+        foreach (NGonRaw ngon in nGons)
             DecomposeOne(ngon, result);
         return result;
     }
 
-    static void DecomposeOne(NgonRaw ngon, List<ConvexNgon> output)
+    static void DecomposeOne(NGonRaw nGon, List<ConvexNGon> output)
     {
-        List<Vector3>? verts = ngon.Vertices;
+        List<Vector3>? verts = nGon.Vertices;
         if (verts.Count < 3) return;
 
         Vector3 normal = NewellNormal(verts);
@@ -68,14 +68,12 @@ public static class ConvexNgonDecomposer
         foreach (List<Vector2>? piece in pieces2D)
         {
             var piece3D = new List<Vector3>(piece.Count);
+            piece3D.AddRange(piece.Select(pt => origin + pt.x * e1 + pt.y * e2));
 
-            foreach (Vector2 pt in piece)
-                piece3D.Add(origin + pt.x * e1 + pt.y * e2);
-
-            output.Add(new ConvexNgon
+            output.Add(new ConvexNGon
             {
                 Vertices = piece3D,
-                Color = ngon.Color,
+                Color = nGon.Color,
                 Normal = normal,
             });
         }
@@ -83,7 +81,7 @@ public static class ConvexNgonDecomposer
         _ = reversed;
     }
 
-    // ============================================================ 2D core
+    // 2D core
 
     static List<List<Vector2>> ConvexDecompose2D(List<Vector2> polygon)
     {
@@ -97,12 +95,12 @@ public static class ConvexNgonDecomposer
 
         var pieces = new List<List<int>>(triangles.Count);
 
-        foreach (int[]? t in triangles)
-            pieces.Add([
-                t[0],
-                t[1],
-                t[2],
-            ]);
+        pieces.AddRange(triangles.Select(t => (List<int>)
+        [
+            t[0],
+            t[1],
+            t[2],
+        ]));
 
         // Hertel-Mehlhorn: keep merging adjacent pieces whose union is convex.
         var changed = true;
@@ -132,7 +130,7 @@ public static class ConvexNgonDecomposer
         foreach (List<int>? piece in pieces)
         {
             var pts = new List<Vector2>(piece.Count);
-            foreach (int idx in piece) pts.Add(polygon[idx]);
+            pts.AddRange(piece.Select(idx => polygon[idx]));
             result.Add(pts);
         }
 
@@ -276,7 +274,7 @@ public static class ConvexNgonDecomposer
     static bool IsConvexIndexed(List<int> indexed, List<Vector2> polygon)
     {
         var pts = new List<Vector2>(indexed.Count);
-        foreach (int i in indexed) pts.Add(polygon[i]);
+        pts.AddRange(indexed.Select(i => polygon[i]));
         return IsConvex2D(pts);
     }
 
@@ -293,8 +291,16 @@ public static class ConvexNgonDecomposer
             Vector2 c = poly[(i + 2) % n];
             float cross = Cross2D(b - a, c - b);
 
-            if (cross > 1e-7f) gotPos = true;
-            else if (cross < -1e-7f) gotNeg = true;
+            switch (cross)
+            {
+                case > 1e-7f:
+                    gotPos = true;
+                    break;
+                case < -1e-7f:
+                    gotNeg = true;
+                    break;
+            }
+
             if (gotPos && gotNeg) return false;
         }
 

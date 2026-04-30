@@ -37,7 +37,7 @@ public class TriangulationCommand : ICommand
         if (_isBuilding)
         {
             Clear();
-            response = "Model build cancelled.";
+            response = "Model build canceled.";
             return true;
         }
 

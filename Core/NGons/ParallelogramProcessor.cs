@@ -1,11 +1,8 @@
+using Exiled.API.Features;
 using UnityEngine;
 
 namespace TriangleScpSl.Core.NGons;
 
-// Parallelogram from an n-gon: center and two half-diagonals.
-// vLeft is to the left of vUp when viewed from the visible face (cross(vUp, vLeft) · normal > 0).
-// Four vertices = center ± vUp, center ± vLeft.
-// Color is inherited from the source FBX face.
 public struct ParallelogramInfo
 {
     public Vector3 Center;
@@ -14,9 +11,6 @@ public struct ParallelogramInfo
     public Color Color;
 }
 
-// Remaining triangle after splitting an n-gon into parallelograms.
-// (V0, V1, V2) are CCW when viewed from the visible side (right-hand rule relative to normal).
-// Color is inherited from the source FBX face.
 public struct TriangleInfo
 {
     public Vector3 V0;
@@ -36,25 +30,25 @@ public static class ParallelogramProcessor
 {
     public static (List<ParallelogramInfo> parallelograms, List<TriangleInfo> triangles) Process
     (
-        IEnumerable<ConvexNgon> ngons)
+        IEnumerable<ConvexNGon> nGons)
     {
         var paras = new List<ParallelogramInfo>();
         var tris = new List<TriangleInfo>();
 
-        foreach (ConvexNgon ngon in ngons)
+        foreach (ConvexNGon ngon in nGons)
             ProcessOne(ngon, paras, tris);
         return (paras, tris);
     }
 
-    static void ProcessOne(ConvexNgon ngon, List<ParallelogramInfo> paras, List<TriangleInfo> tris)
+    static void ProcessOne(ConvexNGon nGon, List<ParallelogramInfo> paras, List<TriangleInfo> tris)
     {
-        List<Vector3>? verts = ngon.Vertices;
+        List<Vector3> verts = nGon.Vertices;
         if (verts.Count < 3) return;
 
-        Color color = ngon.Color;
+        Color color = nGon.Color;
 
-        Vector3 normal = ngon.Normal.sqrMagnitude > 1e-12f
-            ? ngon.Normal.normalized
+        Vector3 normal = nGon.Normal.sqrMagnitude > 1e-12f
+            ? nGon.Normal.normalized
             : NewellNormal(verts).normalized;
 
         var poly = new List<Vector3>(verts);
@@ -81,7 +75,7 @@ public static class ParallelogramProcessor
 
             if (idx < 0)
             {
-                Debug.LogError("ParallelogramProcessor: no suitable vertex found. " +
+                Log.Error("ParallelogramProcessor: no suitable vertex found. " +
                     "Polygon is not convex or normal is pointing the wrong way.");
                 return;
             }
@@ -117,7 +111,7 @@ public static class ParallelogramProcessor
         });
     }
 
-    // ============================================================ helpers
+    // helpers
 
     static int FindParallelogramVertex(List<Vector3> poly, Vector3 normal, float eps = 1e-5f)
     {

@@ -35,7 +35,7 @@ public sealed class ExportSchematicCommand : ICommand
 
         if (arguments.Count is < 2 or > 4)
         {
-            response = "Usage: ExportSchematic <model file (.obj/.stl)> <output json file> [forceObjColor(true/false)] [previewScale]";
+            response = "Usage: ExportSchematic <model file (.obj/.stl)> <output JSON file> [forceObjColor(true/false)] [previewScale]";
             return false;
         }
 

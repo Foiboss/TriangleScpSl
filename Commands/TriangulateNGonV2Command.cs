@@ -11,15 +11,15 @@ using UnityEngine;
 namespace TriangleScpSl.Commands;
 
 [CommandHandler(typeof(RemoteAdminCommandHandler))]
-public class TriangulateNgonV2Command : ICommand
+public class TriangulateNGonV2Command : ICommand
 {
     Coroutine? _buildCoroutine;
     bool _isBuilding;
     ApproximateModel? _model;
 
-    public string Command { get; } = "TriangulateNgonV2";
+    public string Command { get; } = "TriangulateNGonV2";
     public string[] Aliases { get; } = [];
-    public string Description { get; } = "Displays an OBJ/FBX model using ApproximateModel. Usage: <filename(.obj|.fbx)> [accuracy(0.001)]";
+    public string Description { get; } = "Displays an OBJ model using ApproximateModel. Usage: <filename(.obj)> [accuracy(0.001)]";
 
     void Clear()
     {
@@ -37,7 +37,7 @@ public class TriangulateNgonV2Command : ICommand
         if (_isBuilding)
         {
             Clear();
-            response = "Model build cancelled.";
+            response = "Model build canceled.";
             return true;
         }
 
@@ -58,7 +58,7 @@ public class TriangulateNgonV2Command : ICommand
 
         if (arguments.Count is < 1 or > 2)
         {
-            response = "Usage: TriangulateNgonV2 <model file (.obj|.fbx)> [accuracy(0.001)]";
+            response = "Usage: TriangulateNGonV2 <model file (.obj)> [accuracy(0.001)]";
             return false;
         }
 
@@ -76,7 +76,7 @@ public class TriangulateNgonV2Command : ICommand
             }
         }
 
-        if (!NgonModelBuilder.TryLoad(requestedFile, Color.white, out List<ModelTriangle> triangles, out string fileName, out string error))
+        if (!NGonModelBuilder.TryLoad(requestedFile, Color.white, out List<ModelTriangle> triangles, out string fileName, out string error))
         {
             response = error;
             return false;
@@ -96,7 +96,7 @@ public class TriangulateNgonV2Command : ICommand
         int batchSize = Mathf.Max(1, Plugin.Instance?.Config.TriangulateNgonV2BuildBatchSize ?? 16);
         _buildCoroutine = CoroutineHost.Run(BuildRoutine(createdModel, fileName, batchSize));
 
-        response = $"Started building OBJ/FBX model '{fileName}' asynchronously. Run command again to cancel.";
+        response = $"Started building OBJ model '{fileName}' asynchronously. Run command again to cancel.";
         return true;
     }
 
@@ -114,10 +114,10 @@ public class TriangulateNgonV2Command : ICommand
         {
             model.Destroy();
             _model = null;
-            Log.Warn($"[TriangulateNgonV2] Model '{fileName}' has no valid triangles after async build.");
+            Log.Warn($"[TriangulateNGonV2] Model '{fileName}' has no valid triangles after async build.");
             yield break;
         }
 
-        Log.Info($"[TriangulateNgonV2] Created model '{fileName}': triangles={model.Count}, quads={model.QuadCount}.");
+        Log.Info($"[TriangulateNGonV2] Created model '{fileName}': triangles={model.Count}, quads={model.QuadCount}.");
     }
 }

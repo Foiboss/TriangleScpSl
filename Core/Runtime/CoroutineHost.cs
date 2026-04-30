@@ -5,34 +5,34 @@ namespace TriangleScpSl.Core.Runtime;
 
 public static class CoroutineHost
 {
-    static CoroutineHostBehaviour? _host;
+    static CoroutineHostBehaviour? host;
 
     public static Coroutine Run(IEnumerator routine)
     {
         EnsureHost();
-        return _host!.StartCoroutine(routine);
+        return host!.StartCoroutine(routine);
     }
 
     public static void Stop(Coroutine? coroutine)
     {
-        if (_host is null || coroutine is null)
+        if (host is null || coroutine is null)
             return;
 
-        _host.StopCoroutine(coroutine);
+        host.StopCoroutine(coroutine);
     }
 
     public static void Shutdown()
     {
-        if (_host is null)
+        if (host is null)
             return;
 
-        UnityEngine.Object.Destroy(_host.gameObject);
-        _host = null;
+        UnityEngine.Object.Destroy(host.gameObject);
+        host = null;
     }
 
     static void EnsureHost()
     {
-        if (_host is not null)
+        if (host is not null)
             return;
 
         var go = new GameObject("TriangleScpSl.CoroutineHost")
@@ -41,7 +41,7 @@ public static class CoroutineHost
         };
 
         UnityEngine.Object.DontDestroyOnLoad(go);
-        _host = go.AddComponent<CoroutineHostBehaviour>();
+        host = go.AddComponent<CoroutineHostBehaviour>();
     }
 
     sealed class CoroutineHostBehaviour : MonoBehaviour;

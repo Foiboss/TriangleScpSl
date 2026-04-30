@@ -67,7 +67,7 @@ public class TestParallelogramsCommand : ICommand
                 p.Destroy();
 
         foreach (StretchSpatialIndex.Entry entry in _stretches.All())
-            if (entry.Stretch?.Base?.gameObject != null)
+            if (entry.Stretch.Base?.gameObject != null)
                 entry.Stretch.Destroy();
         _parallelograms.Clear();
         _points.Clear();

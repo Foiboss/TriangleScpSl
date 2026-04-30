@@ -4,18 +4,19 @@ using UnityEngine;
 
 namespace TriangleScpSl.Core.NGons;
 
-// Loads an OBJ or FBX file and converts the NGon pipeline output into ModelTriangles
+// Loads an OBJ file and converts the NGon pipeline output into ModelTriangles
 // ready for ExactModel or ApproximateModel.
 //
 // Each NGon with n vertices produces (n-3) parallelograms and 1 triangle.
 // Each parallelogram is split along its vUp diagonal into 2 ModelTriangles.
 // All triangles are CCW relative to their face normal.
-public static class NgonModelBuilder
+public static class NGonModelBuilder
 {
     // Resolves the model file path, runs the full NGon pipeline, and returns ModelTriangles.
-    // requestedFile: file name only (no directory path), with or without .obj/.fbx extension.
+    // requestedFile: file name only (no directory path), with or without .obj extension.
     // defaultColor: fallback face color when the model has no color data.
-    public static bool TryLoad(
+    public static bool TryLoad
+    (
         string requestedFile,
         Color defaultColor,
         out List<ModelTriangle> triangles,
@@ -45,24 +46,19 @@ public static class NgonModelBuilder
         if (string.IsNullOrEmpty(extension))
         {
             string objName = fileName + ".obj";
-            string fbxName = fileName + ".fbx";
             string objPath = TrianglePaths.GetModelPath(objName);
-            string fbxPath = TrianglePaths.GetModelPath(fbxName);
 
             if (File.Exists(objPath))
                 fileName = objName;
-            else if (File.Exists(fbxPath))
-                fileName = fbxName;
             else
             {
-                error = $"Model file not found: {objPath} or {fbxPath}";
+                error = $"Model file not found: {objPath}";
                 return false;
             }
         }
-        else if (!fileName.EndsWith(".fbx", StringComparison.OrdinalIgnoreCase) &&
-                 !fileName.EndsWith(".obj", StringComparison.OrdinalIgnoreCase))
+        else if (!fileName.EndsWith(".obj", StringComparison.OrdinalIgnoreCase))
         {
-            error = "Only .obj or .fbx files are supported for NGon models.";
+            error = "Only .obj files are supported for NGon models.";
             return false;
         }
 
@@ -78,11 +74,11 @@ public static class NgonModelBuilder
 
         try
         {
-            List<NgonRaw> ngons = [];
+            List<NGonRaw> ngons = [];
 
             if (modelPath.EndsWith(".obj", StringComparison.OrdinalIgnoreCase))
             {
-                if (!ObjNgonParser.TryParseFile(modelPath, defaultColor, out ngons, out string objError))
+                if (!ObjNGonParser.TryParseFile(modelPath, defaultColor, out ngons, out string objError))
                 {
                     error = objError;
                     return false;
@@ -95,7 +91,7 @@ public static class NgonModelBuilder
                 return false;
             }
 
-            List<ConvexNgon> convexNgons = ConvexNgonDecomposer.Decompose(ngons);
+            List<ConvexNGon> convexNgons = ConvexNGonDecomposer.Decompose(ngons);
             var (parallelograms, triangleInfos) = ParallelogramProcessor.Process(convexNgons);
 
             triangles = ToModelTriangles(parallelograms, triangleInfos);
@@ -124,14 +120,13 @@ public static class NgonModelBuilder
     // Each ParallelogramInfo becomes 2 triangles (split along the vUp diagonal).
     // Each TriangleInfo becomes 1 triangle.
     // All resulting triangles are CCW relative to their face normal.
-    static List<ModelTriangle> ToModelTriangles(
+    static List<ModelTriangle> ToModelTriangles
+    (
         List<ParallelogramInfo> parallelograms,
         List<TriangleInfo> triangleInfos)
     {
         var result = new List<ModelTriangle>(triangleInfos.Count + parallelograms.Count * 2);
-
-        foreach (TriangleInfo tri in triangleInfos)
-            result.Add(new ModelTriangle(tri.V0, tri.V1, tri.V2, tri.Color));
+        result.AddRange(triangleInfos.Select(tri => new ModelTriangle(tri.V0, tri.V1, tri.V2, tri.Color)));
 
         foreach (ParallelogramInfo para in parallelograms)
         {

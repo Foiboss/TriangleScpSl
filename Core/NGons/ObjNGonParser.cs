@@ -1,18 +1,14 @@
-using System;
-using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
-using System.Linq;
 using UnityEngine;
 
 namespace TriangleScpSl.Core.NGons;
 
 // Lightweight OBJ parser for NGons with per-face color from an MTL file.
-public static class ObjNgonParser
+public static class ObjNGonParser
 {
-    public static bool TryParseFile(string objPath, Color defaultColor, out List<NgonRaw> ngons, out string error)
+    public static bool TryParseFile(string objPath, Color defaultColor, out List<NGonRaw> nGons, out string error)
     {
-        ngons = [];
+        nGons = [];
         error = string.Empty;
 
         if (!File.Exists(objPath))
@@ -36,6 +32,7 @@ public static class ObjNgonParser
             if (File.Exists(mtlPath))
             {
                 ParseMtlFile(mtlPath, materials);
+
                 if (materials.Count == 1)
                     activeMaterialColor = materials.Values.First();
             }
@@ -109,7 +106,7 @@ public static class ObjNgonParser
 
                 if (faceVerts.Count >= 3)
                 {
-                    ngons.Add(new NgonRaw
+                    nGons.Add(new NGonRaw
                     {
                         Vertices = faceVerts,
                         Color = activeMaterialColor ?? defaultColor,
@@ -117,7 +114,7 @@ public static class ObjNgonParser
                 }
             }
 
-            if (ngons.Count == 0)
+            if (nGons.Count == 0)
             {
                 error = "No polygons parsed from OBJ.";
                 return false;
@@ -184,5 +181,3 @@ public static class ObjNgonParser
     static bool TryParseFloat(string token, out float value)
         => float.TryParse(token, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out value);
 }
-
-

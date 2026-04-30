@@ -80,7 +80,7 @@ public static class ApproximateModelUtils
     (
         Vector3 v1World, Vector3 v2World,
         float trueTheta, float truePhi,
-        float candTheta, float candPhi)
+        float candidateTheta, float candidatePhi)
     {
         // Local coordinates of the 4 vertices in the TRUE stretch space
         Vector3 v1Local = ForwardTransform(v1World, trueTheta, truePhi);
@@ -100,7 +100,7 @@ public static class ApproximateModelUtils
             // Where the vertex should be
             Vector3 trueWorld = InverseTransform(lv, trueTheta, truePhi);
             // Where it will end up with the candidate stretch
-            Vector3 candWorld = InverseTransform(lv, candTheta, candPhi);
+            Vector3 candWorld = InverseTransform(lv, candidateTheta, candidatePhi);
             float err = (trueWorld - candWorld).magnitude;
             if (err > maxErr) maxErr = err;
         }
