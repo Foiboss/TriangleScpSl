@@ -4,10 +4,10 @@ using CommandSystem;
 using Exiled.API.Features;
 using System.Collections;
 using TriangleScpSl.Core.ModelFactory;
+using TriangleScpSl.Core.Models.ExactModel;
 using TriangleScpSl.Core.Runtime;
 using TriangleScpSl.Core.Paths;
 using TriangleScpSl.Core.ProjectMerExport;
-using TriangleScpSl.Core.TriangulatedModel;
 using UnityEngine;
 
 namespace TriangleScpSl.Commands;
@@ -18,7 +18,7 @@ public sealed class ExportSchematicCommand : ICommand
     readonly Color _fallbackColor = Color.white;
     Coroutine? _exportCoroutine;
     bool _isExporting;
-    TriangulatedModel? _activeModel;
+    ExactModel? _activeModel;
 
     public string Command { get; } = "ExportSchematic";
     public string[] Aliases { get; } = [];
@@ -104,7 +104,7 @@ public sealed class ExportSchematicCommand : ICommand
                 yield break;
             }
 
-            _activeModel = TriangulatedModel.CreateDeferred(triangles, spawnPosition, PrimitiveFlags.Visible);
+            _activeModel = ExactModel.CreateDeferred(triangles, spawnPosition, PrimitiveFlags.Visible);
             yield return _activeModel.BuildTrianglesCoroutine(PrimitiveFlags.Visible, buildBatch);
 
             if (_activeModel.Count == 0)

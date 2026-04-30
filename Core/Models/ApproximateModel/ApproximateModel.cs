@@ -2,13 +2,15 @@ using System.Collections;
 using AdminToys;
 using Exiled.API.Features.Toys;
 using TriangleScpSl.Core.ModelFactory;
+using TriangleScpSl.Core.ProjectMerExport;
 using TriangleScpSl.Core.Triangulation.Parallelogram;
 using TriangleScpSl.Core.Triangulation.Triangle;
 using UnityEngine;
 
-namespace TriangleScpSl.Core.ParallelogramSpace;
+namespace TriangleScpSl.Core.Models.ApproximateModel;
 
-public class ParallelogramSpace
+public class ApproximateModel
+    : ModelBase
 {
     readonly float _absoluteToleranceUnits;
     readonly Primitive _baseQuad;
@@ -25,7 +27,7 @@ public class ParallelogramSpace
     Vector3 _scale;
     bool _isDestroyed;
 
-    public ParallelogramSpace
+    public ApproximateModel
     (
         IReadOnlyList<ModelTriangle> triangles,
         Vector3 worldPosition,
@@ -71,10 +73,10 @@ public class ParallelogramSpace
             BuildTriangles(flags);
     }
 
-    public int Count => _localTriangles.Count;
-    public int QuadCount => _isDestroyed ? 0 : _stretches.Count + _parallelograms.Count + _fallbackParallelograms.Count * 2 + 1; // +1 for model base quad
+    public override int Count => _localTriangles.Count;
+    public override int QuadCount => _isDestroyed ? 0 : _stretches.Count + _parallelograms.Count + _fallbackParallelograms.Count * 2 + 1; // +1 for model base quad
 
-    public Vector3 Position
+    public override Vector3 Position
     {
         get => _position;
         set
@@ -87,7 +89,7 @@ public class ParallelogramSpace
         }
     }
 
-    public Quaternion Rotation
+    public override Quaternion Rotation
     {
         get => _rotation;
         set
@@ -100,7 +102,7 @@ public class ParallelogramSpace
         }
     }
 
-    public Vector3 Scale
+    public override Vector3 Scale
     {
         get => _scale;
         set
@@ -113,9 +115,9 @@ public class ParallelogramSpace
         }
     }
 
-    public Transform Transform => _baseQuad.Transform;
+    public override Transform Transform => _baseQuad.Transform;
 
-    public Color Color
+    public override Color Color
     {
         set
         {
@@ -133,7 +135,7 @@ public class ParallelogramSpace
         }
     }
 
-    public PrimitiveFlags Flags
+    public override PrimitiveFlags Flags
     {
         set
         {
@@ -153,10 +155,12 @@ public class ParallelogramSpace
         }
     }
 
-    public Vector3 TransformPoint(Vector3 localPoint)
+    public override string ProjectMerDefaultName => "ParallelogramSpace";
+
+    public override Vector3 TransformPoint(Vector3 localPoint)
         => _position + _rotation * Vector3.Scale(localPoint, _scale);
 
-    public Vector3 InverseTransformPoint(Vector3 worldPoint)
+    public override Vector3 InverseTransformPoint(Vector3 worldPoint)
     {
         Vector3 local = Quaternion.Inverse(_rotation) * (worldPoint - _position);
 
@@ -166,7 +170,7 @@ public class ParallelogramSpace
             _scale.z != 0f ? local.z / _scale.z : 0f);
     }
 
-    public static ParallelogramSpace Create
+    public static ApproximateModel Create
     (
         IReadOnlyList<ModelTriangle> triangles,
         Vector3 worldPosition,
@@ -176,7 +180,7 @@ public class ParallelogramSpace
         bool invertWinding = false)
         => new(triangles, worldPosition, flags, absoluteToleranceUnits, scale, invertWinding);
 
-    public static ParallelogramSpace CreateDeferred
+    public static ApproximateModel CreateDeferred
     (
         IReadOnlyList<ModelTriangle> triangles,
         Vector3 worldPosition,
@@ -320,7 +324,7 @@ public class ParallelogramSpace
         return snapshot;
     }
 
-    public void Destroy()
+    public override void Destroy()
     {
         if (_isDestroyed)
             return;
@@ -354,7 +358,7 @@ public class ParallelogramSpace
             CreateTriangle(localTriangle, flags);
     }
 
-    public IEnumerator BuildTrianglesCoroutine(PrimitiveFlags flags, int trianglesPerFrame)
+    public override IEnumerator BuildTrianglesCoroutine(PrimitiveFlags flags, int trianglesPerFrame)
     {
         if (_isDestroyed)
             yield break;
@@ -384,6 +388,70 @@ public class ParallelogramSpace
                 yield return null;
             }
         }
+    }
+
+    public override IReadOnlyList<ProjectMerBlock> GetProjectMerBlocks
+    (
+        int modelObjectId,
+        int startObjectId,
+        Func<Vector3, Vector3> inverseTransformPoint,
+        Quaternion modelRotation)
+    {
+        if (_isDestroyed)
+            return [];
+
+        IReadOnlyList<PrimitiveSnapshot> primitives = GetPrimitiveSnapshot();
+
+        if (primitives.Count == 0)
+            return [];
+
+        List<ProjectMerBlock> blocks = new(primitives.Count);
+        List<int> primitiveObjectIds = new(primitives.Count);
+        int objectId = startObjectId;
+
+        for (var i = 0; i < primitives.Count; i++)
+        {
+            primitiveObjectIds.Add(objectId++);
+        }
+
+        for (var i = 0; i < primitives.Count; i++)
+        {
+            PrimitiveSnapshot primitive = primitives[i];
+
+            int parentId = primitive.ParentIndex >= 0 && primitive.ParentIndex < primitiveObjectIds.Count
+                ? primitiveObjectIds[primitive.ParentIndex]
+                : modelObjectId;
+
+            Vector3 position = primitive.ParentIndex >= 0
+                ? primitive.LocalPosition
+                : inverseTransformPoint(primitive.Position);
+
+            Vector3 rotation = primitive.ParentIndex >= 0
+                ? primitive.LocalRotation.eulerAngles
+                : (Quaternion.Inverse(modelRotation) * primitive.Rotation).eulerAngles;
+
+            Vector3 scale = primitive.ParentIndex >= 0
+                ? primitive.LocalScale
+                : primitive.Scale;
+
+            blocks.Add(new ProjectMerBlock
+            {
+                Name = $"(Q.{i + 1}){primitive.Kind}",
+                ObjectId = primitiveObjectIds[i],
+                ParentId = parentId,
+                Position = position,
+                Rotation = rotation,
+                Scale = scale,
+                BlockType = 1,
+                IsPrimitive = true,
+                PrimitiveType = (int)PrimitiveType.Quad,
+                PrimitiveColor = primitive.Color,
+                PrimitiveFlags = primitive.Flags,
+                Static = false,
+            });
+        }
+
+        return blocks;
     }
 
     void ClearAllPrimitives()
@@ -433,7 +501,7 @@ public class ParallelogramSpace
 
         foreach (StretchSpatialIndex.Entry entry in _stretches.QueryNearby(theta, phi))
         {
-            float err = ParallelogramSpaceUtils.MaxVertexError(
+            float err = ApproximateModelUtils.MaxVertexError(
                 vLeft, vUp, theta, phi, entry.Theta, entry.Phi);
 
             if (err <= _absoluteToleranceUnits && err < bestErr)
@@ -456,7 +524,7 @@ public class ParallelogramSpace
         }
         else
         {
-            stretch = ParallelogramSpaceUtils.CreateStretch(theta, phi);
+            stretch = ApproximateModelUtils.CreateStretch(theta, phi);
             _stretches.Add(theta, phi, stretch);
 
             if (stretch.Transform.parent != _baseQuad.Transform)
@@ -466,11 +534,11 @@ public class ParallelogramSpace
             stretchPhi = phi;
         }
 
-        Vector3 v1ForStretch = ParallelogramSpaceUtils.ForwardTransform(vLeft, stretchTheta, stretchPhi);
-        Vector3 v2ForStretch = ParallelogramSpaceUtils.ForwardTransform(vUp, stretchTheta, stretchPhi);
+        Vector3 v1ForStretch = ApproximateModelUtils.ForwardTransform(vLeft, stretchTheta, stretchPhi);
+        Vector3 v2ForStretch = ApproximateModelUtils.ForwardTransform(vUp, stretchTheta, stretchPhi);
 
         _parallelograms.Add(
-            ParallelogramSpaceUtils.CreateParallelogram(center, v1ForStretch, v2ForStretch, stretch, flags, color));
+            ApproximateModelUtils.CreateParallelogram(center, v1ForStretch, v2ForStretch, stretch, flags, color));
         _parallelogramSnapshots.Add(new ParallelogramSnapshot(vUp, vLeft, center, color, flags, false));
     }
 

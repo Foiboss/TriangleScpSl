@@ -4,7 +4,7 @@ using AdminToys;
 using CommandSystem;
 using Exiled.API.Features;
 using TriangleScpSl.Core.ModelFactory;
-using TriangleScpSl.Core.ParallelogramSpace;
+using TriangleScpSl.Core.Models.ApproximateModel;
 using TriangleScpSl.Core.Paths;
 using TriangleScpSl.Core.ProjectMerExport;
 using TriangleScpSl.Core.Runtime;
@@ -18,7 +18,7 @@ public sealed class ExportSchematicV2Command : ICommand
     readonly Color _fallbackColor = Color.white;
     Coroutine? _exportCoroutine;
     bool _isExporting;
-    ParallelogramSpace? _activeModel;
+    ApproximateModel? _activeModel;
 
     public string Command { get; } = "ExportSchematicV2";
     public string[] Aliases { get; } = [];
@@ -104,7 +104,7 @@ public sealed class ExportSchematicV2Command : ICommand
                 yield break;
             }
 
-            _activeModel = ParallelogramSpace.CreateDeferred(
+            _activeModel = ApproximateModel.CreateDeferred(
                 triangles,
                 spawnPosition,
                 PrimitiveFlags.Visible,

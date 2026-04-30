@@ -3,8 +3,8 @@ using CommandSystem;
 using Exiled.API.Features;
 using System.Collections;
 using TriangleScpSl.Core.ModelFactory;
+using TriangleScpSl.Core.Models.ExactModel;
 using TriangleScpSl.Core.Runtime;
-using TriangleScpSl.Core.TriangulatedModel;
 using UnityEngine;
 
 namespace TriangleScpSl.Commands;
@@ -15,7 +15,7 @@ public class TriangulationCommand : ICommand
     readonly Color _forceColor = Color.white;
     Coroutine? _buildCoroutine;
     bool _isBuilding;
-    TriangulatedModel? _model;
+    ExactModel? _model;
 
     public string Command { get; } = "Triangulate";
     public string[] Aliases { get; } = [];
@@ -84,7 +84,7 @@ public class TriangulationCommand : ICommand
             return false;
         }
 
-        var createdModel = TriangulatedModel.CreateDeferred(triangles, spawnPosition, PrimitiveFlags.Visible);
+        var createdModel = ExactModel.CreateDeferred(triangles, spawnPosition, PrimitiveFlags.Visible);
         _model = createdModel;
         _isBuilding = true;
 
@@ -95,7 +95,7 @@ public class TriangulationCommand : ICommand
         return true;
     }
 
-    IEnumerator BuildRoutine(TriangulatedModel model, string fileName, bool forceObjColor, int batchSize)
+    IEnumerator BuildRoutine(ExactModel model, string fileName, bool forceObjColor, int batchSize)
     {
         yield return model.BuildTrianglesCoroutine(PrimitiveFlags.Visible, batchSize);
 

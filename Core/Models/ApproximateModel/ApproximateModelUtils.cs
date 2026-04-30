@@ -2,9 +2,9 @@ using AdminToys;
 using Exiled.API.Features.Toys;
 using UnityEngine;
 
-namespace TriangleScpSl.Core.ParallelogramSpace;
+namespace TriangleScpSl.Core.Models.ApproximateModel;
 
-public static class ParallelogramSpaceUtils
+public static class ApproximateModelUtils
 {
     public static Primitive CreateStretch(float theta, float phi)
     {

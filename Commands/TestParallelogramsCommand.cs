@@ -2,7 +2,7 @@ using AdminToys;
 using CommandSystem;
 using Exiled.API.Features;
 using Exiled.API.Features.Toys;
-using TriangleScpSl.Core.ParallelogramSpace;
+using TriangleScpSl.Core.Models.ApproximateModel;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
@@ -37,7 +37,7 @@ public class TestParallelogramsCommand : ICommand
 
         foreach (StretchSpatialIndex.Entry entry in _stretches.QueryNearby(trueTheta, truePhi))
         {
-            float err = ParallelogramSpaceUtils.MaxVertexError(
+            float err = ApproximateModelUtils.MaxVertexError(
                 v1World, v2World, trueTheta, truePhi, entry.Theta, entry.Phi);
 
             if (err <= AbsoluteToleranceUnits && err < bestErr)
@@ -51,7 +51,7 @@ public class TestParallelogramsCommand : ICommand
 
         if (best != null) return (best, bestT, bestP);
 
-        Primitive stretch = ParallelogramSpaceUtils.CreateStretch(trueTheta, truePhi);
+        Primitive stretch = ApproximateModelUtils.CreateStretch(trueTheta, truePhi);
         _stretches.Add(trueTheta, truePhi, stretch);
         return (stretch, trueTheta, truePhi);
     }
@@ -112,11 +112,11 @@ public class TestParallelogramsCommand : ICommand
             _points.Add(Primitive.Create(PrimitiveType.Sphere, PrimitiveFlags.Visible, pos - vLeft, Vector3.zero, Vector3.one * 0.1f, true, Color.yellow));
 
             var (stretch, stretchTheta, stretchPhi) = FindOrCreateStretch(vLeft, vUp, theta, phi);
-            Vector3 v1ForStretch = ParallelogramSpaceUtils.ForwardTransform(vLeft, stretchTheta, stretchPhi);
-            Vector3 v2ForStretch = ParallelogramSpaceUtils.ForwardTransform(vUp, stretchTheta, stretchPhi);
+            Vector3 v1ForStretch = ApproximateModelUtils.ForwardTransform(vLeft, stretchTheta, stretchPhi);
+            Vector3 v2ForStretch = ApproximateModelUtils.ForwardTransform(vUp, stretchTheta, stretchPhi);
 
             _parallelograms.Add(
-                ParallelogramSpaceUtils.CreateParallelogram(
+                ApproximateModelUtils.CreateParallelogram(
                     pos, v1ForStretch, v2ForStretch, stretch, PrimitiveFlags.Visible, Color.white));
         }
 

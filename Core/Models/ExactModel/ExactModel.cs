@@ -1,0 +1,327 @@
+using System.Collections;
+using Exiled.API.Features.Toys;
+using TriangleScpSl.Core.ModelFactory;
+using TriangleScpSl.Core.ProjectMerExport;
+using TriangleScpSl.Core.Triangulation.Parallelogram;
+using TriangleScpSl.Core.Triangulation.Triangle;
+using UnityEngine;
+
+namespace TriangleScpSl.Core.Models.ExactModel;
+
+// A 3-D mesh loaded from triangulated file data (STL/OBJ).
+// The model stores local-space triangles and rebuilds ParallelogramPrimitive instances
+// when its transform changes.
+public class ExactModel
+    : ModelBase
+{
+    readonly Primitive _baseQuad;
+    readonly List<ModelTriangle> _localTriangles = [];
+    readonly List<Color> _triangleColors = [];
+    readonly List<ParallelogramPrimitive> _parallelograms = [];
+    readonly bool _invertWinding;
+    AdminToys.PrimitiveFlags _currentFlags;
+
+    Vector3 _position;
+    Quaternion _rotation;
+    Vector3 _scale;
+    bool _isDestroyed;
+
+    public ExactModel
+    (
+        IReadOnlyList<ModelTriangle> triangles,
+        Vector3 worldPosition,
+        AdminToys.PrimitiveFlags flags = AdminToys.PrimitiveFlags.Visible,
+        float scale = 1f,
+        bool invertWinding = false,
+        bool buildImmediately = true)
+    {
+        _position = worldPosition;
+        _rotation = Quaternion.identity;
+        _scale = Vector3.one * scale;
+        _invertWinding = invertWinding;
+        _currentFlags = flags;
+
+        _baseQuad = Primitive.Create(
+            PrimitiveType.Quad,
+            AdminToys.PrimitiveFlags.None,
+            _position,
+            Vector3.zero,
+            _scale,
+            true,
+            Color.clear);
+
+        if (triangles.Count == 0)
+            return;
+
+        foreach (ModelTriangle tri in triangles)
+        {
+            _localTriangles.Add(new ModelTriangle(tri.P1, tri.P2, tri.P3, tri.Color));
+            _triangleColors.Add(tri.Color);
+        }
+
+        if (buildImmediately)
+            BuildTriangles(flags);
+    }
+
+    public override int Count => _localTriangles.Count;
+    public override int QuadCount => _isDestroyed ? 0 : Count * 6 + 1; // +1 for model base quad
+
+    public override Vector3 Position
+    {
+        get => _position;
+        set
+        {
+            if (_isDestroyed)
+                return;
+
+            _position = value;
+            _baseQuad.Position = value;
+        }
+    }
+
+    public override Quaternion Rotation
+    {
+        get => _rotation;
+        set
+        {
+            if (_isDestroyed)
+                return;
+
+            _rotation = value;
+            _baseQuad.Rotation = value;
+        }
+    }
+
+    public override Vector3 Scale
+    {
+        get => _scale;
+        set
+        {
+            if (_isDestroyed)
+                return;
+
+            _scale = value;
+            _baseQuad.Scale = value;
+        }
+    }
+
+    public override Transform Transform => _baseQuad.Transform;
+
+    public override Color Color
+    {
+        set
+        {
+            if (_isDestroyed)
+                return;
+
+            for (var i = 0; i < _triangleColors.Count; i++)
+            {
+                _triangleColors[i] = value;
+            }
+
+            foreach (ParallelogramPrimitive parallelogram in _parallelograms)
+                parallelogram.Color = value;
+        }
+    }
+
+    public override AdminToys.PrimitiveFlags Flags
+    {
+        set
+        {
+            if (_isDestroyed)
+                return;
+
+            _currentFlags = value;
+
+            foreach (ParallelogramPrimitive parallelogram in _parallelograms)
+                parallelogram.Flags = value;
+        }
+    }
+
+    public override string ProjectMerDefaultName => "TriangulatedModel";
+
+    public override Vector3 TransformPoint(Vector3 localPoint)
+        => _position + _rotation * Vector3.Scale(localPoint, _scale);
+
+    public override Vector3 InverseTransformPoint(Vector3 worldPoint)
+    {
+        Vector3 local = Quaternion.Inverse(_rotation) * (worldPoint - _position);
+
+        return new Vector3(
+            _scale.x != 0f ? local.x / _scale.x : 0f,
+            _scale.y != 0f ? local.y / _scale.y : 0f,
+            _scale.z != 0f ? local.z / _scale.z : 0f);
+    }
+
+    public static ExactModel Create
+    (
+        IReadOnlyList<ModelTriangle> triangles,
+        Vector3 worldPosition,
+        AdminToys.PrimitiveFlags flags = AdminToys.PrimitiveFlags.Visible,
+        float scale = 1f,
+        bool invertWinding = false)
+        => new(triangles, worldPosition, flags, scale, invertWinding);
+
+    public static ExactModel CreateDeferred
+    (
+        IReadOnlyList<ModelTriangle> triangles,
+        Vector3 worldPosition,
+        AdminToys.PrimitiveFlags flags = AdminToys.PrimitiveFlags.Visible,
+        float scale = 1f,
+        bool invertWinding = false)
+        => new(triangles, worldPosition, flags, scale, invertWinding, false);
+
+    public override IEnumerator BuildTrianglesCoroutine(AdminToys.PrimitiveFlags flags, int trianglesPerFrame)
+    {
+        if (_isDestroyed)
+            yield break;
+
+        _currentFlags = flags;
+        trianglesPerFrame = Mathf.Max(1, trianglesPerFrame);
+
+        foreach (ParallelogramPrimitive parallelogram in _parallelograms)
+            parallelogram.Destroy();
+
+        _parallelograms.Clear();
+        var processed = 0;
+
+        for (var triangleIndex = 0; triangleIndex < _localTriangles.Count; triangleIndex++)
+        {
+            if (_isDestroyed)
+                yield break;
+
+            ModelTriangle localTriangle = _localTriangles[triangleIndex];
+            AddParallelograms(localTriangle, _triangleColors[triangleIndex], flags);
+            processed++;
+
+            if (processed >= trianglesPerFrame)
+            {
+                processed = 0;
+                yield return null;
+            }
+        }
+    }
+
+    public override void Destroy()
+    {
+        if (_isDestroyed)
+            return;
+
+        _isDestroyed = true;
+
+        foreach (ParallelogramPrimitive parallelogram in _parallelograms)
+            parallelogram.Destroy();
+
+        _parallelograms.Clear();
+        _localTriangles.Clear();
+        _triangleColors.Clear();
+        _baseQuad.Destroy();
+    }
+
+    public override IReadOnlyList<ProjectMerBlock> GetProjectMerBlocks
+    (
+        int modelObjectId,
+        int startObjectId,
+        Func<Vector3, Vector3> inverseTransformPoint,
+        Quaternion modelRotation)
+    {
+        if (_isDestroyed || _parallelograms.Count == 0)
+            return [];
+
+        List<ProjectMerBlock> blocks = new(_parallelograms.Count * 2);
+        int objectId = startObjectId;
+
+        for (var parallelogramIndex = 0; parallelogramIndex < _parallelograms.Count; parallelogramIndex++)
+        {
+            ParallelogramPrimitive parallelogram = _parallelograms[parallelogramIndex];
+            Primitive basePrimitive = parallelogram.BasePrimitive;
+            Primitive quadPrimitive = parallelogram.QuadPrimitive;
+
+            int baseId = objectId++;
+            int quadId = objectId++;
+
+            blocks.Add(new ProjectMerBlock
+            {
+                Name = $"(P.{parallelogramIndex + 1}).Base",
+                ObjectId = baseId,
+                ParentId = modelObjectId,
+                Position = inverseTransformPoint(basePrimitive.Position),
+                Rotation = (Quaternion.Inverse(modelRotation) * basePrimitive.Rotation).eulerAngles,
+                Scale = basePrimitive.Scale,
+                BlockType = 0,
+                IsPrimitive = false,
+                Static = false,
+            });
+
+            blocks.Add(new ProjectMerBlock
+            {
+                Name = $"(P.{parallelogramIndex + 1})",
+                ObjectId = quadId,
+                ParentId = baseId,
+                Position = quadPrimitive.Transform.localPosition,
+                Rotation = quadPrimitive.Transform.localRotation.eulerAngles,
+                Scale = quadPrimitive.Transform.localScale,
+                BlockType = 1,
+                IsPrimitive = true,
+                PrimitiveType = (int)PrimitiveType.Quad,
+                PrimitiveColor = parallelogram.Color,
+                PrimitiveFlags = parallelogram.Flags,
+                Static = false,
+            });
+        }
+
+        return blocks;
+    }
+
+    public IReadOnlyList<(ModelTriangle Triangle, AdminToys.PrimitiveFlags Flags)> GetTriangleSnapshot()
+    {
+        if (_isDestroyed || _parallelograms.Count == 0)
+            return [];
+
+        List<(ModelTriangle Triangle, AdminToys.PrimitiveFlags Flags)> snapshot = new(_localTriangles.Count);
+
+        for (var i = 0; i < _localTriangles.Count; i++)
+        {
+            ModelTriangle tri = _localTriangles[i];
+            snapshot.Add((new ModelTriangle(tri.P1, tri.P2, tri.P3, _triangleColors[i]), _currentFlags));
+        }
+
+        return snapshot;
+    }
+
+    public List<ParallelogramPrimitive> GetParallelogramSnapshot()
+    {
+        if (_isDestroyed || _parallelograms.Count == 0)
+            return [];
+
+        return [.._parallelograms];
+    }
+
+    void BuildTriangles(AdminToys.PrimitiveFlags flags)
+    {
+        _currentFlags = flags;
+        _parallelograms.Clear();
+
+        for (var triangleIndex = 0; triangleIndex < _localTriangles.Count; triangleIndex++)
+        {
+            ModelTriangle localTriangle = _localTriangles[triangleIndex];
+            AddParallelograms(localTriangle, _triangleColors[triangleIndex], flags);
+        }
+    }
+
+    void AddParallelograms(ModelTriangle localTriangle, Color color, AdminToys.PrimitiveFlags flags)
+    {
+        Vector3 p1 = TransformPoint(localTriangle.P1);
+        Vector3 p2 = TransformPoint(localTriangle.P2);
+        Vector3 p3 = TransformPoint(localTriangle.P3);
+
+        if (_invertWinding)
+            (p2, p3) = (p3, p2);
+
+        Vector3[][] data = TriangleParallelogramBuilder.GetParallelogramsInfo(p1, p2, p3);
+
+        _parallelograms.Add(ParallelogramPrimitive.Create(data[0][0], data[0][1], data[0][2], color, flags));
+        _parallelograms.Add(ParallelogramPrimitive.Create(data[1][0], data[1][1], data[1][2], color, flags));
+        _parallelograms.Add(ParallelogramPrimitive.Create(data[2][0], data[2][1], data[2][2], color, flags));
+    }
+}

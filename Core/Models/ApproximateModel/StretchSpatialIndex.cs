@@ -1,7 +1,7 @@
 using Exiled.API.Features.Toys;
 using UnityEngine;
 
-namespace TriangleScpSl.Core.ParallelogramSpace;
+namespace TriangleScpSl.Core.Models.ApproximateModel;
 
 public class StretchSpatialIndex
 {

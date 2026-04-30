@@ -1,5 +1,7 @@
 using AdminToys;
 using TriangleScpSl.Core.FileToTriangles;
+using TriangleScpSl.Core.Models.ApproximateModel;
+using TriangleScpSl.Core.Models.ExactModel;
 using TriangleScpSl.Core.Paths;
 using UnityEngine;
 
@@ -45,20 +47,20 @@ public static class ModelFactory
         return true;
     }
 
-    public static TriangulatedModel.TriangulatedModel CreateModel
+    public static ExactModel CreateModel
     (
         IReadOnlyList<ModelTriangle> triangles,
         Vector3 worldPosition,
         PrimitiveFlags flags = PrimitiveFlags.Visible)
-        => TriangulatedModel.TriangulatedModel.Create(triangles, worldPosition, flags);
+        => ExactModel.Create(triangles, worldPosition, flags);
 
-    public static ParallelogramSpace.ParallelogramSpace CreateModel
+    public static ApproximateModel CreateModel
     (
         IReadOnlyList<ModelTriangle> triangles,
         Vector3 worldPosition,
         PrimitiveFlags flags = PrimitiveFlags.Visible,
         float absoluteToleranceUnits = 0.001f)
-        => ParallelogramSpace.ParallelogramSpace.Create(triangles, worldPosition, flags, absoluteToleranceUnits);
+        => ApproximateModel.Create(triangles, worldPosition, flags, absoluteToleranceUnits);
 
     public static bool TryLoadTriangles
     (

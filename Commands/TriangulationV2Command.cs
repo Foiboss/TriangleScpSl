@@ -3,9 +3,8 @@ using CommandSystem;
 using Exiled.API.Features;
 using System.Collections;
 using TriangleScpSl.Core.ModelFactory;
-using TriangleScpSl.Core.ParallelogramSpace;
+using TriangleScpSl.Core.Models.ApproximateModel;
 using TriangleScpSl.Core.Runtime;
-using TriangleScpSl.Core.TriangulatedModel;
 using UnityEngine;
 
 namespace TriangleScpSl.Commands;
@@ -15,7 +14,7 @@ public class TriangulationV2Command : ICommand
 {
     Coroutine? _buildCoroutine;
     bool _isBuilding;
-    ParallelogramSpace? _model;
+    ApproximateModel? _model;
 
     public string Command { get; } = "TriangulateV2";
     public string[] Aliases { get; } = [];
@@ -84,7 +83,7 @@ public class TriangulationV2Command : ICommand
             return false;
         }
 
-        var createdModel = ParallelogramSpace.CreateDeferred(
+        var createdModel = ApproximateModel.CreateDeferred(
             triangles,
             spawnPosition,
             PrimitiveFlags.Visible,
@@ -100,7 +99,7 @@ public class TriangulationV2Command : ICommand
         return true;
     }
 
-    IEnumerator BuildRoutine(ParallelogramSpace model, string fileName, int batchSize)
+    IEnumerator BuildRoutine(ApproximateModel model, string fileName, int batchSize)
     {
         yield return model.BuildTrianglesCoroutine(PrimitiveFlags.Visible, batchSize);
 
