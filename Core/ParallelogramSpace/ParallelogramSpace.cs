@@ -57,10 +57,8 @@ public class ParallelogramSpace
             return;
         }
 
-        Vector3 modelCenter = CalculateCenter(triangles);
-
         foreach (ModelTriangle tri in triangles)
-            _localTriangles.Add(new ModelTriangle(tri.P1 - modelCenter, tri.P2 - modelCenter, tri.P3 - modelCenter, tri.Color));
+            _localTriangles.Add(new ModelTriangle(tri.P1, tri.P2, tri.P3, tri.Color));
 
         float maxSize = ComputeMaxParallelogramSize();
 
@@ -505,20 +503,6 @@ public class ParallelogramSpace
         }
 
         return maxSize;
-    }
-
-    static Vector3 CalculateCenter(IReadOnlyList<ModelTriangle> triangles)
-    {
-        Vector3 min = triangles[0].P1;
-        Vector3 max = triangles[0].P1;
-
-        foreach (ModelTriangle tri in triangles)
-        {
-            min = Vector3.Min(min, Vector3.Min(tri.P1, Vector3.Min(tri.P2, tri.P3)));
-            max = Vector3.Max(max, Vector3.Max(tri.P1, Vector3.Max(tri.P2, tri.P3)));
-        }
-
-        return (min + max) / 2f;
     }
 
     public sealed class ParallelogramSnapshot(Vector3 vUp, Vector3 vLeft, Vector3 center, Color color, PrimitiveFlags flags, bool isFallback)
