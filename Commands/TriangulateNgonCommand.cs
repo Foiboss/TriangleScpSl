@@ -19,7 +19,7 @@ public class TriangulateNgonCommand : ICommand
 
     public string Command { get; } = "TriangulateNgon";
     public string[] Aliases { get; } = [];
-    public string Description { get; } = "Displays an FBX model using ExactModel. Usage: <filename(.fbx)>";
+    public string Description { get; } = "Displays an OBJ/FBX model using ExactModel. Usage: <filename(.obj|.fbx)>";
 
     void Clear()
     {
@@ -58,7 +58,7 @@ public class TriangulateNgonCommand : ICommand
 
         if (arguments.Count != 1)
         {
-            response = "Usage: TriangulateNgon <model file (.fbx)>";
+            response = "Usage: TriangulateNgon <model file (.obj|.fbx)>";
             return false;
         }
 
@@ -71,14 +71,14 @@ public class TriangulateNgonCommand : ICommand
         }
 
         Vector3 spawnPosition = player.Position + player.GameObject.transform.forward * 2.5f + Vector3.up * 1.2f;
-        var createdModel = ExactModel.CreateDeferred(triangles, spawnPosition, PrimitiveFlags.Visible);
+        var createdModel = ExactModel.CreateDeferred(triangles, spawnPosition, PrimitiveFlags.Visible, 1f, true);
         _model = createdModel;
         _isBuilding = true;
 
         int batchSize = Mathf.Max(1, Plugin.Instance?.Config.TriangulateNgonBuildBatchSize ?? 32);
         _buildCoroutine = CoroutineHost.Run(BuildRoutine(createdModel, fileName, batchSize));
 
-        response = $"Started building FBX model '{fileName}' asynchronously. Run command again to cancel.";
+        response = $"Started building OBJ/FBX model '{fileName}' asynchronously. Run command again to cancel.";
         return true;
     }
 

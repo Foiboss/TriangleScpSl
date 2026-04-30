@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace TriangleScpSl.Core.NGons;
 
-// Loads an FBX file and converts the NGon pipeline output into ModelTriangles
+// Loads an OBJ or FBX file and converts the NGon pipeline output into ModelTriangles
 // ready for ExactModel or ApproximateModel.
 //
 // Each NGon with n vertices produces (n-3) parallelograms and 1 triangle.
@@ -12,9 +12,9 @@ namespace TriangleScpSl.Core.NGons;
 // All triangles are CCW relative to their face normal.
 public static class NgonModelBuilder
 {
-    // Resolves the FBX file path, runs the full NGon pipeline, and returns ModelTriangles.
-    // requestedFile: file name only (no directory path), with or without .fbx extension.
-    // defaultColor: fallback face color when the FBX has no vertex color layer.
+    // Resolves the model file path, runs the full NGon pipeline, and returns ModelTriangles.
+    // requestedFile: file name only (no directory path), with or without .obj/.fbx extension.
+    // defaultColor: fallback face color when the model has no color data.
     public static bool TryLoad(
         string requestedFile,
         Color defaultColor,
@@ -40,14 +40,37 @@ public static class NgonModelBuilder
             return false;
         }
 
-        if (!fileName.EndsWith(".fbx", StringComparison.OrdinalIgnoreCase))
-            fileName += ".fbx";
+        string extension = Path.GetExtension(fileName);
+
+        if (string.IsNullOrEmpty(extension))
+        {
+            string objName = fileName + ".obj";
+            string fbxName = fileName + ".fbx";
+            string objPath = TrianglePaths.GetModelPath(objName);
+            string fbxPath = TrianglePaths.GetModelPath(fbxName);
+
+            if (File.Exists(objPath))
+                fileName = objName;
+            else if (File.Exists(fbxPath))
+                fileName = fbxName;
+            else
+            {
+                error = $"Model file not found: {objPath} or {fbxPath}";
+                return false;
+            }
+        }
+        else if (!fileName.EndsWith(".fbx", StringComparison.OrdinalIgnoreCase) &&
+                 !fileName.EndsWith(".obj", StringComparison.OrdinalIgnoreCase))
+        {
+            error = "Only .obj or .fbx files are supported for NGon models.";
+            return false;
+        }
 
         string modelPath = TrianglePaths.GetModelPath(fileName);
 
         if (!File.Exists(modelPath))
         {
-            error = $"FBX file not found: {modelPath}";
+            error = $"Model file not found: {modelPath}";
             return false;
         }
 
@@ -55,11 +78,20 @@ public static class NgonModelBuilder
 
         try
         {
-            List<NgonRaw> ngons = FbxNgonParser.Parse(modelPath, defaultColor);
+            List<NgonRaw> ngons = [];
+
+            if (modelPath.EndsWith(".obj", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!ObjNgonParser.TryParseFile(modelPath, defaultColor, out ngons, out string objError))
+                {
+                    error = objError;
+                    return false;
+                }
+            }
 
             if (ngons.Count == 0)
             {
-                error = "No valid polygons found in FBX file.";
+                error = "No valid polygons found in model file.";
                 return false;
             }
 
@@ -70,7 +102,7 @@ public static class NgonModelBuilder
 
             if (triangles.Count == 0)
             {
-                error = "No valid triangles produced from FBX polygons.";
+                error = "No valid triangles produced from model polygons.";
                 return false;
             }
 
@@ -83,7 +115,7 @@ public static class NgonModelBuilder
         }
         catch (Exception ex)
         {
-            error = $"Failed to parse FBX: {ex.Message}";
+            error = $"Failed to parse model: {ex.Message}";
             return false;
         }
     }

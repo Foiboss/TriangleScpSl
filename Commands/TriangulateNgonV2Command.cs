@@ -19,7 +19,7 @@ public class TriangulateNgonV2Command : ICommand
 
     public string Command { get; } = "TriangulateNgonV2";
     public string[] Aliases { get; } = [];
-    public string Description { get; } = "Displays an FBX model using ApproximateModel. Usage: <filename(.fbx)> [accuracy(0.001)]";
+    public string Description { get; } = "Displays an OBJ/FBX model using ApproximateModel. Usage: <filename(.obj|.fbx)> [accuracy(0.001)]";
 
     void Clear()
     {
@@ -58,7 +58,7 @@ public class TriangulateNgonV2Command : ICommand
 
         if (arguments.Count is < 1 or > 2)
         {
-            response = "Usage: TriangulateNgonV2 <model file (.fbx)> [accuracy(0.001)]";
+            response = "Usage: TriangulateNgonV2 <model file (.obj|.fbx)> [accuracy(0.001)]";
             return false;
         }
 
@@ -96,7 +96,7 @@ public class TriangulateNgonV2Command : ICommand
         int batchSize = Mathf.Max(1, Plugin.Instance?.Config.TriangulateNgonV2BuildBatchSize ?? 16);
         _buildCoroutine = CoroutineHost.Run(BuildRoutine(createdModel, fileName, batchSize));
 
-        response = $"Started building FBX model '{fileName}' asynchronously. Run command again to cancel.";
+        response = $"Started building OBJ/FBX model '{fileName}' asynchronously. Run command again to cancel.";
         return true;
     }
 

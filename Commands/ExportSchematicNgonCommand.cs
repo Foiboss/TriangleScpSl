@@ -22,7 +22,7 @@ public sealed class ExportSchematicNgonCommand : ICommand
 
     public string Command { get; } = "ExportSchematicNgon";
     public string[] Aliases { get; } = [];
-    public string Description { get; } = "Exports an FBX as ProjectMER schematic JSON using ExactModel. Usage: <model file (.fbx)> <output json file> [previewScale]";
+    public string Description { get; } = "Exports an OBJ/FBX as ProjectMER schematic JSON using ExactModel. Usage: <model file (.obj|.fbx)> <output json file> [previewScale]";
 
     public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)
     {
@@ -35,7 +35,7 @@ public sealed class ExportSchematicNgonCommand : ICommand
 
         if (arguments.Count is < 2 or > 3)
         {
-            response = "Usage: ExportSchematicNgon <model file (.fbx)> <output json file> [previewScale]";
+            response = "Usage: ExportSchematicNgon <model file (.obj|.fbx)> <output json file> [previewScale]";
             return false;
         }
 
@@ -86,7 +86,7 @@ public sealed class ExportSchematicNgonCommand : ICommand
                 yield break;
             }
 
-            _activeModel = ExactModel.CreateDeferred(triangles, Vector3.zero, PrimitiveFlags.Visible);
+            _activeModel = ExactModel.CreateDeferred(triangles, Vector3.zero, PrimitiveFlags.Visible, 1f, true);
             yield return _activeModel.BuildTrianglesCoroutine(PrimitiveFlags.Visible, buildBatch);
 
             if (_activeModel.Count == 0)

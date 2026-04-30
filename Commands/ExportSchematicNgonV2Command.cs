@@ -22,7 +22,7 @@ public sealed class ExportSchematicNgonV2Command : ICommand
 
     public string Command { get; } = "ExportSchematicNgonV2";
     public string[] Aliases { get; } = [];
-    public string Description { get; } = "Exports an FBX as ProjectMER schematic JSON using ApproximateModel. Usage: <model file (.fbx)> <output json file> [accuracy(0.001)] [previewScale]";
+    public string Description { get; } = "Exports an OBJ/FBX as ProjectMER schematic JSON using ApproximateModel. Usage: <model file (.obj|.fbx)> <output json file> [accuracy(0.001)] [previewScale]";
 
     public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)
     {
@@ -35,7 +35,7 @@ public sealed class ExportSchematicNgonV2Command : ICommand
 
         if (arguments.Count is < 2 or > 4)
         {
-            response = "Usage: ExportSchematicNgonV2 <model file (.fbx)> <output json file> [accuracy(0.001)] [previewScale]";
+            response = "Usage: ExportSchematicNgonV2 <model file (.obj|.fbx)> <output json file> [accuracy(0.001)] [previewScale]";
             return false;
         }
 
