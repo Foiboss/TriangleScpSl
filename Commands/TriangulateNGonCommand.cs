@@ -75,7 +75,7 @@ public class TriangulateNGonCommand : ICommand
         _model = createdModel;
         _isBuilding = true;
 
-        int batchSize = Mathf.Max(1, Plugin.Instance?.Config.TriangulateNgonBuildBatchSize ?? 32);
+        int batchSize = Mathf.Max(1, Plugin.Instance?.Config.TriangulateNGonBuildBatchSize ?? 32);
         _buildCoroutine = CoroutineHost.Run(BuildRoutine(createdModel, fileName, batchSize));
 
         response = $"Started building OBJ model '{fileName}' asynchronously. Run command again to cancel.";

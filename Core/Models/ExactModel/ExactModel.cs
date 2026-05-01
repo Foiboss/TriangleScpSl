@@ -63,7 +63,7 @@ public class ExactModel
         if (buildImmediately)
             BuildTriangles(flags);
     }
-    
+
     public ExactModel
     (
         IReadOnlyList<ModelParallelogram> parallelograms,
@@ -204,7 +204,7 @@ public class ExactModel
         float scale = 1f,
         bool invertWinding = false)
         => new(triangles, worldPosition, flags, scale, invertWinding, false);
-    
+
     public static ExactModel Create
     (
         IReadOnlyList<ModelParallelogram> parallelograms,
@@ -247,10 +247,10 @@ public class ExactModel
             Vector3 center = TransformPoint(modelParallelogram.Center);
 
             _parallelograms.Add(ParallelogramPrimitive.Create(
-                vUp, 
-                vLeft, 
-                center, 
-                modelParallelogram.Color, 
+                vUp,
+                vLeft,
+                center,
+                modelParallelogram.Color,
                 flags));
             processed++;
 
@@ -344,10 +344,10 @@ public class ExactModel
             Vector3 center = TransformPoint(modelParallelogram.Center);
 
             _parallelograms.Add(ParallelogramPrimitive.Create(
-                vUp, 
-                vLeft, 
-                center, 
-                modelParallelogram.Color, 
+                vUp,
+                vLeft,
+                center,
+                modelParallelogram.Color,
                 flags));
         }
     }

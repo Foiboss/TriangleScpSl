@@ -238,7 +238,7 @@ public class ApproximateModel
         float scale = 1f,
         bool invertWinding = false)
         => new(triangles, worldPosition, flags, absoluteToleranceUnits, scale, invertWinding, false);
-    
+
     public static ApproximateModel Create
     (
         IReadOnlyList<ModelParallelogram> parallelograms,
@@ -708,4 +708,3 @@ public class ApproximateModel
         public int ParentIndex { get; } = parentIndex;
     }
 }
-

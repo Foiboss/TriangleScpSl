@@ -19,7 +19,7 @@ public static class ParallelogramProcessor
         IEnumerable<ConvexNGon> nGons)
     {
         List<ModelParallelogram> parallelograms = [];
-        
+
         foreach (ConvexNGon ngon in nGons)
             ProcessOne(ngon, parallelograms);
         return parallelograms;
@@ -89,11 +89,13 @@ public static class ParallelogramProcessor
         // Final triangle — the three remaining vertices in CCW order (preserved by removals).
         AddTriangle(poly[0], poly[1], poly[2], color, parallelograms);
     }
-    
+
     static void AddTriangle(Vector3 p1, Vector3 p2, Vector3 p3, Color color, List<ModelParallelogram> parallelograms)
     {
         Vector3[][] triangleParallelograms = TriangleParallelogramBuilder.GetParallelogramsInfo(p1, p2, p3);
-        for (int i = 0; i < 3; i++)
+
+        for (var i = 0; i < 3; i++)
+        {
             parallelograms.Add(
                 new ModelParallelogram
                 {
@@ -102,8 +104,9 @@ public static class ParallelogramProcessor
                     Center = triangleParallelograms[i][2],
                     Color = color,
                 });
+        }
     }
-    
+
     // helpers
 
     static int FindParallelogramVertex(List<Vector3> poly, Vector3 normal, float eps = 1e-5f)

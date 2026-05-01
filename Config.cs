@@ -6,10 +6,10 @@ public sealed class Config : IConfig
 {
     public bool IsEnabled { get; set; } = true;
     public bool Debug { get; set; } = false;
-    public int TriangulateBuildBatchSize { get; set; } = 32;
-    public int TriangulateV2BuildBatchSize { get; set; } = 16;
-    public int ExportBuildBatchSize { get; set; } = 64;
-    public int ExportWriteBatchSize { get; set; } = 256;
-    public int TriangulateNgonBuildBatchSize { get; set; } = 32;
-    public int TriangulateNgonV2BuildBatchSize { get; set; } = 16;
+    public int TriangulateBuildBatchSize { get; set; } = 128;
+    public int TriangulateV2BuildBatchSize { get; set; } = 64;
+    public int ExportBuildBatchSize { get; set; } = 128;
+    public int ExportWriteBatchSize { get; set; } = 512;
+    public int TriangulateNGonBuildBatchSize { get; set; } = 128;
+    public int TriangulateNGonV2BuildBatchSize { get; set; } = 64;
 }
