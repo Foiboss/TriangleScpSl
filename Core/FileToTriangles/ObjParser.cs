@@ -6,7 +6,7 @@ namespace TriangleScpSl.Core.FileToTriangles;
 
 public static class ObjParser
 {
-    public static bool TryParseFile(string filePath, out List<ModelTriangle> triangles, out string error)
+    public static bool TryParseFile(string filePath, Color fallbackColor, out List<ModelTriangle> triangles, out string error)
     {
         triangles = [];
         error = string.Empty;
@@ -24,6 +24,15 @@ public static class ObjParser
             Dictionary<string, Color> materials = [];
             Color? activeMaterialColor = null;
             string? baseDir = Path.GetDirectoryName(filePath);
+
+            // Try to load MTL file with the same name as the OBJ file
+            string mtlPath = Path.ChangeExtension(filePath, ".mtl");
+
+            if (!string.IsNullOrEmpty(baseDir))
+                mtlPath = Path.Combine(baseDir, Path.GetFileName(mtlPath));
+
+            if (File.Exists(mtlPath))
+                ParseMtlFile(mtlPath, materials);
 
             string[] lines = File.ReadAllLines(filePath);
 
@@ -117,7 +126,7 @@ public static class ObjParser
                     int i2 = faceIndices[i];
                     int i3 = faceIndices[i + 1];
 
-                    Color triangleColor = ResolveTriangleColor(i1, i2, i3, activeMaterialColor, vertexColors);
+                    Color triangleColor = ResolveTriangleColor(i1, i2, i3, activeMaterialColor, vertexColors, fallbackColor);
                     triangles.Add(new ModelTriangle(vertices[i1], vertices[i2], vertices[i3], triangleColor));
                 }
             }
@@ -187,7 +196,7 @@ public static class ObjParser
         }
     }
 
-    static Color ResolveTriangleColor(int i1, int i2, int i3, Color? materialColor, List<Color?> vertexColors)
+    static Color ResolveTriangleColor(int i1, int i2, int i3, Color? materialColor, List<Color?> vertexColors, Color fallbackColor)
     {
         if (materialColor.HasValue)
             return materialColor.Value;
@@ -217,7 +226,7 @@ public static class ObjParser
             count++;
         }
 
-        return count > 0 ? accumulated / count : Color.white;
+        return count > 0 ? accumulated / count : fallbackColor;
     }
 
     static Color NormalizeColor(float r, float g, float b)

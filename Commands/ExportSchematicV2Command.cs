@@ -22,7 +22,7 @@ public sealed class ExportSchematicV2Command : ICommand
 
     public string Command { get; } = "ExportSchematicV2";
     public string[] Aliases { get; } = [];
-    public string Description { get; } = "Exports .obj/.stl as ProjectMER schematic JSON. Usage: <model file> <output file> [accuracy(0.001)] [previewScale]";
+    public string Description { get; } = "Exports .obj as ProjectMER schematic JSON. Usage: <model file> <output file> [accuracy(0.001)] [previewScale]";
 
     public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)
     {
@@ -35,7 +35,7 @@ public sealed class ExportSchematicV2Command : ICommand
 
         if (arguments.Count is < 2 or > 4)
         {
-            response = "Usage: ExportSchematicV2 <model file (.obj/.stl)> <output JSON file> [accuracy(0.001)] [previewScale]";
+            response = "Usage: ExportSchematicV2 <model file (.obj)> <output JSON file> [accuracy(0.001)] [previewScale]";
             return false;
         }
 

@@ -22,7 +22,7 @@ public sealed class ExportSchematicCommand : ICommand
 
     public string Command { get; } = "ExportSchematic";
     public string[] Aliases { get; } = [];
-    public string Description { get; } = "Exports .obj/.stl as ProjectMER schematic JSON. Usage: <model file> <output file> [forceObjColor(true/false)] [previewScale]";
+    public string Description { get; } = "Exports .obj as ProjectMER schematic JSON. Usage: <model file> <output file> [previewScale]";
 
     public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)
     {
@@ -35,7 +35,7 @@ public sealed class ExportSchematicCommand : ICommand
 
         if (arguments.Count is < 2 or > 4)
         {
-            response = "Usage: ExportSchematic <model file (.obj/.stl)> <output JSON file> [forceObjColor(true/false)] [previewScale]";
+            response = "Usage: ExportSchematic <model file (.obj)> <output JSON file> [previewScale]";
             return false;
         }
 
@@ -48,24 +48,11 @@ public sealed class ExportSchematicCommand : ICommand
             return false;
         }
 
-        var forceObjColor = false;
+        var previewScale = 1f;
 
         if (arguments.Count >= 3)
         {
-            string rawForce = arguments.Array?[arguments.Offset + 2] ?? string.Empty;
-
-            if (!bool.TryParse(rawForce, out forceObjColor))
-            {
-                response = "Invalid forceObjColor value. Use true/false.";
-                return false;
-            }
-        }
-
-        var previewScale = 1f;
-
-        if (arguments.Count >= 4)
-        {
-            string rawScale = arguments.Array?[arguments.Offset + 3] ?? string.Empty;
+            string rawScale = arguments.Array?[arguments.Offset + 2] ?? string.Empty;
 
             if (!float.TryParse(rawScale, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out previewScale) || previewScale <= 0f)
             {
@@ -80,7 +67,7 @@ public sealed class ExportSchematicCommand : ICommand
         int writeBatch = Mathf.Max(1, Plugin.Instance?.Config.ExportWriteBatchSize ?? 256);
 
         _isExporting = true;
-        _exportCoroutine = CoroutineHost.Run(ExportRoutine(requestedFile, outputFileName, spawnPosition, forceObjColor, previewScale, buildBatch, writeBatch));
+        _exportCoroutine = CoroutineHost.Run(ExportRoutine(requestedFile, outputFileName, spawnPosition, previewScale, buildBatch, writeBatch));
 
         response = "Export started asynchronously. Run command again to cancel current export.";
         return true;
@@ -91,14 +78,13 @@ public sealed class ExportSchematicCommand : ICommand
         string requestedFile,
         string outputFileName,
         Vector3 spawnPosition,
-        bool forceObjColor,
         float previewScale,
         int buildBatch,
         int writeBatch)
     {
         try
         {
-            if (!ModelFactory.TryLoadTrianglesRaw(requestedFile, _fallbackColor, forceObjColor, out List<ModelTriangle> triangles, out _, out string modelError))
+            if (!ModelFactory.TryLoadTrianglesRaw(requestedFile, _fallbackColor, false, out List<ModelTriangle> triangles, out _, out string modelError))
             {
                 Log.Warn($"[ExportSchematic] {modelError}");
                 yield break;
@@ -141,7 +127,7 @@ public sealed class ExportSchematicCommand : ICommand
                 yield break;
             }
 
-            Log.Info($"[ExportSchematic] Exported: {outputPath} (triangles={_activeModel.ParallelogramCount}, quads={_activeModel.QuadCount}, forceObjColor={forceObjColor}, previewScale={previewScale.ToString(CultureInfo.InvariantCulture)}).");
+            Log.Info($"[ExportSchematic] Exported: {outputPath} (triangles={_activeModel.ParallelogramCount}, quads={_activeModel.QuadCount}, previewScale={previewScale.ToString(CultureInfo.InvariantCulture)}).");
         }
         finally
         {

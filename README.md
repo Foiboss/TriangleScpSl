@@ -2,66 +2,84 @@
 
 ![blender-monkey](https://github.com/user-attachments/assets/2012cb09-db5a-4140-a48f-e1e865e89234)
 
-
-An [EXILED](https://github.com/ExMod-Team/EXILED) plugin for SCP: Secret Laboratory that renders filled triangles and STL/OBJ-based 3-D meshes in world space using primitive toys.
+An [EXILED](https://github.com/ExMod-Team/EXILED) plugin for SCP: Secret Laboratory that renders filled triangles and N-gons OBJ-based 3-D meshes in world space using primitive toys.
 
 ## Current project info
 
 - Plugin name: `TriangleScpSl`
-- Version: `3.0.0`
+- Version: `4.0.0`
 - Author: `Foibos`
 - Target framework: `net48`
 - EXILED package: `ExMod.Exiled 9.13.3`
 
 ## Table of Contents
 
-- [How it works](#how-it-works)
-  - [V1 — Per-triangle parallelograms](#v1--per-triangle-parallelograms)
-  - [V2 — Shared stretch primitives](#v2--shared-stretch-primitives)
-  - [Primitive count](#primitive-count)
 - [Installation](#installation)
+- [How it works](#how-it-works)
+    - [V1 — Per-triangle parallelograms](#v1--per-triangle-parallelograms)
+    - [V2 — Shared stretch primitives](#v2--shared-stretch-primitives)
+    - [Primitive count](#primitive-count)
 - [Configuration](#configuration)
 - [Commands](#commands)
-  - [Triangulate](#triangulate)
-  - [TriangulateV2](#triangulatev2)
-  - [TriangleExample](#triangleexample)
-  - [ExportSchematic](#exportschematic)
-  - [ExportSchematicV2](#exportschematicv2)
+    - [Triangulate](#triangulate)
+    - [TriangulateV2](#triangulatev2)
+    - [TriangleExample](#triangleexample)
+    - [ExportSchematic](#exportschematic)
+    - [ExportSchematicV2](#exportschematicv2)
+    - [TriangulateNGon](#triangulatengon)
+    - [TriangulateNGonV2](#triangulatengonv2)
+    - [ExportSchematicNGon](#exportschematicngon)
+    - [ExportSchematicNGonV2](#exportschematicngonv2)
+    - [TestParallelograms](#testparallelograms)
 - [API](#api)
-  - [ModelTriangle](#modeltriangle)
-  - [TriangulatedModel](#triangulatedmodel)
-  - [ParallelogramSpace](#parallelogramspace)
-  - [TrianglePrimitive](#triangleprimitive)
-  - [ParallelogramPrimitive](#parallelogramprimitive)
+    - [ModelFactory](#modelfactory)
+    - [ModelTriangle](#modeltriangle)
+    - [ModelParallelogram](#modelparallelogram)
+    - [TriangulatedModel](#triangulatedmodel)
+    - [ApproximateModel](#approximatemodel)
+    - [ExactModel](#exactmodel)
+    - [NGonModelBuilder](#ngonmodelbuilder)
+    - [TrianglePrimitive](#triangleprimitive)
+    - [ParallelogramPrimitive](#parallelogramprimitive)
 - [Mathematical Details: Parallelogram Construction](#mathematical-details-parallelogram-construction)
-  - [Step 1 — Decompose vLeft](#step-1--decompose-vleft)
-  - [Step 2 — Compute Inner Rectangle Sides](#step-2--compute-inner-rectangle-sides)
-  - [Step 3 — Invert to Find a, b, x](#step-3--invert-to-find-a-b-x)
-  - [Step 4 — Apply the Transform](#step-4--apply-the-transform)
+    - [Step 1 — Decompose vLeft](#step-1--decompose-vleft)
+    - [Step 2 — Compute Inner Rectangle Sides](#step-2--compute-inner-rectangle-sides)
+    - [Step 3 — Invert to Find a, b, x](#step-3--invert-to-find-a-b-x)
+    - [Step 4 — Apply the Transform](#step-4--apply-the-transform)
 - [V2 Mathematical Details: Stretch Clustering](#v2-mathematical-details-stretch-clustering)
 - [Architecture Details](#architecture-details)
-  - [V1 Architecture](#v1-architecture)
-  - [V2 Architecture](#v2-architecture)
-  - [Quad Counting](#quad-counting)
+    - [V1 Architecture](#v1-architecture)
+    - [V2 Architecture](#v2-architecture)
+    - [Quad Counting](#quad-counting)
+
+## Installation
+
+[![Download Latest Release](https://img.shields.io/badge/download-latest%20release-brightgreen?style=for-the-badge)](https://github.com/Foiboss/TriangleScpSl/releases/latest)
+
+1. Build the project.
+2. Copy `TriangleScpSl.dll` into `EXILED/Plugins/`.
+3. Place models in `EXILED/Plugins/BlenderModels/`.
 
 ## How it works
 
-Each triangle is rendered as three parallelograms that share the triangle area. Two rendering pipelines are available.
+Each model is rendered using parallelograms that share the n-gon area. Two rendering pipelines are available.
 
-### V1 — Per-triangle parallelograms
+### V1 — Exact parallelograms
 
 Each parallelogram is built from two nested quads:
 
 1. a base quad that sets position and orientation,
 2. a child quad that applies the shear needed to match the parallelogram.
 
-`TrianglePrimitive` renders one triangle directly from three `ParallelogramPrimitive` objects. `TriangulatedModel` is a convenience wrapper that loads `ModelTriangle` data into a list of `TrianglePrimitive` objects and keeps an internal transform anchor.
+`TriangulatedModel` is a convenience wrapper that loads `ModelTriangle` or `ModelParallelogram` data into a list of `List<ModelParallelogram>` (if ModelTriangles provided, each one is converted into 3 ModelParallelogram) objects and keeps an internal transform anchor.
 
-### V2 — Shared stretch primitives
+### V2 — Shared stretch parallelograms
 
-`ParallelogramSpace` uses an improved algorithm that groups parallelograms with similar orientations together under a shared *stretch* primitive (a quad scaled along X by `cos(φ)·F` and along Y by `sin(φ)·F` and rotated by θ). Child quads placed under the same stretch are deformed uniformly by it, so the visible shape is reproduced without a separate base quad per parallelogram.
+`ApproximateModel` uses an improved algorithm that groups parallelograms with similar orientations together under a shared *stretch* primitive (a quad scaled along X by `cos(φ)·F` and along Y by `sin(φ)·F` and rotated by θ). Child quads placed under the same stretch are deformed uniformly by it, so
+the visible shape is reproduced without a separate base quad per parallelogram.
 
-`VectorPhiSolver` finds the (θ, φ) pair for each parallelogram. `StretchSpatialIndex` clusters nearby (θ, φ) pairs into cells and reuses a single stretch primitive for all parallelograms within the configured angular tolerance. This can dramatically reduce the total quad count on models with many similarly-oriented faces.
+`VectorPhiSolver` finds the (θ, φ) pair for each parallelogram. `StretchSpatialIndex` clusters nearby (θ, φ) pairs into cells and reuses a single stretch primitive for all parallelograms within the configured angular tolerance. This can dramatically reduce the total quad count on models with many
+similarly-oriented faces.
 
 Parallelograms that cannot be solved analytically fall back to the V1 `ParallelogramPrimitive` approach.
 
@@ -76,7 +94,7 @@ QuadCount = TriangleCount * 6 + 1
 - `Count * 6`: three parallelograms per triangle, two quads per parallelogram
 - `+ 1`: one invisible base quad as the model transform anchor
 
-**V2 (`ParallelogramSpace`):**
+**V2 (`ApproximateModel`):**
 
 ```
 QuadCount = StretchCount + ParallelogramCount + FallbackCount * 2 + 1
@@ -87,94 +105,144 @@ QuadCount = StretchCount + ParallelogramCount + FallbackCount * 2 + 1
 - `FallbackCount * 2`: fallback parallelograms each use two quads (base + visible)
 - `+ 1`: one invisible base quad as the model transform anchor
 
-## Installation
-
-[![Download Latest Release](https://img.shields.io/badge/download-latest%20release-brightgreen?style=for-the-badge)](https://github.com/Foiboss/TriangleScpSl/releases/latest)
-
-1. Build the project.
-2. Copy `TriangleScpSl.dll` into `EXILED/Plugins/`.
-3. Place models in `EXILED/Plugins/BlenderModels/`.
-
 ## Commands
+
+- Triangulate commands must be used by the player, ExportSchematic can be run from the server console.
+- Every command model building/exporting process is spread across multiple frames to avoid server lag. Running the command again while building cancels the build; running it again after the model is visible destroys it.
+- Only OBJ files are supported. If you add the MTL file with the same name as OBJ, model will be loaded with colors from MTL file. Otherwise, white color will be used.
+- Files are loaded from `EXILED/Plugins/BlenderModels/`.
 
 ### `Triangulate`
 
-Spawns a V1 model near the player. Building is spread across multiple frames to avoid server lag. Running the command again while building cancels the build; running it again after the model is visible destroys it.
+Spawns a V1 model near the player using ModelTriangles and ExactModel.
 
 ```text
-triangulate <model file (.stl/.obj)> [force color (true/false)]
+triangulate <model file (.obj)>
 ```
 
-- Must be used by a player.
-- Only a file name is allowed, not a path.
-- `.stl` is appended automatically if the extension is omitted.
-- File is loaded from `EXILED/Plugins/BlenderModels/`.
-- Optional second argument forces all triangles to a single fallback color (cyan).
-- Batch size per frame is controlled by `TriangulateBuildBatchSize` in the config (default `32`).
+- Batch size per frame is controlled by `TriangulateBuildBatchSize` in the config (default `128`).
 
 ### `TriangulateV2`
 
-Spawns a V2 model near the player using shared stretch primitives. Building is spread across multiple frames to avoid server lag. Running the command again while building cancels the build; running it again after the model is visible destroys it.
+Spawns a V2 model near the player using ModelTriangles and shared stretch primitives (ApproximateModel).
 
 ```text
-TriangulateV2 <model file (.stl/.obj)> [accuracy]
+TriangulateV2 <model file (.obj)> [accuracy]
 ```
 
-- Must be used by a player.
-- Only a file name is allowed, not a path.
-- `.stl` is appended automatically if the extension is omitted.
-- File is loaded from `EXILED/Plugins/BlenderModels/`.
 - `accuracy`: maximum allowed vertex error in world units when reusing a stretch (default `0.001`). Lower values increase fidelity and quad count; higher values reduce quad count at the cost of precision.
-- Batch size per frame is controlled by `TriangulateV2BuildBatchSize` in the config (default `16`).
+- Batch size per frame is controlled by `TriangulateV2BuildBatchSize` in the config (default `64`).
+
+### `TriangulateNGon`
+
+Spawns an OBJ model using exact N-gon parallelogram decomposition. This experimental approach decomposes N-sided polygons into a set of parallelograms that are rendered directly, providing an alternative to triangle-based decomposition.
+
+```text
+TriangulateNGon <model file (.obj)>
+```
+
+- Batch size per frame is controlled by `TriangulateNGonBuildBatchSize` in the config (default `128`).
+
+### `TriangulateNGonV2`
+
+Spawns an OBJ model using N-gon decomposition with shared stretch primitives, combining the benefits of N-gon rendering with the quad-reduction properties of the V2 pipeline.
+
+```text
+TriangulateNGonV2 <model file (.obj)> [accuracy]
+```
+
+- `accuracy`: maximum allowed vertex error in world units when reusing a stretch (default `0.001`).
+- Batch size per frame is controlled by `TriangulateNGonV2BuildBatchSize` in the config (default `64`).
+
+### `ExportSchematic`
+
+Exports an OBJ model to ProjectMER schematic JSON file with the same result as `Triangulate` command (V1 ModelTriangle based).
+
+```text
+exportschematic <model file (.obj)> <output json> [previewScale]
+```
+
+- Output must be a file name only (no path), e.g. `mymodel` or `mymodel.json`.
+- The schematic is written to the LabAPI ProjectMER Schematics folder.
+- `previewScale` is a positive float (default `1`).
+- Build batch size is controlled by `ExportBuildBatchSize` in the config (default `128`).
+- Write batch size is controlled by `ExportWriteBatchSize` in the config (default `512`).
+
+### `ExportSchematicV2`
+
+Exports an OBJ model to ProjectMER schematic JSON file with the same result as `TriangulateV2` command (V2 ModelParallelogram based).
+
+```text
+ExportSchematicV2 <model file (.obj)> <output json> [accuracy] [previewScale]
+```
+
+- Output must be a file name only (no path), e.g. `mymodel` or `mymodel.json`.
+- The schematic is written to the LabAPI ProjectMER Schematics folder.
+- `accuracy`: maximum allowed vertex error in world units (default `0.001`).
+- `previewScale`: positive float scale applied before export (default `1`).
+- Build batch size is controlled by `ExportBuildBatchSize` in the config (default `128`).
+- Write batch size is controlled by `ExportWriteBatchSize` in the config (default `512`).
+
+### `ExportSchematicNGon`
+
+Exports an OBJ model to ProjectMER schematic JSON file with the same result as `TriangulateNGon` command (V1 pipeline, using N-gon decomposition, without shared stretches).
+
+```text
+ExportSchematicNGon <model file (.obj)> <output json> [previewScale]
+```
+
+- Output must be a file name only (no path), e.g. `mymodel` or `mymodel.json`.
+- The schematic is written to the LabAPI ProjectMER Schematics folder.
+- `previewScale` is a positive float (default `1`).
+- Build batch size is controlled by `ExportBuildBatchSize` in the config (default `128`).
+- Write batch size is controlled by `ExportWriteBatchSize` in the config (default `512`).
+
+### `ExportSchematicNGonV2`
+
+Exports an OBJ model to ProjectMER schematic JSON file with the same result as `TriangulateNGonV2` command (V2 pipeline, using N-gon decomposition, with shared stretches).
+
+```text
+ExportSchematicNGonV2 <model file (.obj)> <output json> [accuracy] [previewScale]
+```
+
+- Output must be a file name only (no path), e.g. `mymodel` or `mymodel.json`.
+- The schematic is written to the LabAPI ProjectMER Schematics folder.
+- `accuracy`: maximum allowed vertex error in world units (default `0.001`).
+- `previewScale`: positive float scale applied before export (default `1`).
+- Build batch size is controlled by `ExportBuildBatchSize` in the config (default `128`).
+- Write batch size is controlled by `ExportWriteBatchSize` in the config (default `512`).
 
 ### `TriangleExample`
 
 Spawns a randomly generated triangle near the player with colored vertex markers. Running the command again destroys it.
 
-### `ExportSchematic`
+### `TestParallelograms`
 
-Exports an STL or OBJ model as a V1 ProjectMER schematic JSON file. Both building and JSON writing are spread across multiple frames to avoid server lag. Running the command again while exporting cancels the export.
-
-```text
-exportschematic <model file (.stl/.obj)> <output json> [forceObjColor(true/false)] [previewScale]
-```
-
-- Output must be a file name only (no path), e.g. `mymodel.json`.
-- The schematic is written to the LabAPI ProjectMER Schematics folder.
-- `previewScale` is a positive float (default `1`).
-- Can be run from the server console (no player required).
-- Build batch size is controlled by `ExportBuildBatchSize` in the config (default `64`).
-- Write batch size is controlled by `ExportWriteBatchSize` in the config (default `256`).
-
-### `ExportSchematicV2`
-
-Exports an STL or OBJ model as a V2 ProjectMER schematic JSON file using shared stretch primitives. Both building and JSON writing are spread across multiple frames to avoid server lag. Running the command again while exporting cancels the export.
+Debug command that spawns random parallelograms with adaptive stretch clustering to visualize how the V2 shared-stretch algorithm works.
 
 ```text
-ExportSchematicV2 <model file (.stl/.obj)> <output json> [accuracy] [previewScale]
+TestParallelograms [amount]
 ```
 
-- Output must be a file name only (no path), e.g. `mymodel.json`.
-- `.json` is appended automatically if omitted.
-- The schematic is written to the LabAPI ProjectMER Schematics folder.
-- `accuracy`: maximum allowed vertex error in world units (default `0.001`).
-- `previewScale`: positive float scale applied before export (default `1`).
-- Can be run from the server console (no player required).
-- Build batch size is controlled by `ExportBuildBatchSize` in the config (default `64`).
-- Write batch size is controlled by `ExportWriteBatchSize` in the config (default `256`).
+- Must be used by a player.
+- `amount`: number of random parallelograms to spawn (default `1`).
+- Running the command again destroys all spawned parallelograms and stretches.
+- Visualizes points at the parallelogram vertices (red/green for vUp, blue/yellow for vLeft).
 
 ## Configuration
 
 The plugin exposes the following options in the EXILED config file:
 
-| Key                               | Default | Description                                                      |
-|-----------------------------------|---------|------------------------------------------------------------------|
-| `is_enabled`                      | `true`  | Enable or disable the plugin                                     |
-| `debug`                           | `false` | Enable debug logging                                             |
-| `triangulate_build_batch_size`    | `32`    | Triangles built per frame for the V1 `Triangulate` command       |
-| `triangulate_v2_build_batch_size` | `16`    | Triangles built per frame for the `TriangulateV2` command        |
-| `export_build_batch_size`         | `64`    | Triangles built per frame for `ExportSchematicV2` build phase    |
-| `export_write_batch_size`         | `256`   | Primitives written per frame for `ExportSchematicV2` write phase |
+| Key                                    | Default | Description                                                        |
+|----------------------------------------|---------|--------------------------------------------------------------------|
+| `is_enabled`                           | `true`  | Enable or disable the plugin                                       |
+| `debug`                                | `false` | Enable debug logging                                               |
+| `triangulate_build_batch_size`         | `128`   | Triangles built per frame for the V1 `Triangulate` command         |
+| `triangulate_v2_build_batch_size`      | `64`    | Triangles built per frame for the `TriangulateV2` command          |
+| `export_build_batch_size`              | `128`   | Triangles built per frame for export build phase                   |
+| `export_write_batch_size`              | `512`   | Primitives written per frame for export write phase                |
+| `triangulate_ngon_build_batch_size`    | `128`   | Parallelograms built per frame for the `TriangulateNGon` command   |
+| `triangulate_ngon_v2_build_batch_size` | `64`    | Parallelograms built per frame for the `TriangulateNGonV2` command |
 
 Smaller batch sizes reduce per-frame CPU time but increase total build time. Larger values finish faster but may cause brief server hitches on very large models.
 
@@ -182,11 +250,11 @@ Smaller batch sizes reduce per-frame CPU time but increase total build time. Lar
 
 ### `ModelFactory`
 
-Static class that loads STL/OBJ files from `EXILED/Plugins/BlenderModels/` and constructs models.
+Static class that loads OBJ files from `EXILED/Plugins/BlenderModels/` and constructs models.
 
 - `TryLoadTriangles(file, color, forceObjColor, out triangles, out fileName, out error)` — loads a file, applies the winding correction required by the V1 pipeline, returns a flat `List<ModelTriangle>`
-- `CreateModel(triangles, position, flags)` → `TriangulatedModel` — creates a V1 model
-- `CreateModel(triangles, position, flags, tolerance)` → `ParallelogramSpace` — creates a V2 model
+- `CreateModel(triangles, position, flags)` → `TriangulatedModel` — creates a V1 triangle-based model
+- `CreateModel(triangles, position, flags, tolerance)` → `ApproximateModel` — creates a V2 model with shared stretches
 
 ### `ModelTriangle`
 
@@ -201,14 +269,29 @@ Vector3 p1 = tri.P1;
 Color color = tri.Color;
 ```
 
+### `ModelParallelogram`
+
+A readonly struct that stores two edge vectors, a center point, and a color. Used by N-Gon and ApproximateModel pipelines.
+
+```csharp
+using TriangleScpSl.Core.ModelFactory;
+using UnityEngine;
+
+var para = new ModelParallelogram(vUp, vLeft, center, Color.white);
+Vector3 vUp = para.VUp;
+Vector3 vLeft = para.VLeft;
+Vector3 center = para.Center;
+Color color = para.Color;
+```
+
 ### `TriangulatedModel`
 
-Loads and displays a 3-D mesh from a list of `ModelTriangle` values using the V1 pipeline.
+Loads and displays a 3-D mesh from a list of `ModelTriangle` values using the V1 pipeline (one parallelogram pair per triangle).
 
 ```csharp
 using AdminToys;
 using TriangleScpSl.Core.ModelFactory;
-using TriangleScpSl.Core.TriangulatedModel;
+using TriangleScpSl.Core.Models.TriangulatedModel;
 using UnityEngine;
 
 List<ModelTriangle> triangles = [new(p1, p2, p3, Color.white)];
@@ -216,7 +299,7 @@ List<ModelTriangle> triangles = [new(p1, p2, p3, Color.white)];
 var model = TriangulatedModel.Create(triangles, worldPosition);
 var model2 = new TriangulatedModel(triangles, worldPosition, PrimitiveFlags.Visible, scale: 0.01f, invertWinding: true);
 
-int triangleCount = model.Count;
+int parallelogramCount = model.ParallelogramCount;
 int quadCount = model.QuadCount; // Count * 6 + 1
 
 model.Position = new Vector3(0, 1, 0);
@@ -233,58 +316,43 @@ model.Destroy();
 
 Members:
 
-- `Count` — number of triangles in the model
-- `QuadCount` — total primitive count (`Count * 6 + 1`)
+- `ParallelogramCount` — number of parallelograms in the model
+- `QuadCount` — total primitive count (`ParallelogramCount * 2 + 1`)
 - `Position` — position of the internal transform anchor
 - `Rotation` — rotation of the internal transform anchor
 - `Scale` — scale of the internal transform anchor
 - `Transform` — Unity `Transform` of the internal anchor primitive
 - `TransformPoint(...)` — converts a local point to world space
 - `InverseTransformPoint(...)` — converts a world point to local space
-- `Color` — write-only; overrides the color of all triangles
-- `Flags` — write-only; sets primitive flags of all triangles
-- `GetTriangleSnapshot()` — returns a snapshot as `IReadOnlyList<(ModelTriangle, PrimitiveFlags)>`
+- `Color` — write-only; overrides the color of all parallelograms
+- `Flags` — write-only; sets primitive flags of all parallelograms
 - `Create(...)` — static factory, mirrors the constructor
 - `CreateDeferred(...)` — creates the model without spawning primitives; call `BuildTrianglesCoroutine` afterwards
-- `BuildTrianglesCoroutine(flags, trianglesPerFrame)` — coroutine that spawns primitives in batches
+- `BuildTrianglesCoroutine(flags, parallelogramsPerFrame)` — coroutine that spawns primitives in batches
 - `Destroy()` — destroys all underlying primitives
 
-Constructor signature:
+### `ApproximateModel`
 
-```csharp
-TriangulatedModel(
-    IReadOnlyList<ModelTriangle> triangles,
-    Vector3 worldPosition,
-    PrimitiveFlags flags = PrimitiveFlags.Visible,
-    float scale = 1f,
-    bool invertWinding = false,
-    bool buildImmediately = true)
-```
-
-`invertWinding` swaps the second and third vertices of every triangle, reversing the face normals. When loading files via `ModelFactory`, the winding correction for the coordinate system is applied automatically — `invertWinding` is purely for user-level control on top of that.
-
-### `ParallelogramSpace`
-
-Loads and displays a 3-D mesh from a list of `ModelTriangle` values using the V2 shared-stretch pipeline.
+Loads and displays a 3-D mesh from triangles or parallelograms using the V2 shared-stretch pipeline. Combines multiple similarly-oriented parallelograms under single stretch primitives to reduce quad count.
 
 ```csharp
 using AdminToys;
 using TriangleScpSl.Core.ModelFactory;
-using TriangleScpSl.Core.ParallelogramSpace;
+using TriangleScpSl.Core.Models.ApproximateModel;
 using UnityEngine;
 
 List<ModelTriangle> triangles = [new(p1, p2, p3, Color.white)];
 
-var model = ParallelogramSpace.Create(triangles, worldPosition);
-var model2 = new ParallelogramSpace(
+var model = ApproximateModel.Create(triangles, worldPosition);
+var model2 = new ApproximateModel(
     triangles, worldPosition,
     PrimitiveFlags.Visible,
     absoluteToleranceUnits: 0.001f,
     scale: 1f,
     invertWinding: false);
 
-int triangleCount = model.Count;
-int quadCount = model.QuadCount; // StretchCount + ParallelogramCount + FallbackCount*2 + 1
+int parallelogramCount = model.ParallelogramCount;
+int quadCount = model.QuadCount;
 
 model.Position = new Vector3(0, 1, 0);
 model.Rotation = Quaternion.Euler(0, 90f, 0);
@@ -295,18 +363,13 @@ Vector3 local = model.InverseTransformPoint(world);
 
 model.Color = Color.red;
 model.Flags = PrimitiveFlags.Visible | PrimitiveFlags.Collidable;
-
-IReadOnlyList<ParallelogramSpace.ParallelogramSnapshot> paraSnap = model.GetParallelogramSnapshot();
-IReadOnlyList<ParallelogramSpace.PrimitiveSnapshot> primSnap   = model.GetPrimitiveSnapshot();
-IReadOnlyList<(ModelTriangle, PrimitiveFlags)>        triSnap   = model.GetTriangleSnapshot();
-
 model.Destroy();
 ```
 
 Members:
 
-- `Count` — number of triangles in the model
-- `QuadCount` — total primitive count (see [Primitive count](#primitive-count))
+- `ParallelogramCount` — number of parallelograms in the model
+- `QuadCount` — total primitive count (StretchCount + ParallelogramCount + FallbackCount*2 + 1)
 - `Position` — position of the internal transform anchor
 - `Rotation` — rotation of the internal transform anchor
 - `Scale` — scale of the internal transform anchor
@@ -315,27 +378,106 @@ Members:
 - `InverseTransformPoint(...)` — converts a world point to local space
 - `Color` — write-only; overrides the color of all parallelograms
 - `Flags` — write-only; sets primitive flags of all parallelograms
-- `GetTriangleSnapshot()` — world-space triangles as `IReadOnlyList<(ModelTriangle, PrimitiveFlags)>`
-- `GetParallelogramSnapshot()` — raw parallelogram data as `IReadOnlyList<ParallelogramSnapshot>`
-- `GetPrimitiveSnapshot()` — full hierarchy of all quads as `IReadOnlyList<PrimitiveSnapshot>` (used by the schematic exporter)
 - `Create(...)` — static factory, mirrors the constructor
 - `CreateDeferred(...)` — creates the model without spawning primitives; call `BuildTrianglesCoroutine` afterwards
-- `BuildTrianglesCoroutine(flags, trianglesPerFrame)` — coroutine that spawns primitives in batches
+- `BuildTrianglesCoroutine(flags, parallelogramsPerFrame)` — coroutine that spawns primitives in batches
 - `Destroy()` — destroys all underlying primitives
 
 Constructor signature:
 
 ```csharp
-ParallelogramSpace(
+ApproximateModel(
     IReadOnlyList<ModelTriangle> triangles,
     Vector3 worldPosition,
     PrimitiveFlags flags = PrimitiveFlags.Visible,
     float absoluteToleranceUnits = 0.001f,
     float scale = 1f,
-    bool invertWinding = false)
+    bool invertWinding = false,
+    bool buildImmediately = true)
 ```
 
-`absoluteToleranceUnits` is the maximum allowed displacement (in world units) of any parallelogram vertex when the parallelogram is assigned to an existing stretch instead of creating a new one. Smaller values yield more stretch primitives but higher fidelity; larger values yield fewer stretch primitives with slight shape approximation.
+### `ExactModel`
+
+Loads and displays a 3-D mesh from triangles or parallelograms without shared-stretch optimization. Each parallelogram is rendered with its own base quad, resulting in higher fidelity but higher quad count than `ApproximateModel`.
+
+```csharp
+using AdminToys;
+using TriangleScpSl.Core.ModelFactory;
+using TriangleScpSl.Core.Models.ExactModel;
+using UnityEngine;
+
+List<ModelTriangle> triangles = [new(p1, p2, p3, Color.white)];
+
+var model = ExactModel.Create(triangles, worldPosition);
+var model2 = new ExactModel(triangles, worldPosition, PrimitiveFlags.Visible, scale: 1f);
+
+int parallelogramCount = model.ParallelogramCount;
+int quadCount = model.QuadCount; // ParallelogramCount * 2 + 1
+
+model.Position = new Vector3(0, 1, 0);
+model.Rotation = Quaternion.Euler(0, 90f, 0);
+model.Scale = Vector3.one * 2f;
+
+Vector3 world = model.TransformPoint(new Vector3(1, 0, 0));
+Vector3 local = model.InverseTransformPoint(world);
+
+model.Color = Color.red;
+model.Flags = PrimitiveFlags.Visible | PrimitiveFlags.Collidable;
+model.Destroy();
+```
+
+Members:
+
+- `ParallelogramCount` — number of parallelograms in the model
+- `QuadCount` — total primitive count (`ParallelogramCount * 2 + 1`)
+- `Position` — position of the internal transform anchor
+- `Rotation` — rotation of the internal transform anchor
+- `Scale` — scale of the internal transform anchor
+- `Transform` — Unity `Transform` of the internal anchor primitive
+- `TransformPoint(...)` — converts a local point to world space
+- `InverseTransformPoint(...)` — converts a world point to local space
+- `Color` — write-only; overrides the color of all parallelograms
+- `Flags` — write-only; sets primitive flags of all parallelograms
+- `Create(...)` — static factory, mirrors the constructor
+- `CreateDeferred(...)` — creates the model without spawning primitives; call `BuildTrianglesCoroutine` afterwards
+- `BuildTrianglesCoroutine(flags, parallelogramsPerFrame)` — coroutine that spawns primitives in batches
+- `Destroy()` — destroys all underlying primitives
+
+Constructor signature:
+
+```csharp
+ExactModel(
+    IReadOnlyList<ModelTriangle> triangles,
+    Vector3 worldPosition,
+    PrimitiveFlags flags = PrimitiveFlags.Visible,
+    float scale = 1f,
+    bool invertWinding = false,
+    bool buildImmediately = true)
+```
+
+### `NGonModelBuilder`
+
+Static utility class for loading OBJ files and decomposing N-gon polygons into parallelograms and triangles.
+
+```csharp
+using TriangleScpSl.Core.NGons;
+using TriangleScpSl.Core.ModelFactory;
+using UnityEngine;
+
+// Load an OBJ file and get parallelograms
+if (NGonModelBuilder.TryLoad("model.obj", Color.white, out List<ModelParallelogram> parallelograms, out string fileName, out string error))
+{
+    // Use parallelograms with ExactModel or ApproximateModel
+    var model = ExactModel.Create(parallelograms, position);
+}
+```
+
+Members:
+
+- `TryLoad(requestedFile, defaultColor, out parallelograms, out normalizedFileName, out error)` — loads an OBJ file (file name only, no path), decomposes N-gons into parallelograms and triangles, returns true if successful
+- Decomposes each N-gon with n vertices into (n-3) parallelograms and 1 triangle
+- Each parallelogram is split along its vUp diagonal into 2 triangles
+- All triangles are counter-clockwise relative to their face normal
 
 ### `TrianglePrimitive`
 
@@ -474,9 +616,11 @@ The V2 pipeline replaces per-parallelogram base quads with shared *stretch* prim
 - rotation `R(θ)` around Z
 - scale `(cos(φ)·F, sin(φ)·F, 1)` where `F = 2`
 
-For a parallelogram with edge vectors **v1** and **v2**, `VectorPhiSolver` finds (θ, φ) such that after applying the inverse stretch transform (rotate by −θ, then scale x by `1/(cos(φ)·F)` and y by `1/(sin(φ)·F)`), both **v1** and **v2** map to vectors of equal length. This allows the visible child quad to be placed with a simple `LookRotation` and uniform-ish scale.
+For a parallelogram with edge vectors **v1** and **v2**, `VectorPhiSolver` finds (θ, φ) such that after applying the inverse stretch transform (rotate by −θ, then scale x by `1/(cos(φ)·F)` and y by `1/(sin(φ)·F)`), both **v1** and **v2** map to vectors of equal length. This allows the visible child
+quad to be placed with a simple `LookRotation` and uniform-ish scale.
 
-`StretchSpatialIndex` maintains a 2-D spatial hash in (θ, φ) space. Before creating a new stretch, `ParallelogramSpace` queries nearby cells and measures the maximum vertex error that would result from reusing each candidate. The first candidate within `absoluteToleranceUnits` is reused; otherwise a new stretch is created.
+`StretchSpatialIndex` maintains a 2-D spatial hash in (θ, φ) space. Before creating a new stretch, `ApproximateModel` queries nearby cells and measures the maximum vertex error that would result from reusing each candidate. The first candidate within `absoluteToleranceUnits` is reused; otherwise a
+new stretch is created.
 
 ## Architecture Details
 

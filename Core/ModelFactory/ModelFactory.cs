@@ -29,10 +29,26 @@ public static class ModelFactory
             return false;
         }
 
-        if (!fileName.EndsWith(".stl", StringComparison.OrdinalIgnoreCase) &&
-            !fileName.EndsWith(".obj", StringComparison.OrdinalIgnoreCase))
+        string extension = Path.GetExtension(fileName);
+
+        // Only accept .obj files (no .stl support for triangle commands)
+        if (string.IsNullOrEmpty(extension))
         {
-            fileName += ".stl";
+            string objName = fileName + ".obj";
+            string objPath = TrianglePaths.GetModelPath(objName);
+
+            if (File.Exists(objPath))
+                fileName = objName;
+            else
+            {
+                error = $"Model file not found: {objPath}";
+                return false;
+            }
+        }
+        else if (!fileName.EndsWith(".obj", StringComparison.OrdinalIgnoreCase))
+        {
+            error = "Only .obj files are supported.";
+            return false;
         }
 
         modelPath = TrianglePaths.GetModelPath(fileName);
@@ -81,7 +97,7 @@ public static class ModelFactory
     internal static bool TryLoadTrianglesRaw
     (
         string requestedFile,
-        Color color,
+        Color fallbackColor,
         bool forceObjColor,
         out List<ModelTriangle> triangles,
         out string normalizedFileName,
@@ -94,7 +110,7 @@ public static class ModelFactory
 
         if (modelPath.EndsWith(".obj", StringComparison.OrdinalIgnoreCase))
         {
-            if (!ObjParser.TryParseFile(modelPath, out List<ModelTriangle> parsedObjTriangles, out string parseError))
+            if (!ObjParser.TryParseFile(modelPath, fallbackColor, out List<ModelTriangle> parsedObjTriangles, out string parseError))
             {
                 error = $"Failed to parse OBJ: {parseError}";
                 return false;
@@ -107,19 +123,9 @@ public static class ModelFactory
                 for (var i = 0; i < triangles.Count; i++)
                 {
                     ModelTriangle tri = triangles[i];
-                    triangles[i] = new ModelTriangle(tri.P1, tri.P2, tri.P3, color);
+                    triangles[i] = new ModelTriangle(tri.P1, tri.P2, tri.P3, fallbackColor);
                 }
             }
-        }
-        else
-        {
-            if (!StlParser.TryParseFile(modelPath, color, out List<ModelTriangle> parsedStlTriangles, out string parseError))
-            {
-                error = $"Failed to parse STL: {parseError}";
-                return false;
-            }
-
-            triangles = parsedStlTriangles;
         }
 
         if (triangles.Count == 0)

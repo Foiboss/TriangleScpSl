@@ -12,13 +12,14 @@ namespace TriangleScpSl.Commands;
 [CommandHandler(typeof(RemoteAdminCommandHandler))]
 public class TriangulateV2Command : ICommand
 {
+    readonly Color _fallbackColor = Color.white;
     Coroutine? _buildCoroutine;
     bool _isBuilding;
     ApproximateModel? _model;
 
     public string Command { get; } = "TriangulateV2";
     public string[] Aliases { get; } = [];
-    public string Description { get; } = "Displays a model Usage: <filename(.obj/.stl)> <clusterization accuracy(0.001)>";
+    public string Description { get; } = "Displays a model Usage: <filename(.obj)> <clusterization accuracy(0.001)>";
 
     void Clear()
     {
@@ -57,7 +58,7 @@ public class TriangulateV2Command : ICommand
 
         if (arguments.Count is < 1 or > 2)
         {
-            response = "Usage: triangulate <model file (.stl/.obj)> <clusterization accuracy (0.001)>";
+            response = "Usage: triangulate <model file (.obj)> <clusterization accuracy (0.001)>";
             return false;
         }
 
@@ -77,7 +78,7 @@ public class TriangulateV2Command : ICommand
 
         Vector3 spawnPosition = player.Position + player.GameObject.transform.forward * 2.5f + Vector3.up * 1.2f;
 
-        if (!ModelFactory.TryLoadTrianglesRaw(requestedFile, Color.white, false, out List<ModelTriangle> triangles, out string fileName, out string error))
+        if (!ModelFactory.TryLoadTrianglesRaw(requestedFile, _fallbackColor, false, out List<ModelTriangle> triangles, out string fileName, out string error))
         {
             response = error;
             return false;

@@ -12,14 +12,14 @@ namespace TriangleScpSl.Commands;
 [CommandHandler(typeof(RemoteAdminCommandHandler))]
 public class TriangulateCommand : ICommand
 {
-    readonly Color _forceColor = Color.white;
+    readonly Color _fallbackColor = Color.white;
     Coroutine? _buildCoroutine;
     bool _isBuilding;
     ExactModel? _model;
 
     public string Command { get; } = "Triangulate";
     public string[] Aliases { get; } = [];
-    public string Description { get; } = "Displays a model Usage: <filename(.obj/.stl)> <true/false(force color)>";
+    public string Description { get; } = "Displays a model Usage: <filename(.obj)>";
 
     void Clear()
     {
@@ -56,29 +56,17 @@ public class TriangulateCommand : ICommand
             return false;
         }
 
-        if (arguments.Count is < 1 or > 2)
+        if (arguments.Count < 1)
         {
-            response = "Usage: triangulate <model file (.stl/.obj)> <force color (true/false)>";
+            response = "Usage: triangulate <model file (.obj)>";
             return false;
         }
 
         string requestedFile = arguments.Array?[arguments.Offset] ?? string.Empty;
-        var forceObjColor = false;
-
-        if (arguments.Count == 2)
-        {
-            string rawFlag = arguments.Array?[arguments.Offset + 1] ?? string.Empty;
-
-            if (!bool.TryParse(rawFlag, out forceObjColor))
-            {
-                response = "Invalid OBJ color flag. Use: true/false";
-                return false;
-            }
-        }
 
         Vector3 spawnPosition = player.Position + player.GameObject.transform.forward * 2.5f + Vector3.up * 1.2f;
 
-        if (!ModelFactory.TryLoadTrianglesRaw(requestedFile, _forceColor, forceObjColor, out List<ModelTriangle> triangles, out string fileName, out string error))
+        if (!ModelFactory.TryLoadTrianglesRaw(requestedFile, _fallbackColor, false, out List<ModelTriangle> triangles, out string fileName, out string error))
         {
             response = error;
             return false;
@@ -89,13 +77,13 @@ public class TriangulateCommand : ICommand
         _isBuilding = true;
 
         int batchSize = Mathf.Max(1, Plugin.Instance?.Config.TriangulateBuildBatchSize ?? 32);
-        _buildCoroutine = CoroutineHost.Run(BuildRoutine(createdModel, fileName, forceObjColor, batchSize));
+        _buildCoroutine = CoroutineHost.Run(BuildRoutine(createdModel, fileName, batchSize));
 
         response = $"Started building model '{fileName}' asynchronously. Run command again to cancel while building.";
         return true;
     }
 
-    IEnumerator BuildRoutine(ExactModel model, string fileName, bool forceObjColor, int batchSize)
+    IEnumerator BuildRoutine(ExactModel model, string fileName, int batchSize)
     {
         yield return model.BuildTrianglesCoroutine(PrimitiveFlags.Visible, batchSize);
 
@@ -113,6 +101,6 @@ public class TriangulateCommand : ICommand
             yield break;
         }
 
-        Log.Info($"[Triangulate] Created model '{fileName}': triangles={model.ParallelogramCount}, quads={model.QuadCount}, forceObjColor={forceObjColor}.");
+        Log.Info($"[Triangulate] Created model '{fileName}': triangles={model.ParallelogramCount}, quads={model.QuadCount}.");
     }
 }
