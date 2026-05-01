@@ -37,9 +37,15 @@ public static class ConvexNGonDecomposer
         if (normal.sqrMagnitude < 1e-12f) return; // degenerate polygon
         normal = normal.normalized;
 
-        // Orthonormal basis on the polygon plane; cross(e1, e2) == normal.
+        // Orthonormal basis ON the polygon plane.
+        // e1 MUST be made perpendicular to the normal: OBJ n-gons are usually
+        // slightly non-planar, so verts[1]-verts[0] has a small component along
+        // the Newell normal. Without this projection the (e1, e2) plane is tilted
+        // and every reconstructed vertex inherits that tilt -> per-face rotation
+        // offset and gaps between neighbouring n-gons.
         Vector3 origin = verts[0];
         Vector3 e1 = verts[1] - origin;
+        e1 -= Vector3.Dot(e1, normal) * normal;
 
         if (e1.sqrMagnitude < 1e-12f)
             e1 = Vector3.Cross(normal, Mathf.Abs(normal.y) < 0.9f ? Vector3.up : Vector3.right);
@@ -47,28 +53,30 @@ public static class ConvexNGonDecomposer
         Vector3 e2 = Vector3.Cross(normal, e1).normalized;
 
         var p2D = new List<Vector2>(verts.Count);
+        var indexMap = new List<int>(verts.Count);
 
-        foreach (Vector3 v in verts)
+        for (var i = 0; i < verts.Count; i++)
         {
-            Vector3 d = v - origin;
+            Vector3 d = verts[i] - origin;
             p2D.Add(new Vector2(Vector3.Dot(d, e1), Vector3.Dot(d, e2)));
+            indexMap.Add(i);
         }
 
-        // Orient CCW in 2D; with this basis choice that is also CCW in 3D relative to normal.
-        var reversed = false;
-
+        // Orient CCW in 2D; with this basis this is also CCW in 3D relative to normal.
         if (SignedArea2D(p2D) < 0f)
         {
             p2D.Reverse();
-            reversed = true;
+            indexMap.Reverse();
         }
 
-        List<List<Vector2>> pieces2D = ConvexDecompose2D(p2D);
+        List<List<int>> pieces = ConvexDecompose2D(p2D);
 
-        foreach (List<Vector2>? piece in pieces2D)
+        foreach (List<int> piece in pieces)
         {
             var piece3D = new List<Vector3>(piece.Count);
-            piece3D.AddRange(piece.Select(pt => origin + pt.x * e1 + pt.y * e2));
+
+            foreach (int localIdx in piece)
+                piece3D.Add(verts[indexMap[localIdx]]);
 
             output.Add(new ConvexNGon
             {
@@ -77,21 +85,24 @@ public static class ConvexNGonDecomposer
                 Normal = normal,
             });
         }
-
-        _ = reversed;
     }
 
-    // 2D core
-
-    static List<List<Vector2>> ConvexDecompose2D(List<Vector2> polygon)
+    static List<List<int>> ConvexDecompose2D(List<Vector2> polygon)
     {
         if (IsConvex2D(polygon))
-            return [[..polygon]];
+        {
+            var all = new List<int>(polygon.Count);
+
+            for (var i = 0; i < polygon.Count; i++)
+            {
+                all.Add(i);
+            }
+
+            return [all];
+        }
 
         List<int[]> triangles = EarClipTriangulate(polygon);
-
-        if (triangles.Count == 0)
-            return [];
+        if (triangles.Count == 0) return [];
 
         var pieces = new List<List<int>>(triangles.Count);
 
@@ -125,16 +136,7 @@ public static class ConvexNGonDecomposer
             }
         }
 
-        var result = new List<List<Vector2>>(pieces.Count);
-
-        foreach (List<int>? piece in pieces)
-        {
-            var pts = new List<Vector2>(piece.Count);
-            pts.AddRange(piece.Select(idx => polygon[idx]));
-            result.Add(pts);
-        }
-
-        return result;
+        return pieces;
     }
 
     // Ear-clipping triangulation of a simple CCW polygon.
