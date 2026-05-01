@@ -71,7 +71,7 @@ public class TriangulateNGonCommand : ICommand
         }
 
         Vector3 spawnPosition = player.Position + player.GameObject.transform.forward * 2.5f + Vector3.up * 1.2f;
-        var createdModel = ExactModel.CreateDeferred(parallelograms, spawnPosition, PrimitiveFlags.Visible, 1f, true);
+        var createdModel = ExactModel.CreateDeferred(parallelograms, spawnPosition, PrimitiveFlags.Visible, 1f);
         _model = createdModel;
         _isBuilding = true;
 

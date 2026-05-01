@@ -98,7 +98,7 @@ public sealed class ExportSchematicCommand : ICommand
     {
         try
         {
-            if (!ModelFactory.TryLoadTriangles(requestedFile, _fallbackColor, forceObjColor, out List<ModelTriangle> triangles, out _, out string modelError))
+            if (!ModelFactory.TryLoadTrianglesRaw(requestedFile, _fallbackColor, forceObjColor, out List<ModelTriangle> triangles, out _, out string modelError))
             {
                 Log.Warn($"[ExportSchematic] {modelError}");
                 yield break;

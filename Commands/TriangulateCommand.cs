@@ -78,7 +78,7 @@ public class TriangulateCommand : ICommand
 
         Vector3 spawnPosition = player.Position + player.GameObject.transform.forward * 2.5f + Vector3.up * 1.2f;
 
-        if (!ModelFactory.TryLoadTriangles(requestedFile, _forceColor, forceObjColor, out List<ModelTriangle> triangles, out string fileName, out string error))
+        if (!ModelFactory.TryLoadTrianglesRaw(requestedFile, _forceColor, forceObjColor, out List<ModelTriangle> triangles, out string fileName, out string error))
         {
             response = error;
             return false;

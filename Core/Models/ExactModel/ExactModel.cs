@@ -242,10 +242,14 @@ public class ExactModel
             if (_isDestroyed)
                 yield break;
 
+            Vector3 vUp = _invertWinding ? -modelParallelogram.VUp : modelParallelogram.VUp;
+            Vector3 vLeft = modelParallelogram.VLeft;
+            Vector3 center = TransformPoint(modelParallelogram.Center);
+
             _parallelograms.Add(ParallelogramPrimitive.Create(
-                modelParallelogram.VUp, 
-                modelParallelogram.VLeft, 
-                modelParallelogram.Center, 
+                vUp, 
+                vLeft, 
+                center, 
                 modelParallelogram.Color, 
                 flags));
             processed++;
@@ -335,10 +339,14 @@ public class ExactModel
 
         foreach (ModelParallelogram modelParallelogram in _modelParallelograms)
         {
+            Vector3 vUp = _invertWinding ? -modelParallelogram.VUp : modelParallelogram.VUp;
+            Vector3 vLeft = modelParallelogram.VLeft;
+            Vector3 center = TransformPoint(modelParallelogram.Center);
+
             _parallelograms.Add(ParallelogramPrimitive.Create(
-                modelParallelogram.VUp, 
-                modelParallelogram.VLeft, 
-                modelParallelogram.Center, 
+                vUp, 
+                vLeft, 
+                center, 
                 modelParallelogram.Color, 
                 flags));
         }
@@ -346,9 +354,10 @@ public class ExactModel
 
     (ModelParallelogram para1, ModelParallelogram para2, ModelParallelogram para3) GetParallelograms(ModelTriangle localTriangle, Color color)
     {
-        Vector3 p1 = TransformPoint(localTriangle.P1);
-        Vector3 p2 = TransformPoint(localTriangle.P2);
-        Vector3 p3 = TransformPoint(localTriangle.P3);
+        // Keep triangle data in model-local space; world transform is applied at build time.
+        Vector3 p1 = localTriangle.P1;
+        Vector3 p2 = localTriangle.P2;
+        Vector3 p3 = localTriangle.P3;
 
         if (_invertWinding)
             (p2, p3) = (p3, p2);

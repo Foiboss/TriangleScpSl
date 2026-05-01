@@ -428,7 +428,11 @@ public class ApproximateModel
             CreateTriangle(localTriangle, flags);
 
         foreach (ModelParallelogram p in _localParallelograms)
-            CreateParallelogram(p.VLeft, p.VUp, p.Center, flags, p.Color);
+        {
+            Vector3 vUp = _invertWinding ? -p.VUp : p.VUp;
+            Vector3 vLeft = p.VLeft;
+            CreateParallelogram(vLeft, vUp, TransformPoint(p.Center), flags, p.Color);
+        }
     }
 
     public override IEnumerator BuildTrianglesCoroutine(PrimitiveFlags flags, int trianglesPerFrame)
@@ -467,7 +471,9 @@ public class ApproximateModel
             if (_isDestroyed)
                 yield break;
 
-            CreateParallelogram(p.VLeft, p.VUp, p.Center, flags, p.Color);
+            Vector3 vUp = _invertWinding ? -p.VUp : p.VUp;
+            Vector3 vLeft = p.VLeft;
+            CreateParallelogram(vLeft, vUp, TransformPoint(p.Center), flags, p.Color);
             processed++;
 
             if (processed >= trianglesPerFrame)
@@ -702,3 +708,4 @@ public class ApproximateModel
         public int ParentIndex { get; } = parentIndex;
     }
 }
+
