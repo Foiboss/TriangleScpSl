@@ -596,7 +596,7 @@ public class ApproximateModel
         foreach (StretchSpatialIndex.Entry entry in _stretches.QueryNearby(theta, phi))
         {
             float err = ApproximateModelUtils.MaxVertexError(
-                vLeft, vUp, theta, phi, entry.Theta, entry.Phi);
+                vLeft, vUp, entry.Theta, entry.Phi);
 
             if (err <= _absoluteToleranceUnits && err < bestErr)
             {

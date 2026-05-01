@@ -38,7 +38,7 @@ public class TestParallelogramsCommand : ICommand
         foreach (StretchSpatialIndex.Entry entry in _stretches.QueryNearby(trueTheta, truePhi))
         {
             float err = ApproximateModelUtils.MaxVertexError(
-                v1World, v2World, trueTheta, truePhi, entry.Theta, entry.Phi);
+                v1World, v2World, entry.Theta, entry.Phi);
 
             if (err <= AbsoluteToleranceUnits && err < bestErr)
             {
