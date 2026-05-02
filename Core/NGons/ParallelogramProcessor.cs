@@ -1,5 +1,5 @@
 using Exiled.API.Features;
-using TriangleScpSl.Core.ModelFactory;
+using TriangleScpSl.Core.Triangulation.Parallelogram;
 using TriangleScpSl.Core.Triangulation.Triangle;
 using UnityEngine;
 

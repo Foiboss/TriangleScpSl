@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace TriangleScpSl.Core.ModelFactory;
+namespace TriangleScpSl.Core.Triangulation.Triangle;
 
 public readonly struct ModelTriangle(Vector3 p1, Vector3 p2, Vector3 p3, Color color)
 {

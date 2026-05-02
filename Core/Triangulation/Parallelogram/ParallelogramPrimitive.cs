@@ -20,7 +20,7 @@ public class ParallelogramPrimitive
 
         QuadPrimitive = Primitive.Create(PrimitiveType.Quad, flags, Vector3.zero, null, Vector3.one, true, color);
         BasePrimitive = Primitive.Create(PrimitiveType.Quad, PrimitiveFlags.None, Vector3.zero, null, Vector3.one, true, color);
-        ParallelogramByPoints.Create(vUp, vLeft, center, QuadPrimitive, BasePrimitive);
+        ParallelogramHelpUtils.Create(vUp, vLeft, center, QuadPrimitive, BasePrimitive);
     }
 
     public Color Color
@@ -59,6 +59,10 @@ public class ParallelogramPrimitive
     (Vector3 vUp, Vector3 vLeft, Vector3 center, Color color,
         PrimitiveFlags flags = PrimitiveFlags.Visible) => new(vUp, vLeft, center, color, flags);
 
+    public static ParallelogramPrimitive Create
+    (ModelParallelogram model,
+        PrimitiveFlags flags = PrimitiveFlags.Visible) => new(model.VUp, model.VLeft, model.Center, model.Color, flags);
+    
     public void Rebuild(Vector3 vUp, Vector3 vLeft, Vector3 center)
     {
         _p1 = center + vUp;
@@ -66,7 +70,7 @@ public class ParallelogramPrimitive
         _p3 = center - vUp;
         _p4 = center - vLeft;
 
-        ParallelogramByPoints.Create(vUp, vLeft, center, QuadPrimitive, BasePrimitive);
+        ParallelogramHelpUtils.Create(vUp, vLeft, center, QuadPrimitive, BasePrimitive);
     }
 
     public void Destroy()

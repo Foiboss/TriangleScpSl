@@ -28,7 +28,7 @@ public static class ConvexNGonDecomposer
         return result;
     }
 
-    static void DecomposeOne(NGonRaw nGon, List<ConvexNGon> output)
+    public static void DecomposeOne(NGonRaw nGon, List<ConvexNGon> output)
     {
         List<Vector3>? verts = nGon.Vertices;
         if (verts.Count < 3) return;

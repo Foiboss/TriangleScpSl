@@ -2,10 +2,10 @@ using AdminToys;
 using CommandSystem;
 using Exiled.API.Features;
 using System.Collections;
-using TriangleScpSl.Core.ModelFactory;
 using TriangleScpSl.Core.Models.ApproximateModel;
 using TriangleScpSl.Core.NGons;
 using TriangleScpSl.Core.Runtime;
+using TriangleScpSl.Core.Triangulation.Parallelogram;
 using UnityEngine;
 
 namespace TriangleScpSl.Commands;

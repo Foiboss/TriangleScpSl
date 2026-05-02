@@ -5,6 +5,7 @@ using System.Collections;
 using TriangleScpSl.Core.ModelFactory;
 using TriangleScpSl.Core.Models.ApproximateModel;
 using TriangleScpSl.Core.Runtime;
+using TriangleScpSl.Core.Triangulation.Triangle;
 using UnityEngine;
 
 namespace TriangleScpSl.Commands;

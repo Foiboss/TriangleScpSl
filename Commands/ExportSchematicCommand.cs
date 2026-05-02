@@ -8,6 +8,7 @@ using TriangleScpSl.Core.Models.ExactModel;
 using TriangleScpSl.Core.Runtime;
 using TriangleScpSl.Core.Paths;
 using TriangleScpSl.Core.ProjectMerExport;
+using TriangleScpSl.Core.Triangulation.Triangle;
 using UnityEngine;
 
 namespace TriangleScpSl.Commands;

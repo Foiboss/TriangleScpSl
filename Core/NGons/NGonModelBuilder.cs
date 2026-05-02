@@ -1,5 +1,5 @@
-using TriangleScpSl.Core.ModelFactory;
 using TriangleScpSl.Core.Paths;
+using TriangleScpSl.Core.Triangulation.Parallelogram;
 using UnityEngine;
 
 namespace TriangleScpSl.Core.NGons;

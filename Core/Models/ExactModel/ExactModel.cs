@@ -1,6 +1,5 @@
 using System.Collections;
 using Exiled.API.Features.Toys;
-using TriangleScpSl.Core.ModelFactory;
 using TriangleScpSl.Core.ProjectMerExport;
 using TriangleScpSl.Core.Triangulation.Parallelogram;
 using TriangleScpSl.Core.Triangulation.Triangle;

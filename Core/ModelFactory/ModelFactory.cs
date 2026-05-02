@@ -3,6 +3,7 @@ using TriangleScpSl.Core.FileToTriangles;
 using TriangleScpSl.Core.Models.ApproximateModel;
 using TriangleScpSl.Core.Models.ExactModel;
 using TriangleScpSl.Core.Paths;
+using TriangleScpSl.Core.Triangulation.Triangle;
 using UnityEngine;
 
 namespace TriangleScpSl.Core.ModelFactory;

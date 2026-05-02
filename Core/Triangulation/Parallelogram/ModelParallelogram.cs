@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace TriangleScpSl.Core.ModelFactory;
+namespace TriangleScpSl.Core.Triangulation.Parallelogram;
 
 public class ModelParallelogram
 {
