@@ -49,6 +49,15 @@ public static class ParallelogramProcessor
             return;
         }
 
+        if (!IsPlanar(poly, normal, out float maxDeviation, out float avgEdgeLength))
+        {
+            // Non-planar faces can produce quads that stick out; triangulate instead.
+            for (var i = 1; i < poly.Count - 1; i++)
+                AddTriangle(poly[0], poly[i], poly[i + 1], color, parallelograms);
+
+            return;
+        }
+
         // Greedily peel off one parallelogram per iteration.
         while (poly.Count > 3)
         {
@@ -112,6 +121,8 @@ public static class ParallelogramProcessor
     static int FindParallelogramVertex(List<Vector3> poly, Vector3 normal, float eps = 1e-5f)
     {
         int n = poly.Count;
+        BuildPlaneBasis(poly, normal, out Vector3 origin, out Vector3 e1, out Vector3 e2);
+        List<Vector2> poly2D = ProjectPolygon(poly, origin, e1, e2);
 
         for (var i = 0; i < n; i++)
         {
@@ -120,12 +131,61 @@ public static class ParallelogramProcessor
             Vector3 b = poly[(i + 1) % n];
             Vector3 p = a + b - v;
 
-            if (IsInsideOrOnConvexCcw(p, poly, normal, eps))
+            Vector2 p2D = ProjectPoint(p, origin, e1, e2);
+
+            if (IsInsideOrOnConvexCcw2D(p2D, poly2D, eps))
                 return i;
         }
 
         return -1;
     }
+
+    static bool IsInsideOrOnConvexCcw2D(Vector2 p, List<Vector2> poly, float eps)
+    {
+        int n = poly.Count;
+
+        for (var i = 0; i < n; i++)
+        {
+            Vector2 a = poly[i];
+            Vector2 b = poly[(i + 1) % n];
+
+            if (Cross2D(b - a, p - a) < -eps)
+                return false;
+        }
+
+        return true;
+    }
+
+    static void BuildPlaneBasis(List<Vector3> poly, Vector3 normal, out Vector3 origin, out Vector3 e1, out Vector3 e2)
+    {
+        origin = poly[0];
+        e1 = poly[1] - origin;
+        e1 -= Vector3.Dot(e1, normal) * normal;
+
+        if (e1.sqrMagnitude < 1e-12f)
+            e1 = Vector3.Cross(normal, Mathf.Abs(normal.y) < 0.9f ? Vector3.up : Vector3.right);
+
+        e1 = e1.normalized;
+        e2 = Vector3.Cross(normal, e1).normalized;
+    }
+
+    static List<Vector2> ProjectPolygon(List<Vector3> poly, Vector3 origin, Vector3 e1, Vector3 e2)
+    {
+        var projected = new List<Vector2>(poly.Count);
+
+        for (var i = 0; i < poly.Count; i++)
+            projected.Add(ProjectPoint(poly[i], origin, e1, e2));
+
+        return projected;
+    }
+
+    static Vector2 ProjectPoint(Vector3 p, Vector3 origin, Vector3 e1, Vector3 e2)
+    {
+        Vector3 d = p - origin;
+        return new Vector2(Vector3.Dot(d, e1), Vector3.Dot(d, e2));
+    }
+
+    static float Cross2D(Vector2 a, Vector2 b) => a.x * b.y - a.y * b.x;
 
     static bool IsInsideOrOnConvexCcw(Vector3 p, List<Vector3> poly, Vector3 normal, float eps)
     {
@@ -141,6 +201,28 @@ public static class ParallelogramProcessor
         }
 
         return true;
+    }
+
+    static bool IsPlanar(List<Vector3> poly, Vector3 normal, out float maxDeviation, out float avgEdgeLength)
+    {
+        Vector3 origin = poly[0];
+        maxDeviation = 0f;
+        avgEdgeLength = 0f;
+
+        for (var i = 0; i < poly.Count; i++)
+        {
+            Vector3 a = poly[i];
+            Vector3 b = poly[(i + 1) % poly.Count];
+            avgEdgeLength += (b - a).magnitude;
+
+            float deviation = Mathf.Abs(Vector3.Dot(a - origin, normal));
+            if (deviation > maxDeviation)
+                maxDeviation = deviation;
+        }
+
+        avgEdgeLength = poly.Count > 0 ? avgEdgeLength / poly.Count : 0f;
+        float tolerance = avgEdgeLength * 1e-4f + 1e-6f;
+        return maxDeviation <= tolerance;
     }
 
     static Vector3 NewellNormal(List<Vector3> poly)
