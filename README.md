@@ -16,7 +16,7 @@ An [EXILED](https://github.com/ExMod-Team/EXILED) plugin for SCP: Secret Laborat
 
 - [Installation](#installation)
 - [How it works](#how-it-works)
-    - [V1 — Per-triangle parallelograms](#v1--per-triangle-parallelograms)
+    - [V1 — Exact parallelograms](#v1--exact-parallelograms)
     - [V2 — Shared stretch primitives](#v2--shared-stretch-primitives)
     - [Primitive count](#primitive-count)
 - [Configuration](#configuration)
@@ -31,6 +31,7 @@ An [EXILED](https://github.com/ExMod-Team/EXILED) plugin for SCP: Secret Laborat
     - [ExportSchematicNGon](#exportschematicngon)
     - [ExportSchematicNGonV2](#exportschematicngonv2)
     - [TestParallelograms](#testparallelograms)
+    - [TestNGons](#testngons)
 - [API](#api)
     - [ModelFactory](#modelfactory)
     - [ModelTriangle](#modeltriangle)
@@ -228,6 +229,19 @@ TestParallelograms [amount]
 - `amount`: number of random parallelograms to spawn (default `1`).
 - Running the command again destroys all spawned parallelograms and stretches.
 - Visualizes points at the parallelogram vertices (red/green for vUp, blue/yellow for vLeft).
+
+### `TestNGons`
+
+Debug command that loads an OBJ model and visualizes the N-gon decomposition pipeline stages with colored markers.
+
+```text
+TestNGons <model file (.obj)> [stage]
+```
+
+- Must be used by a player.
+- `stage`: decomposition stage to visualize (default `0`). Stages: `0` = raw polygons, `1` = planar clusters, `2` = convex pieces, `3` = parallelograms.
+- Running the command again destroys all visualization markers and geometry.
+- Useful for debugging polygon merging, convex decomposition, and parallelogram generation.
 
 ## Configuration
 

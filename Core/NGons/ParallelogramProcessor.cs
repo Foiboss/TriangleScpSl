@@ -5,13 +5,9 @@ using UnityEngine;
 
 namespace TriangleScpSl.Core.NGons;
 
-// Processes an array of convex n-gons and returns:
-//   - List<ParallelogramInfo>: all parallelograms (n-3 per n-gon).
-//   - List<TriangleInfo>: one final triangle per n-gon.
-// Algorithm per n-gon: while vertex count > 3, find vertex V with neighbors A and B such that
-// the fourth parallelogram point P = A + B - V lies inside the current polygon (guaranteed to
-// exist for n >= 4 in a convex polygon). Record ParallelogramInfo, remove V, repeat.
-// The remaining 3 vertices become TriangleInfo; CCW order is preserved throughout.
+// Decompose convex n-gons into (n-3) parallelograms + 1 triangle per n-gon.
+// Algorithm: greedily peel off parallelograms (find V where P=A+B-V is inside polygon),
+// then triangulate remaining 3 vertices. CCW order preserved throughout.
 public static class ParallelogramProcessor
 {
     public static List<ModelParallelogram> Process
@@ -38,27 +34,23 @@ public static class ParallelogramProcessor
 
         var poly = new List<Vector3>(verts);
 
-        // Ensure CCW winding relative to normal.
         if (Vector3.Dot(NewellNormal(poly), normal) < 0f)
             poly.Reverse();
 
-        // Triangle fast-path.
         if (poly.Count == 3)
         {
             AddTriangle(poly[0], poly[1], poly[2], color, parallelograms);
             return;
         }
 
-        if (!IsPlanar(poly, normal, out float maxDeviation, out float avgEdgeLength))
+        if (!IsPlanar(poly, normal))
         {
-            // Non-planar faces can produce quads that stick out; triangulate instead.
+            // Non-planar; fall back to triangulation
             for (var i = 1; i < poly.Count - 1; i++)
                 AddTriangle(poly[0], poly[i], poly[i + 1], color, parallelograms);
-
             return;
         }
 
-        // Greedily peel off one parallelogram per iteration.
         while (poly.Count > 3)
         {
             int n = poly.Count;
@@ -66,8 +58,7 @@ public static class ParallelogramProcessor
 
             if (idx < 0)
             {
-                Log.Error("ParallelogramProcessor: no suitable vertex found. " +
-                    "Polygon is not convex or normal is pointing the wrong way.");
+                Log.Error("ParallelogramProcessor: no suitable vertex found.");
                 return;
             }
 
@@ -76,10 +67,9 @@ public static class ParallelogramProcessor
             Vector3 b = poly[(idx + 1) % n];
 
             Vector3 center = (a + b) * 0.5f;
-            Vector3 vUp = v - center; // half-diagonal toward the construction vertex
+            Vector3 vUp = v - center;
             Vector3 toA = a - center;
 
-            // Pick vLeft from {toA, b-center} so that cross(vUp, vLeft) · normal > 0.
             Vector3 vLeft = Vector3.Dot(Vector3.Cross(vUp, toA), normal) > 0f
                 ? toA
                 : b - center;
@@ -95,7 +85,6 @@ public static class ParallelogramProcessor
             poly.RemoveAt(idx);
         }
 
-        // Final triangle — the three remaining vertices in CCW order (preserved by removals).
         AddTriangle(poly[0], poly[1], poly[2], color, parallelograms);
     }
 
@@ -115,8 +104,6 @@ public static class ParallelogramProcessor
                 });
         }
     }
-
-    // helpers
 
     static int FindParallelogramVertex(List<Vector3> poly, Vector3 normal, float eps = 1e-5f)
     {
@@ -173,8 +160,8 @@ public static class ParallelogramProcessor
     {
         var projected = new List<Vector2>(poly.Count);
 
-        for (var i = 0; i < poly.Count; i++)
-            projected.Add(ProjectPoint(poly[i], origin, e1, e2));
+        foreach (Vector3 polygon in poly)
+            projected.Add(ProjectPoint(polygon, origin, e1, e2));
 
         return projected;
     }
@@ -187,27 +174,11 @@ public static class ParallelogramProcessor
 
     static float Cross2D(Vector2 a, Vector2 b) => a.x * b.y - a.y * b.x;
 
-    static bool IsInsideOrOnConvexCcw(Vector3 p, List<Vector3> poly, Vector3 normal, float eps)
-    {
-        int n = poly.Count;
-
-        for (var i = 0; i < n; i++)
-        {
-            Vector3 a = poly[i];
-            Vector3 b = poly[(i + 1) % n];
-
-            if (Vector3.Dot(Vector3.Cross(b - a, p - a), normal) < -eps)
-                return false;
-        }
-
-        return true;
-    }
-
-    static bool IsPlanar(List<Vector3> poly, Vector3 normal, out float maxDeviation, out float avgEdgeLength)
+    static bool IsPlanar(List<Vector3> poly, Vector3 normal)
     {
         Vector3 origin = poly[0];
-        maxDeviation = 0f;
-        avgEdgeLength = 0f;
+        var maxDeviation = 0f;
+        var avgEdgeLength = 0f;
 
         for (var i = 0; i < poly.Count; i++)
         {
@@ -216,6 +187,7 @@ public static class ParallelogramProcessor
             avgEdgeLength += (b - a).magnitude;
 
             float deviation = Mathf.Abs(Vector3.Dot(a - origin, normal));
+
             if (deviation > maxDeviation)
                 maxDeviation = deviation;
         }

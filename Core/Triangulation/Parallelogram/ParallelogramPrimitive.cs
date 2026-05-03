@@ -62,7 +62,7 @@ public class ParallelogramPrimitive
     public static ParallelogramPrimitive Create
     (ModelParallelogram model,
         PrimitiveFlags flags = PrimitiveFlags.Visible) => new(model.VUp, model.VLeft, model.Center, model.Color, flags);
-    
+
     public void Rebuild(Vector3 vUp, Vector3 vLeft, Vector3 center)
     {
         _p1 = center + vUp;

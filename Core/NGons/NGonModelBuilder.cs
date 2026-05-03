@@ -4,24 +4,24 @@ using UnityEngine;
 
 namespace TriangleScpSl.Core.NGons;
 
-// Loads an OBJ file and converts the NGon pipeline output into ModelTriangles
-// ready for ExactModel or ApproximateModel.
+// Load OBJ and decompose N-gons into parallelograms via pipeline:
+// ObjNGonParser → PlanarNGonSplitter → ConvexNGonDecomposer → ParallelogramProcessor
 //
-// Each NGon with n vertices produces (n-3) parallelograms and 1 triangle.
-// Each parallelogram is split along its vUp diagonal into 2 ModelTriangles.
-// All triangles are CCW relative to their face normal.
+// planarThreshold: max vertex displacement when snapping to plane (0 = disabled).
 public static class NGonModelBuilder
 {
-    // Resolves the model file path, runs the full NGon pipeline, and returns ModelTriangles.
-    // requestedFile: file name only (no directory path), with or without .obj extension.
-    // defaultColor: fallback face color when the model has no color data.
+    // Load OBJ file, decompose N-gons, return parallelograms.
+    // requestedFile: file name only (no path), with or without .obj extension.
+    // defaultColor: fallback color if OBJ has no color data.
+    // planarThreshold: max vertex displacement during plane snapping (0 = disabled).
     public static bool TryLoad
     (
         string requestedFile,
         Color defaultColor,
         out List<ModelParallelogram> parallelograms,
         out string normalizedFileName,
-        out string error)
+        out string error,
+        float planarThreshold = 0f)
     {
         parallelograms = [];
         normalizedFileName = string.Empty;
@@ -91,7 +91,10 @@ public static class NGonModelBuilder
                 return false;
             }
 
-            List<ConvexNGon> convexNgons = ConvexNGonDecomposer.Decompose(ngons);
+            // Split non-planar faces (when planarThreshold > 0)
+            List<NGonRaw> planarNgons = PlanarNGonSplitter.SplitAll(ngons, planarThreshold);
+
+            List<ConvexNGon> convexNgons = ConvexNGonDecomposer.Decompose(planarNgons);
             parallelograms = ParallelogramProcessor.Process(convexNgons);
 
             if (parallelograms.Count == 0)

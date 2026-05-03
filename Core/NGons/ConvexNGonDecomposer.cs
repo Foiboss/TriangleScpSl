@@ -10,13 +10,8 @@ public struct ConvexNGon
     public Vector3 Normal;
 }
 
-// Splits each raw n-gon into the minimum number of convex n-gons using the Hertel-Mehlhorn algorithm:
-// 1. Project polygon onto its plane (Newell normal + orthonormal basis).
-// 2. If already convex, return as-is.
-// 3. Otherwise triangulate via ear clipping.
-// 4. Greedily merge adjacent pieces while the union stays convex (4-approximation of optimal decomposition).
-// 5. Project pieces back to 3D, inheriting color and normal from the source face.
-// Works with simple (no self-intersections, no holes) near-planar polygons.
+// Splits raw n-gons into convex pieces via Hertel-Mehlhorn: project to 2D, triangulate if
+// needed, then greedily merge adjacent convex pieces. Returns 3D pieces with original color/normal.
 public static class ConvexNGonDecomposer
 {
     public static List<ConvexNGon> Decompose(IEnumerable<NGonRaw> nGons)
@@ -30,19 +25,14 @@ public static class ConvexNGonDecomposer
 
     public static void DecomposeOne(NGonRaw nGon, List<ConvexNGon> output)
     {
-        List<Vector3>? verts = nGon.Vertices;
+        List<Vector3> verts = nGon.Vertices;
         if (verts.Count < 3) return;
 
         Vector3 normal = NewellNormal(verts);
-        if (normal.sqrMagnitude < 1e-12f) return; // degenerate polygon
+        if (normal.sqrMagnitude < 1e-12f) return; // degenerate
         normal = normal.normalized;
 
-        // Orthonormal basis ON the polygon plane.
-        // e1 MUST be made perpendicular to the normal: OBJ n-gons are usually
-        // slightly non-planar, so verts[1]-verts[0] has a small component along
-        // the Newell normal. Without this projection the (e1, e2) plane is tilted
-        // and every reconstructed vertex inherits that tilt -> per-face rotation
-        // offset and gaps between neighbouring n-gons.
+        // Build orthonormal basis on polygon plane; project e1 to remove normal component
         Vector3 origin = verts[0];
         Vector3 e1 = verts[1] - origin;
         e1 -= Vector3.Dot(e1, normal) * normal;
@@ -62,7 +52,7 @@ public static class ConvexNGonDecomposer
             indexMap.Add(i);
         }
 
-        // Orient CCW in 2D; with this basis this is also CCW in 3D relative to normal.
+        // Ensure CCW winding in 2D (= CCW in 3D relative to normal)
         if (SignedArea2D(p2D) < 0f)
         {
             p2D.Reverse();
@@ -113,7 +103,7 @@ public static class ConvexNGonDecomposer
             t[2],
         ]));
 
-        // Hertel-Mehlhorn: keep merging adjacent pieces whose union is convex.
+        // Greedily merge adjacent convex pieces
         var changed = true;
         int safety = pieces.Count * pieces.Count + 16;
 
@@ -139,8 +129,7 @@ public static class ConvexNGonDecomposer
         return pieces;
     }
 
-    // Ear-clipping triangulation of a simple CCW polygon.
-    // Returns index triples referencing the original vertex list.
+    // Ear-clip triangulate CCW polygon
     static List<int[]> EarClipTriangulate(List<Vector2> polygon)
     {
         var triangles = new List<int[]>();
@@ -175,7 +164,7 @@ public static class ConvexNGonDecomposer
                 }
             }
 
-            if (!found) break; // degenerate polygon guard
+            if (!found) break;
         }
 
         if (indices.Count == 3)
@@ -183,13 +172,12 @@ public static class ConvexNGonDecomposer
         return triangles;
     }
 
+    // Check if vertex cur is an ear (convex + no vertices inside triangle)
     static bool IsEar(List<Vector2> polygon, List<int> indices, int prev, int cur, int next)
     {
         Vector2 a = polygon[prev], b = polygon[cur], c = polygon[next];
-        // Vertex b must be convex (not reflex or collinear) in a CCW polygon.
         if (Cross2D(b - a, c - b) <= 1e-7f) return false;
 
-        // No other polygon vertex may lie inside triangle (a, b, c).
         foreach (int idx in indices)
         {
             if (idx == prev || idx == cur || idx == next) continue;
@@ -201,13 +189,10 @@ public static class ConvexNGonDecomposer
         return true;
     }
 
-    // If p1 and p2 share an edge and their union is convex, returns true and fills merged.
-    // p1 and p2 are CCW index lists into the shared vertex table polygon.
+    // Merge p1 and p2 along shared edge if union is convex
     static bool TryMergePieces(List<int> p1, List<int> p2, List<Vector2> polygon, out List<int>? merged)
     {
         merged = null;
-
-        // Shared edge: p1 has a→b CCW, p2 has b→a CCW.
         for (var i = 0; i < p1.Count; i++)
         {
             int a = p1[i];
@@ -233,18 +218,13 @@ public static class ConvexNGonDecomposer
         return false;
     }
 
-    // Merge p1 and p2 along shared edge a–b where
-    // p1[i1]=a, p1[i1+1]=b (CCW) and p2[j2]=b, p2[j2+1]=a (CCW).
-    // Returns a CCW traversal of the merged polygon.
+    // Merge p1 and p2 along shared edge (p1[i1]→p1[i1+1]) and (p2[j2+1]→p2[j2])
     static List<int> MergeAlongSharedEdge(List<int> p1, int i1, List<int> p2, int j2)
     {
         var merged = new List<int>();
         int n1 = p1.Count, n2 = p2.Count;
 
-        // 1. Start at a.
         merged.Add(p1[i1]);
-
-        // 2. Walk p2 from the vertex after a (= p2[j2+2]) up to and including b (= p2[j2]).
         int cur = (j2 + 2) % n2;
 
         while (true)
@@ -254,16 +234,14 @@ public static class ConvexNGonDecomposer
             cur = (cur + 1) % n2;
         }
 
-        // 3. Walk p1 from the vertex after b (= p1[i1+2]) up to the vertex before a (= p1[i1-1]).
         int p1End = (i1 - 1 + n1) % n1;
         cur = (i1 + 2) % n1;
 
-        // If p1 is a triangle and (i1+2)%n1 == i1, there is nothing to add.
         if (cur != i1)
         {
             while (true)
             {
-                if (cur == (i1 + 1) % n1) break; // guard: would reach b — stop
+                if (cur == (i1 + 1) % n1) break;
                 merged.Add(p1[cur]);
                 if (cur == p1End) break;
                 cur = (cur + 1) % n1;
@@ -336,7 +314,7 @@ public static class ConvexNGonDecomposer
 
     static float Cross2D(Vector2 a, Vector2 b) => a.x * b.y - a.y * b.x;
 
-    // Newell normal: a stable normal for a near-planar polygon, consistent with winding order.
+    // Newell normal for near-planar polygon
     static Vector3 NewellNormal(List<Vector3> poly)
     {
         Vector3 n = Vector3.zero;

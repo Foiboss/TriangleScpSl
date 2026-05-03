@@ -32,7 +32,7 @@ public static class ParallelogramHelpUtils
 
         return (a, b, x);
     }
-    
+
     public static void Create(Vector3 vUp, Vector3 vLeft, Vector3 center, Primitive quad, Primitive baseQuad)
     {
         if (Mathf.Abs(Vector3.Dot(vLeft, vUp)) > vUp.sqrMagnitude)

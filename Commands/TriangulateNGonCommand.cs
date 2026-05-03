@@ -19,7 +19,7 @@ public class TriangulateNGonCommand : ICommand
 
     public string Command { get; } = "TriangulateNGon";
     public string[] Aliases { get; } = [];
-    public string Description { get; } = "Displays an OBJ model using ExactModel. Usage: <filename(.obj)>";
+    public string Description { get; } = "Displays an OBJ model using ExactModel. Usage: <filename(.obj)> [planar threshold(0)]";
 
     void Clear()
     {
@@ -56,15 +56,28 @@ public class TriangulateNGonCommand : ICommand
             return false;
         }
 
-        if (arguments.Count != 1)
+        if (arguments.Count is < 1 or > 2)
         {
             response = "Usage: TriangulateNGon <model file (.obj)>";
             return false;
         }
 
+        var planarThreshold = 0f;
+
+        if (arguments.Count == 2)
+        {
+            string rawPlanar = arguments.Array?[arguments.Offset + 1] ?? string.Empty;
+
+            if (!float.TryParse(rawPlanar, out planarThreshold))
+            {
+                response = "Invalid planar threshold value.";
+                return false;
+            }
+        }
+
         string requestedFile = arguments.Array?[arguments.Offset] ?? string.Empty;
 
-        if (!NGonModelBuilder.TryLoad(requestedFile, Color.white, out List<ModelParallelogram> parallelograms, out string fileName, out string error))
+        if (!NGonModelBuilder.TryLoad(requestedFile, Color.white, out List<ModelParallelogram> parallelograms, out string fileName, out string error, planarThreshold))
         {
             response = error;
             return false;

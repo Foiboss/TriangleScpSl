@@ -19,7 +19,7 @@ public class TriangulateNGonV2Command : ICommand
 
     public string Command { get; } = "TriangulateNGonV2";
     public string[] Aliases { get; } = [];
-    public string Description { get; } = "Displays an OBJ model using ApproximateModel. Usage: <filename(.obj)> [accuracy(0.001)]";
+    public string Description { get; } = "Displays an OBJ model using ApproximateModel. Usage: <filename(.obj)> [planar threshold(0)] [accuracy(0.001)]";
 
     void Clear()
     {
@@ -56,18 +56,30 @@ public class TriangulateNGonV2Command : ICommand
             return false;
         }
 
-        if (arguments.Count is < 1 or > 2)
+        if (arguments.Count is < 1 or > 3)
         {
-            response = "Usage: TriangulateNGonV2 <model file (.obj)> [accuracy(0.001)]";
+            response = "Usage: TriangulateNGonV2 <model file (.obj)> [planar threshold(0)] [accuracy(0.001)]";
             return false;
         }
 
         string requestedFile = arguments.Array?[arguments.Offset] ?? string.Empty;
+        var planarThreshold = 0f;
         var accuracy = 0.001f;
 
-        if (arguments.Count == 2)
+        if (arguments.Count >= 2)
         {
-            string rawAccuracy = arguments.Array?[arguments.Offset + 1] ?? string.Empty;
+            string rawPlanar = arguments.Array?[arguments.Offset + 1] ?? string.Empty;
+
+            if (!float.TryParse(rawPlanar, out planarThreshold))
+            {
+                response = "Invalid planar threshold value.";
+                return false;
+            }
+        }
+
+        if (arguments.Count == 3)
+        {
+            string rawAccuracy = arguments.Array?[arguments.Offset + 2] ?? string.Empty;
 
             if (!float.TryParse(rawAccuracy, out accuracy))
             {
@@ -76,7 +88,7 @@ public class TriangulateNGonV2Command : ICommand
             }
         }
 
-        if (!NGonModelBuilder.TryLoad(requestedFile, Color.white, out List<ModelParallelogram> parallelograms, out string fileName, out string error))
+        if (!NGonModelBuilder.TryLoad(requestedFile, Color.white, out List<ModelParallelogram> parallelograms, out string fileName, out string error, planarThreshold))
         {
             response = error;
             return false;

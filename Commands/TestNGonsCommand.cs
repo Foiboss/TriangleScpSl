@@ -14,7 +14,7 @@ public class TestNGonsCommand : ICommand
 {
     readonly List<Primitive> _points = [];
     readonly List<ParallelogramPrimitive> _parallelograms = [];
-    
+
     public string Command { get; } = "TestNGons";
     public string[] Aliases { get; } = [];
     public string Description { get; } = "Creates/Destroys example n-gon";
@@ -60,11 +60,11 @@ public class TestNGonsCommand : ICommand
         const float maxRadius = 5f;
         List<Vector3> points = [];
         Color color = Color.white;
-        
+
         // Generate vertices in circular order (like OBJ face vertices)
         Vector3 basePos = player.Position + Vector3.up;
         float angleStep = 360f / vertexCount;
-        
+
         for (var i = 0; i < vertexCount; i++)
         {
             float angle = i * angleStep * Mathf.Deg2Rad;
@@ -84,13 +84,12 @@ public class TestNGonsCommand : ICommand
 
         List<ConvexNGon> convexNGons = [];
         ConvexNGonDecomposer.DecomposeOne(rawNGon, convexNGons);
-        var modelParallelograms = ParallelogramProcessor.Process(convexNGons);
+        List<ModelParallelogram> modelParallelograms = ParallelogramProcessor.Process(convexNGons);
 
         foreach (ModelParallelogram modelParallelogram in modelParallelograms)
             _parallelograms.Add(ParallelogramPrimitive.Create(modelParallelogram));
-        
+
         response = "Spawned";
         return true;
     }
-        
 }
