@@ -23,13 +23,13 @@ An [EXILED](https://github.com/ExMod-Team/EXILED) plugin for SCP: Secret Laborat
 - [Commands](#commands)
     - [Triangulate](#triangulate)
     - [TriangulateV2](#triangulatev2)
-    - [TriangleExample](#triangleexample)
     - [ExportSchematic](#exportschematic)
     - [ExportSchematicV2](#exportschematicv2)
     - [TriangulateNGon](#triangulatengon)
     - [TriangulateNGonV2](#triangulatengonv2)
     - [ExportSchematicNGon](#exportschematicngon)
     - [ExportSchematicNGonV2](#exportschematicngonv2)
+    - [TriangleExample](#triangleexample)
     - [TestParallelograms](#testparallelograms)
     - [TestNGons](#testngons)
 - [API](#api)
@@ -112,6 +112,8 @@ QuadCount = StretchCount + ParallelogramCount + FallbackCount * 2 + 1
 - Every command model building/exporting process is spread across multiple frames to avoid server lag. Running the command again while building cancels the build; running it again after the model is visible destroys it.
 - Only OBJ files are supported. If you add the MTL file with the same name as OBJ, model will be loaded with colors from MTL file. Otherwise, white color will be used.
 - Files are loaded from `EXILED/Plugins/BlenderModels/`.
+- When exporting, the schematic is written to the LabAPI ProjectMER Schematics folder.
+- When exporting, output must be a file name only (no path), e.g. `mymodel` or `mymodel.json`.
 
 ### `Triangulate`
 
@@ -121,8 +123,6 @@ Spawns a V1 model near the player using ModelTriangles and ExactModel.
 triangulate <model file (.obj)>
 ```
 
-- Batch size per frame is controlled by `TriangulateBuildBatchSize` in the config (default `128`).
-
 ### `TriangulateV2`
 
 Spawns a V2 model near the player using ModelTriangles and shared stretch primitives (ApproximateModel).
@@ -130,88 +130,62 @@ Spawns a V2 model near the player using ModelTriangles and shared stretch primit
 ```text
 TriangulateV2 <model file (.obj)> [accuracy]
 ```
-
 - `accuracy`: maximum allowed vertex error in world units when reusing a stretch (default `0.001`). Lower values increase fidelity and quad count; higher values reduce quad count at the cost of precision.
-- Batch size per frame is controlled by `TriangulateV2BuildBatchSize` in the config (default `64`).
 
 ### `TriangulateNGon`
 
-Spawns an OBJ model using exact N-gon parallelogram decomposition. This experimental approach decomposes N-sided polygons into a set of parallelograms that are rendered directly, providing an alternative to triangle-based decomposition.
+Spawns an OBJ model using exact N-gon parallelogram decomposition (V1 pipeline). The multi-stage decomposition merges coplanar adjacent faces, decomposes non-convex polygons into convex pieces, then converts each convex N-gon into parallelograms.
 
 ```text
-TriangulateNGon <model file (.obj)>
+TriangulateNGon <model file (.obj)> [planar threshold]
 ```
-
-- Batch size per frame is controlled by `TriangulateNGonBuildBatchSize` in the config (default `128`).
+- `planar threshold`: max vertex displacement during plane-fitting and vertex snapping for coplanar face clustering (default `0`). Set to `0` to disable coplanar merging; higher values merge more aggressively and snap vertices within tolerance.
 
 ### `TriangulateNGonV2`
 
-Spawns an OBJ model using N-gon decomposition with shared stretch primitives, combining the benefits of N-gon rendering with the quad-reduction properties of the V2 pipeline.
+Spawns an OBJ model using N-gon decomposition with shared stretch primitives (V2 pipeline), combining benefits of N-gon decomposition with quad-reduction via stretch clustering.
 
 ```text
-TriangulateNGonV2 <model file (.obj)> [accuracy]
+TriangulateNGonV2 <model file (.obj)> [planar threshold] [accuracy]
 ```
-
+- `planar threshold`: max vertex displacement during plane-fitting and vertex snapping for coplanar face clustering (default `0`).
 - `accuracy`: maximum allowed vertex error in world units when reusing a stretch (default `0.001`).
-- Batch size per frame is controlled by `TriangulateNGonV2BuildBatchSize` in the config (default `64`).
 
 ### `ExportSchematic`
 
 Exports an OBJ model to ProjectMER schematic JSON file with the same result as `Triangulate` command (V1 ModelTriangle based).
 
 ```text
-exportschematic <model file (.obj)> <output json> [previewScale]
+exportschematic <model file (.obj)> <output json>
 ```
-
-- Output must be a file name only (no path), e.g. `mymodel` or `mymodel.json`.
-- The schematic is written to the LabAPI ProjectMER Schematics folder.
-- `previewScale` is a positive float (default `1`).
-- Build batch size is controlled by `ExportBuildBatchSize` in the config (default `128`).
-- Write batch size is controlled by `ExportWriteBatchSize` in the config (default `512`).
 
 ### `ExportSchematicV2`
 
 Exports an OBJ model to ProjectMER schematic JSON file with the same result as `TriangulateV2` command (V2 ModelParallelogram based).
 
 ```text
-ExportSchematicV2 <model file (.obj)> <output json> [accuracy] [previewScale]
+ExportSchematicV2 <model file (.obj)> <output json> [accuracy]
 ```
-
-- Output must be a file name only (no path), e.g. `mymodel` or `mymodel.json`.
-- The schematic is written to the LabAPI ProjectMER Schematics folder.
 - `accuracy`: maximum allowed vertex error in world units (default `0.001`).
-- `previewScale`: positive float scale applied before export (default `1`).
-- Build batch size is controlled by `ExportBuildBatchSize` in the config (default `128`).
-- Write batch size is controlled by `ExportWriteBatchSize` in the config (default `512`).
 
 ### `ExportSchematicNGon`
 
-Exports an OBJ model to ProjectMER schematic JSON file with the same result as `TriangulateNGon` command (V1 pipeline, using N-gon decomposition, without shared stretches).
+Exports an OBJ model to ProjectMER schematic JSON file with the same result as `TriangulateNGon` command (V1 pipeline, using N-gon decomposition with coplanar merging).
 
 ```text
-ExportSchematicNGon <model file (.obj)> <output json> [previewScale]
+ExportSchematicNGon <model file (.obj)> <output JSON file> [planar threshold]
 ```
-
-- Output must be a file name only (no path), e.g. `mymodel` or `mymodel.json`.
-- The schematic is written to the LabAPI ProjectMER Schematics folder.
-- `previewScale` is a positive float (default `1`).
-- Build batch size is controlled by `ExportBuildBatchSize` in the config (default `128`).
-- Write batch size is controlled by `ExportWriteBatchSize` in the config (default `512`).
+- `planar threshold`: max vertex displacement during plane-fitting and vertex snapping for coplanar face clustering (default `0`).
 
 ### `ExportSchematicNGonV2`
 
-Exports an OBJ model to ProjectMER schematic JSON file with the same result as `TriangulateNGonV2` command (V2 pipeline, using N-gon decomposition, with shared stretches).
+Exports an OBJ model to ProjectMER schematic JSON file with the same result as `TriangulateNGonV2` command (V2 pipeline, using N-gon decomposition with coplanar merging and shared stretches).
 
 ```text
-ExportSchematicNGonV2 <model file (.obj)> <output json> [accuracy] [previewScale]
+ExportSchematicNGonV2 <model file (.obj)> <output JSON file> [planar threshold] [accuracy]
 ```
-
-- Output must be a file name only (no path), e.g. `mymodel` or `mymodel.json`.
-- The schematic is written to the LabAPI ProjectMER Schematics folder.
+- `planar threshold`: max vertex displacement during plane-fitting and vertex snapping for coplanar face clustering (default `0`).
 - `accuracy`: maximum allowed vertex error in world units (default `0.001`).
-- `previewScale`: positive float scale applied before export (default `1`).
-- Build batch size is controlled by `ExportBuildBatchSize` in the config (default `128`).
-- Write batch size is controlled by `ExportWriteBatchSize` in the config (default `512`).
 
 ### `TriangleExample`
 
@@ -242,23 +216,6 @@ TestNGons <model file (.obj)> [stage]
 - `stage`: decomposition stage to visualize (default `0`). Stages: `0` = raw polygons, `1` = planar clusters, `2` = convex pieces, `3` = parallelograms.
 - Running the command again destroys all visualization markers and geometry.
 - Useful for debugging polygon merging, convex decomposition, and parallelogram generation.
-
-## Configuration
-
-The plugin exposes the following options in the EXILED config file:
-
-| Key                                    | Default | Description                                                        |
-|----------------------------------------|---------|--------------------------------------------------------------------|
-| `is_enabled`                           | `true`  | Enable or disable the plugin                                       |
-| `debug`                                | `false` | Enable debug logging                                               |
-| `triangulate_build_batch_size`         | `128`   | Triangles built per frame for the V1 `Triangulate` command         |
-| `triangulate_v2_build_batch_size`      | `64`    | Triangles built per frame for the `TriangulateV2` command          |
-| `export_build_batch_size`              | `128`   | Triangles built per frame for export build phase                   |
-| `export_write_batch_size`              | `512`   | Primitives written per frame for export write phase                |
-| `triangulate_ngon_build_batch_size`    | `128`   | Parallelograms built per frame for the `TriangulateNGon` command   |
-| `triangulate_ngon_v2_build_batch_size` | `64`    | Parallelograms built per frame for the `TriangulateNGonV2` command |
-
-Smaller batch sizes reduce per-frame CPU time but increase total build time. Larger values finish faster but may cause brief server hitches on very large models.
 
 ## API
 
@@ -297,53 +254,6 @@ Vector3 vLeft = para.VLeft;
 Vector3 center = para.Center;
 Color color = para.Color;
 ```
-
-### `TriangulatedModel`
-
-Loads and displays a 3-D mesh from a list of `ModelTriangle` values using the V1 pipeline (one parallelogram pair per triangle).
-
-```csharp
-using AdminToys;
-using TriangleScpSl.Core.ModelFactory;
-using TriangleScpSl.Core.Models.TriangulatedModel;
-using UnityEngine;
-
-List<ModelTriangle> triangles = [new(p1, p2, p3, Color.white)];
-
-var model = TriangulatedModel.Create(triangles, worldPosition);
-var model2 = new TriangulatedModel(triangles, worldPosition, PrimitiveFlags.Visible, scale: 0.01f, invertWinding: true);
-
-int parallelogramCount = model.ParallelogramCount;
-int quadCount = model.QuadCount; // Count * 6 + 1
-
-model.Position = new Vector3(0, 1, 0);
-model.Rotation = Quaternion.Euler(0, 90f, 0);
-model.Scale = Vector3.one * 2f;
-
-Vector3 world = model.TransformPoint(new Vector3(1, 0, 0));
-Vector3 local = model.InverseTransformPoint(world);
-
-model.Color = Color.red;
-model.Flags = PrimitiveFlags.Visible | PrimitiveFlags.Collidable;
-model.Destroy();
-```
-
-Members:
-
-- `ParallelogramCount` — number of parallelograms in the model
-- `QuadCount` — total primitive count (`ParallelogramCount * 2 + 1`)
-- `Position` — position of the internal transform anchor
-- `Rotation` — rotation of the internal transform anchor
-- `Scale` — scale of the internal transform anchor
-- `Transform` — Unity `Transform` of the internal anchor primitive
-- `TransformPoint(...)` — converts a local point to world space
-- `InverseTransformPoint(...)` — converts a world point to local space
-- `Color` — write-only; overrides the color of all parallelograms
-- `Flags` — write-only; sets primitive flags of all parallelograms
-- `Create(...)` — static factory, mirrors the constructor
-- `CreateDeferred(...)` — creates the model without spawning primitives; call `BuildTrianglesCoroutine` afterwards
-- `BuildTrianglesCoroutine(flags, parallelogramsPerFrame)` — coroutine that spawns primitives in batches
-- `Destroy()` — destroys all underlying primitives
 
 ### `ApproximateModel`
 
@@ -471,7 +381,12 @@ ExactModel(
 
 ### `NGonModelBuilder`
 
-Static utility class for loading OBJ files and decomposing N-gon polygons into parallelograms and triangles.
+Static utility class for loading OBJ files and decomposing N-gon polygons into parallelograms and triangles using a multi-stage pipeline:
+
+1. **ObjNGonParser** — parses OBJ files and MTL color data into raw N-gons
+2. **PlanarNGonSplitter** — merges adjacent coplanar faces sharing surface continuity, fits planes to clusters, and snaps vertices for coplanarity
+3. **ConvexNGonDecomposer** — decomposes non-convex N-gons into convex pieces via Hertel-Mehlhorn algorithm
+4. **ParallelogramProcessor** — converts convex N-gons into parallelograms and triangles
 
 ```csharp
 using TriangleScpSl.Core.NGons;
@@ -484,14 +399,25 @@ if (NGonModelBuilder.TryLoad("model.obj", Color.white, out List<ModelParallelogr
     // Use parallelograms with ExactModel or ApproximateModel
     var model = ExactModel.Create(parallelograms, position);
 }
+
+// With planar clustering and coplanar snapping
+if (NGonModelBuilder.TryLoad("model.obj", Color.white, out parallelograms, out fileName, out error, planarThreshold: 0.01f))
+{
+    var model = ApproximateModel.Create(parallelograms, position);
+}
 ```
 
 Members:
 
-- `TryLoad(requestedFile, defaultColor, out parallelograms, out normalizedFileName, out error)` — loads an OBJ file (file name only, no path), decomposes N-gons into parallelograms and triangles, returns true if successful
-- Decomposes each N-gon with n vertices into (n-3) parallelograms and 1 triangle
-- Each parallelogram is split along its vUp diagonal into 2 triangles
-- All triangles are counter-clockwise relative to their face normal
+- `TryLoad(requestedFile, defaultColor, out parallelograms, out normalizedFileName, out error, planarThreshold = 0f)` — loads an OBJ file (file name only, no path), decomposes N-gons into parallelograms and triangles, returns true if successful
+  - `planarThreshold`: max vertex displacement during plane snapping (0 disables coplanar merging)
+- **N-gon decomposition pipeline:**
+  - Parses raw polygons from OBJ (supports per-material colors via MTL)
+  - Optionally clusters adjacent coplanar faces and merges them into larger N-gons
+  - Decomposes non-convex N-gons into convex pieces
+  - Decomposes each convex N-gon with n vertices into (n-3) parallelograms and 1 triangle
+- **Parallelogram format:** output is a flat `List<ModelParallelogram>` where each element represents a parallelogram or one component of a triangle's decomposition
+- All geometry is counter-clockwise relative to face normal
 
 ### `TrianglePrimitive`
 
@@ -692,6 +618,50 @@ public int QuadCount => _stretches.Count + _parallelograms.Count + _fallbackPara
 - `_parallelograms.Count`: one visible child quad per successfully solved parallelogram
 - `_fallbackParallelograms.Count * 2`: two quads each for fallback parallelograms
 - `+ 1`: invisible base quad (model anchor)
+
+### N-Gon Decomposition Pipeline Architecture
+
+The N-Gon decomposition converts OBJ files into `ModelParallelogram` data through a multi-stage pipeline:
+
+```
+ObjNGonParser
+    ↓ (parses OBJ faces)
+PlanarNGonSplitter
+    ↓ (merges coplanar adjacent faces, fits planes, snaps vertices)
+ConvexNGonDecomposer
+    ↓ (Hertel-Mehlhorn: converts non-convex n-gons to convex pieces via ear-clipping + merging)
+ParallelogramProcessor
+    ↓ (decomposes each convex n-gon into (n-3) parallelograms + 1 triangle)
+List<ModelParallelogram> (output)
+```
+
+**Stage Details:**
+
+1. **ObjNGonParser** — Reads OBJ vertex/face data and MTL colors (if available). Converts each face into a `NGonRaw` (vertex list + color).
+
+2. **PlanarNGonSplitter** — (Optional, enabled when `planarThreshold > 0`)
+   - Deduplicates and merges adjacent faces sharing high normal agreement (within ~30°)
+   - Fits a best-fit plane to each cluster and evicts outlier faces exceeding the threshold
+   - Snaps all cluster vertices to their fitted planes to ensure perfect coplanarity
+   - Emits merged boundary polygons and singletons
+
+3. **ConvexNGonDecomposer** — Decomposes each (possibly non-convex) N-gon:
+   - Projects to 2D and tests convexity
+   - If convex, emits as-is
+   - If non-convex, ear-clips into triangles, then greedily merges adjacent triangle pairs back into larger convex pieces
+   - Returns a list of `ConvexNGon` (each with 3D vertices, original color, and face normal)
+
+4. **ParallelogramProcessor** — Converts each convex N-gon into parallelograms:
+   - For n=3 (triangle): creates 3 `ModelParallelogram` objects (one per edge decomposition)
+   - For n≥4: greedily peels off parallelograms by finding vertices where `P = A + B - V` lies inside the polygon, then recurses
+   - Final 3 remaining vertices become a triangle
+   - Output: flat `List<ModelParallelogram>`
+
+**Integration with V1/V2 Pipelines:**
+
+- `NGonModelBuilder.TryLoad()` returns `List<ModelParallelogram>` 
+- Pass to `ExactModel.Create(parallelograms, position)` for V1 rendering (one base quad per parallelogram)
+- Pass to `ApproximateModel.Create(parallelograms, position, tolerance)` for V2 rendering (shared stretch clustering)
 
 ## License
 

@@ -23,7 +23,7 @@ public sealed class ExportSchematicCommand : ICommand
 
     public string Command { get; } = "ExportSchematic";
     public string[] Aliases { get; } = [];
-    public string Description { get; } = "Exports .obj as ProjectMER schematic JSON. Usage: <model file> <output file> [previewScale]";
+    public string Description { get; } = "Exports .obj as ProjectMER schematic JSON. Usage: <model file> <output file>";
 
     public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)
     {
@@ -34,9 +34,9 @@ public sealed class ExportSchematicCommand : ICommand
             return true;
         }
 
-        if (arguments.Count is < 2 or > 4)
+        if (arguments.Count != 2)
         {
-            response = "Usage: ExportSchematic <model file (.obj)> <output JSON file> [previewScale]";
+            response = "Usage: ExportSchematic <model file (.obj)> <output JSON file>";
             return false;
         }
 
@@ -49,26 +49,13 @@ public sealed class ExportSchematicCommand : ICommand
             return false;
         }
 
-        var previewScale = 1f;
-
-        if (arguments.Count >= 3)
-        {
-            string rawScale = arguments.Array?[arguments.Offset + 2] ?? string.Empty;
-
-            if (!float.TryParse(rawScale, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out previewScale) || previewScale <= 0f)
-            {
-                response = "Invalid previewScale. Use a positive number (example: 1 or 0.5).";
-                return false;
-            }
-        }
-
         Vector3 spawnPosition = Vector3.zero;
 
         int buildBatch = Mathf.Max(1, Plugin.Instance?.Config.ExportBuildBatchSize ?? 64);
         int writeBatch = Mathf.Max(1, Plugin.Instance?.Config.ExportWriteBatchSize ?? 256);
 
         _isExporting = true;
-        _exportCoroutine = CoroutineHost.Run(ExportRoutine(requestedFile, outputFileName, spawnPosition, previewScale, buildBatch, writeBatch));
+        _exportCoroutine = CoroutineHost.Run(ExportRoutine(requestedFile, outputFileName, spawnPosition, 1f, buildBatch, writeBatch));
 
         response = "Export started asynchronously. Run command again to cancel current export.";
         return true;
@@ -128,7 +115,7 @@ public sealed class ExportSchematicCommand : ICommand
                 yield break;
             }
 
-            Log.Info($"[ExportSchematic] Exported: {outputPath} (triangles={_activeModel.ParallelogramCount}, quads={_activeModel.QuadCount}, previewScale={previewScale.ToString(CultureInfo.InvariantCulture)}).");
+            Log.Info($"[ExportSchematic] Exported: {outputPath} (parallelograms={_activeModel.ParallelogramCount}, quads={_activeModel.QuadCount}, previewScale={previewScale.ToString(CultureInfo.InvariantCulture)}).");
         }
         finally
         {

@@ -130,6 +130,6 @@ public class TriangulateNGonV2Command : ICommand
             yield break;
         }
 
-        Log.Info($"[TriangulateNGonV2] Created model '{fileName}': triangles={model.ParallelogramCount}, quads={model.QuadCount}.");
+        Log.Info($"[TriangulateNGonV2] Created model '{fileName}': parallelograms={model.ParallelogramCount}, quads={model.QuadCount}.");
     }
 }

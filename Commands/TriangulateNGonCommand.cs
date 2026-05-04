@@ -113,6 +113,6 @@ public class TriangulateNGonCommand : ICommand
             yield break;
         }
 
-        Log.Info($"[TriangulateNGon] Created model '{fileName}': triangles={model.ParallelogramCount}, quads={model.QuadCount}.");
+        Log.Info($"[TriangulateNGon] Created model '{fileName}': parallelograms={model.ParallelogramCount}, quads={model.QuadCount}.");
     }
 }

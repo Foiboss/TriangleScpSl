@@ -22,7 +22,7 @@ public sealed class ExportSchematicNGonCommand : ICommand
 
     public string Command { get; } = "ExportSchematicNGon";
     public string[] Aliases { get; } = [];
-    public string Description { get; } = "Exports an OBJ as ProjectMER schematic JSON using ExactModel. Usage: <model file (.obj)> <output JSON file> [previewScale]";
+    public string Description { get; } = "Exports an OBJ as ProjectMER schematic JSON using ExactModel. Usage: <model file (.obj)> <output JSON file> [planar threshold(0)]";
 
     public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)
     {
@@ -35,7 +35,7 @@ public sealed class ExportSchematicNGonCommand : ICommand
 
         if (arguments.Count is < 2 or > 3)
         {
-            response = "Usage: ExportSchematicNGon <model file (.obj)> <output JSON file> [previewScale]";
+            response = "Usage: ExportSchematicNGon <model file (.obj)> <output JSON file> [planar threshold(0)]";
             return false;
         }
 
@@ -48,15 +48,15 @@ public sealed class ExportSchematicNGonCommand : ICommand
             return false;
         }
 
-        var previewScale = 1f;
+        var planarThreshold = 0f;
 
         if (arguments.Count >= 3)
         {
-            string rawScale = arguments.Array?[arguments.Offset + 2] ?? string.Empty;
+            string rawPlanarThreshold = arguments.Array?[arguments.Offset + 2] ?? string.Empty;
 
-            if (!float.TryParse(rawScale, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out previewScale) || previewScale <= 0f)
+            if (!float.TryParse(rawPlanarThreshold, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out planarThreshold) || planarThreshold < 0f)
             {
-                response = "Invalid previewScale. Use a positive number (example: 1 or 0.5).";
+                response = "Invalid planarThreshold. Use a nonnegative number (example: 0.001 or 0).";
                 return false;
             }
         }
@@ -65,7 +65,7 @@ public sealed class ExportSchematicNGonCommand : ICommand
         int writeBatch = Mathf.Max(1, Plugin.Instance?.Config.ExportWriteBatchSize ?? 256);
 
         _isExporting = true;
-        _exportCoroutine = CoroutineHost.Run(ExportRoutine(requestedFile, outputFileName, previewScale, buildBatch, writeBatch));
+        _exportCoroutine = CoroutineHost.Run(ExportRoutine(requestedFile, outputFileName, planarThreshold, buildBatch, writeBatch));
 
         response = "Export started asynchronously. Run command again to cancel.";
         return true;
@@ -75,13 +75,13 @@ public sealed class ExportSchematicNGonCommand : ICommand
     (
         string requestedFile,
         string outputFileName,
-        float previewScale,
+        float planarThreshold,
         int buildBatch,
         int writeBatch)
     {
         try
         {
-            if (!NGonModelBuilder.TryLoad(requestedFile, Color.white, out List<ModelParallelogram> parallelograms, out _, out string modelError))
+            if (!NGonModelBuilder.TryLoad(requestedFile, Color.white, out List<ModelParallelogram> parallelograms, out _, out string modelError, planarThreshold))
             {
                 Log.Warn($"[ExportSchematicNGon] {modelError}");
                 yield break;
@@ -96,7 +96,7 @@ public sealed class ExportSchematicNGonCommand : ICommand
                 yield break;
             }
 
-            _activeModel.Scale = Vector3.one * previewScale;
+            _activeModel.Scale = Vector3.one;
 
             TrianglePaths.EnsureSchematicDirectoryExists(outputFileName);
             string outputPath = TrianglePaths.GetSchematicOutputPath(outputFileName);
@@ -124,7 +124,7 @@ public sealed class ExportSchematicNGonCommand : ICommand
                 yield break;
             }
 
-            Log.Info($"[ExportSchematicNGon] Exported: {outputPath} (triangles={_activeModel.ParallelogramCount}, quads={_activeModel.QuadCount}, previewScale={previewScale.ToString(CultureInfo.InvariantCulture)}).");
+            Log.Info($"[ExportSchematicNGon] Exported: {outputPath} (parallelograms={_activeModel.ParallelogramCount}, quads={_activeModel.QuadCount}, planarThreshold={planarThreshold.ToString(CultureInfo.InvariantCulture)}).");
         }
         finally
         {
