@@ -5,9 +5,9 @@ using UnityEngine;
 
 namespace TriangleScpSl.Core.NGons;
 
-// Decompose convex n-gons into (n-3) parallelograms + 1 triangle per n-gon.
+// Decompose convex n-gons into (n-3) parallelograms + 1 triangle per n-gon
 // Algorithm: greedily peel off parallelograms (find V where P=A+B-V is inside polygon),
-// then triangulate remaining 3 vertices. CCW order preserved throughout.
+// then triangulate remaining 3 vertices. CCW order preserved throughout
 public static class ParallelogramProcessor
 {
     public static List<ModelParallelogram> Process

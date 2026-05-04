@@ -4,16 +4,9 @@ using UnityEngine;
 
 namespace TriangleScpSl.Core.NGons;
 
-// Load OBJ and decompose N-gons into parallelograms via pipeline:
-// ObjNGonParser → PlanarNGonSplitter → ConvexNGonDecomposer → ParallelogramProcessor
-//
-// planarThreshold: max vertex displacement when snapping to plane (0 = disabled).
 public static class NGonModelBuilder
 {
-    // Load OBJ file, decompose N-gons, return parallelograms.
-    // requestedFile: file name only (no path), with or without .obj extension.
-    // defaultColor: fallback color if OBJ has no color data.
-    // planarThreshold: max vertex displacement during plane snapping (0 = disabled).
+    // planarThreshold: max vertex displacement during plane snapping (0 = disabled)
     public static bool TryLoad
     (
         string requestedFile,

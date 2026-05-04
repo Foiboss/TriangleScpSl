@@ -3,9 +3,9 @@ using UnityEngine;
 namespace TriangleScpSl.Core.NGons;
 
 // Merges adjacent faces sharing surface continuity (normal agreement) into
-// n-gons, then projects cluster vertices onto a best-fit plane for coplanarity.
+// n-gons, then projects cluster vertices onto a best-fit plane for coplanarity
 // Merges purely on normal agreement; per-cluster plane-fit and shrinkage ensure
-// vertex displacement stays within planarThreshold.
+// vertex displacement stays within planarThreshold
 //
 // Pipeline:
 // (1) deduplicate vertices,
@@ -14,14 +14,14 @@ namespace TriangleScpSl.Core.NGons;
 // (4) cluster via union-find on normal agreement,
 // (5) fit plane and evict worst-fitting faces,
 // (6) snap vertices to planes,
-// (7) extract boundaries and emit n-gons.
+// (7) extract boundaries and emit n-gons
 //
-// planarThreshold: max vertex displacement during snapping (0 disables).
-// NormalEps: per-edge normal agreement tolerance (~0.13 ≈ 30° max deviation).
+// planarThreshold: max vertex displacement during snapping (0 disables)
+// NormalEps: per-edge normal agreement tolerance (0.13 = 30° max deviation)
 public static class PlanarNGonSplitter
 {
     const float VertexMergeEps = 1e-5f;
-    // Per-edge normal continuity. ~0.13 ≈ 30° max deviation.
+    // Per-edge normal continuity. 0.13 = 30° max deviation
     const float NormalEps = 0.13f;
 
     public static List<NGonRaw> SplitAll(IEnumerable<NGonRaw> sources, float planarThreshold = 0f)
@@ -31,13 +31,11 @@ public static class PlanarNGonSplitter
         return MergeCoplanar(faces, planarThreshold);
     }
 
-    // -----------------------------------------------------------------------
-
     static List<NGonRaw> MergeCoplanar(List<NGonRaw> faces, float threshold)
     {
         int faceCount = faces.Count;
 
-        // Step 1: deduplicate vertices into global table
+        // deduplicate vertices into global table
         var table = new List<Vector3>();
         var faceIdx = new int[faceCount][];
 
@@ -54,7 +52,7 @@ public static class PlanarNGonSplitter
 
         int vertCount = table.Count;
 
-        // Step 2: compute per-face normals and eligibility
+        // compute per-face normals and eligibility
         var faceEligible = new bool[faceCount];
         var faceNormal = new Vector3[faceCount];
         var faceCentroid = new Vector3[faceCount];
@@ -82,7 +80,7 @@ public static class PlanarNGonSplitter
             faceCentroid[f] = centroid;
         }
 
-        // Step 3: build edge-to-faces adjacency map
+        // build edge-to-faces adjacency map
         var edgeMap = new Dictionary<long, List<int>>();
 
         for (var f = 0; f < faceCount; f++)
@@ -106,7 +104,7 @@ public static class PlanarNGonSplitter
             }
         }
 
-        // Step 4: cluster via union-find on normal agreement
+        // cluster via union-find on normal agreement
         var parent = new int[faceCount];
         var clusterCount = new int[faceCount];
 
@@ -160,7 +158,7 @@ public static class PlanarNGonSplitter
             list.Add(f);
         }
 
-        // Step 5: fit per-cluster planes and evict outlier faces
+        // fit per-cluster planes and evict outlier faces
         var clusterPlaneNormal = new Dictionary<int, Vector3>();
         var clusterPlanePoint = new Dictionary<int, Vector3>();
 
@@ -208,7 +206,7 @@ public static class PlanarNGonSplitter
                 clusterFaces.Remove(root);
         }
 
-        // Step 6: snap cluster vertices to their planes
+        // snap cluster vertices to their planes
         var snapAccum = new Vector3[vertCount];
         var snapCount = new int[vertCount];
 
@@ -219,7 +217,7 @@ public static class PlanarNGonSplitter
             Vector3 planeN = clusterPlaneNormal[root];
             Vector3 planeP = clusterPlanePoint[root];
 
-            // Collect the unique cluster vertex set on the fly.
+            // Collect the unique cluster vertex set on the fly
             var seen = new HashSet<int>();
 
             foreach (int fi in facesInCluster)
@@ -246,7 +244,7 @@ public static class PlanarNGonSplitter
                 : table[vi];
         }
 
-        // Step 7: rebuild and emit merged n-gons
+        // rebuild and emit merged n-gons
         var result = new List<NGonRaw>(faceCount);
         var emitted = new bool[faceCount];
 
@@ -298,7 +296,7 @@ public static class PlanarNGonSplitter
         return result;
     }
 
-    // Fit plane to cluster: centroid + face-area-weighted normal.
+    // Fit plane to cluster: centroid + face-area-weighted normal
     static void FitPlane
     (
         List<int> facesInCluster,
@@ -343,7 +341,7 @@ public static class PlanarNGonSplitter
         planeP = centroid;
     }
 
-    // Extract cluster boundary as a CCW loop. Returns false on non-manifold geometry.
+    // Extract cluster boundary as a CCW loop. Returns false on non-manifold geometry
     static bool TryExtractBoundary
     (
         List<int> facesInCluster,
@@ -420,13 +418,13 @@ public static class PlanarNGonSplitter
         return false;
     }
 
-    // Drop collinear vertices from outline to reduce n-gon vertex count.
+    // Drop collinear vertices from outline to reduce n-gon vertex count
     static List<int> SimplifyCollinear(List<int> loop, Vector3[] pos)
     {
         int n = loop.Count;
         if (n < 4) return loop;
 
-        const float sinEps = 0.01f; // ~0.5°
+        const float sinEps = 0.01f; // 0.5°
         var keep = new bool[n];
 
         for (var i = 0; i < n; i++)
@@ -523,7 +521,8 @@ public static class PlanarNGonSplitter
         int ra = Find(parent, a);
         int rb = Find(parent, b);
         if (ra == rb) return;
-        // Union by size.
+        
+        // Union by size
         if (count[ra] < count[rb]) (ra, rb) = (rb, ra);
         parent[rb] = ra;
         count[ra] += count[rb];

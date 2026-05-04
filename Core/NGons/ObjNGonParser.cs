@@ -3,7 +3,6 @@ using UnityEngine;
 
 namespace TriangleScpSl.Core.NGons;
 
-// Lightweight OBJ parser for NGons with per-face color from an MTL file.
 public static class ObjNGonParser
 {
     public static bool TryParseFile(string objPath, Color defaultColor, out List<NGonRaw> nGons, out string error)
@@ -173,7 +172,7 @@ public static class ObjNGonParser
 
     static bool TryResolveIndex(int rawIndex, int vertexCount, out int resolvedIndex)
     {
-        // OBJ indices are 1-based, negative values are relative to the end.
+        // OBJ indices are 1-based, negative values are relative to the end
         resolvedIndex = rawIndex > 0 ? rawIndex - 1 : vertexCount + rawIndex;
         return resolvedIndex >= 0 && resolvedIndex < vertexCount;
     }

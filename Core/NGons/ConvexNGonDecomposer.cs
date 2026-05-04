@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace TriangleScpSl.Core.NGons;
 
-// Convex n-gon: vertices (CCW relative to normal), color, plane normal.
+// Convex n-gon: vertices (CCW relative to normal), color, plane normal
 public struct ConvexNGon
 {
     public List<Vector3> Vertices;
@@ -11,7 +11,7 @@ public struct ConvexNGon
 }
 
 // Splits raw n-gons into convex pieces via Hertel-Mehlhorn: project to 2D, triangulate if
-// needed, then greedily merge adjacent convex pieces. Returns 3D pieces with original color/normal.
+// needed, then greedily merge adjacent convex pieces. Returns 3D pieces with original color/normal
 public static class ConvexNGonDecomposer
 {
     public static List<ConvexNGon> Decompose(IEnumerable<NGonRaw> nGons)
