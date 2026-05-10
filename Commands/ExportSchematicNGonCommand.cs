@@ -81,18 +81,18 @@ public sealed class ExportSchematicNGonCommand : ICommand
     {
         try
         {
-            if (!NGonModelBuilder.TryLoad(requestedFile, Color.white, out List<ModelParallelogram> parallelograms, out _, out string modelError, planarThreshold))
+            if (!NGonModelBuilder.TryLoad(requestedFile, Color.white, out List<ModelParallelogram> parallelograms, out List<ModelPrimitive> detectedPrimitives, out _, out string modelError, planarThreshold))
             {
                 Log.Warn($"[ExportSchematicNGon] {modelError}");
                 yield break;
             }
 
-            _activeModel = ExactModel.CreateDeferred(parallelograms, Vector3.zero, PrimitiveFlags.Visible, 1f);
+            _activeModel = ExactModel.CreateDeferred(parallelograms, detectedPrimitives, Vector3.zero, PrimitiveFlags.Visible, 1f);
             yield return _activeModel.BuildTrianglesCoroutine(PrimitiveFlags.Visible, buildBatch);
 
-            if (_activeModel.ParallelogramCount == 0)
+            if (_activeModel.ParallelogramCount == 0 && _activeModel.NativePrimitiveCount == 0)
             {
-                Log.Warn("[ExportSchematicNGon] Model has no valid non-degenerate triangles.");
+                Log.Warn("[ExportSchematicNGon] Model has no valid non-degenerate geometry.");
                 yield break;
             }
 
@@ -124,7 +124,7 @@ public sealed class ExportSchematicNGonCommand : ICommand
                 yield break;
             }
 
-            Log.Info($"[ExportSchematicNGon] Exported: {outputPath} (parallelograms={_activeModel.ParallelogramCount}, quads={_activeModel.QuadCount}, planarThreshold={planarThreshold.ToString(CultureInfo.InvariantCulture)}).");
+            Log.Info($"[ExportSchematicNGon] Exported: {outputPath} (ParallelogramCount={_activeModel.ParallelogramCount}, PrimitiveCount={_activeModel.PrimitiveCount}, planarThreshold={planarThreshold.ToString(CultureInfo.InvariantCulture)}).");
         }
         finally
         {

@@ -119,6 +119,6 @@ public class TriangulateV2Command : ICommand
             yield break;
         }
 
-        Log.Info($"[TriangulateV2] Created model '{fileName}': parallelograms={model.ParallelogramCount}, quads={model.QuadCount}.");
+        Log.Info($"[TriangulateV2] Created model '{fileName}': ParallelogramCount={model.ParallelogramCount}, PrimitiveCount={model.PrimitiveCount}.");
     }
 }

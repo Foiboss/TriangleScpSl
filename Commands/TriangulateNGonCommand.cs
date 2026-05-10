@@ -77,14 +77,14 @@ public class TriangulateNGonCommand : ICommand
 
         string requestedFile = arguments.Array?[arguments.Offset] ?? string.Empty;
 
-        if (!NGonModelBuilder.TryLoad(requestedFile, Color.white, out List<ModelParallelogram> parallelograms, out string fileName, out string error, planarThreshold))
+        if (!NGonModelBuilder.TryLoad(requestedFile, Color.white, out List<ModelParallelogram> parallelograms, out List<ModelPrimitive> detectedPrimitives, out string fileName, out string error, planarThreshold))
         {
             response = error;
             return false;
         }
 
         Vector3 spawnPosition = player.Position + player.GameObject.transform.forward * 2.5f + Vector3.up * 1.2f;
-        var createdModel = ExactModel.CreateDeferred(parallelograms, spawnPosition, PrimitiveFlags.Visible, 1f);
+        var createdModel = ExactModel.CreateDeferred(parallelograms, detectedPrimitives, spawnPosition, PrimitiveFlags.Visible, 1f);
         _model = createdModel;
         _isBuilding = true;
 
@@ -105,14 +105,14 @@ public class TriangulateNGonCommand : ICommand
         if (!ReferenceEquals(_model, model))
             yield break;
 
-        if (model.ParallelogramCount == 0)
+        if (model is { ParallelogramCount: 0, NativePrimitiveCount: 0 })
         {
             model.Destroy();
             _model = null;
-            Log.Warn($"[TriangulateNGon] Model '{fileName}' has no valid triangles after async build.");
+            Log.Warn($"[TriangulateNGon] Model '{fileName}' has no valid geometry after async build.");
             yield break;
         }
 
-        Log.Info($"[TriangulateNGon] Created model '{fileName}': parallelograms={model.ParallelogramCount}, quads={model.QuadCount}.");
+        Log.Info($"[TriangulateNGon] Created model '{fileName}': ParallelogramCount={model.ParallelogramCount}, NativePrimitiveCount={model.NativePrimitiveCount}, PrimitiveCount={model.PrimitiveCount}.");
     }
 }

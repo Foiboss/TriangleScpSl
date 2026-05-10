@@ -88,7 +88,18 @@ public class TriangulateNGonV2Command : ICommand
             }
         }
 
-        if (!NGonModelBuilder.TryLoad(requestedFile, Color.white, out List<ModelParallelogram> parallelograms, out string fileName, out string error, planarThreshold))
+        if (!NGonModelBuilder.TryLoad(
+                requestedFile,
+                Color.white,
+                out List<ModelParallelogram> parallelograms,
+                out List<ModelPrimitive> detectedPrimitives,
+                out string fileName,
+                out string error,
+                planarThreshold,
+                true,
+                false
+            )
+        )
         {
             response = error;
             return false;
@@ -98,6 +109,7 @@ public class TriangulateNGonV2Command : ICommand
 
         var createdModel = ApproximateModel.CreateDeferred(
             parallelograms,
+            detectedPrimitives,
             spawnPosition,
             PrimitiveFlags.Visible,
             accuracy);
@@ -122,7 +134,7 @@ public class TriangulateNGonV2Command : ICommand
         if (!ReferenceEquals(_model, model))
             yield break;
 
-        if (model.ParallelogramCount == 0)
+        if (model is { ParallelogramCount: 0, NativePrimitiveCount: 0 })
         {
             model.Destroy();
             _model = null;
@@ -130,6 +142,6 @@ public class TriangulateNGonV2Command : ICommand
             yield break;
         }
 
-        Log.Info($"[TriangulateNGonV2] Created model '{fileName}': parallelograms={model.ParallelogramCount}, quads={model.QuadCount}.");
+        Log.Info($"[TriangulateNGonV2] Created model '{fileName}': ParallelogramCount={model.ParallelogramCount}, NativePrimitiveCount={model.NativePrimitiveCount}, PrimitiveCount={model.PrimitiveCount}.");
     }
 }

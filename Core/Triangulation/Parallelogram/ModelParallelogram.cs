@@ -8,4 +8,5 @@ public class ModelParallelogram
     public Vector3 VLeft;
     public Vector3 VUp;
     public Color Color;
+    public bool IsRectangle = false;
 }

@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace TriangleScpSl.Core.NGons;
 
-// Convex n-gon: vertices (CCW relative to normal), color, plane normal
+/// <summary>A convex n-gon with vertices in CCW order, color, and plane normal.</summary>
 public struct ConvexNGon
 {
     public List<Vector3> Vertices;
@@ -10,8 +10,7 @@ public struct ConvexNGon
     public Vector3 Normal;
 }
 
-// Splits raw n-gons into convex pieces via Hertel-Mehlhorn: project to 2D, triangulate if
-// needed, then greedily merge adjacent convex pieces. Returns 3D pieces with original color/normal
+/// <summary>Splits concave n-gons into convex pieces via triangulation and merging.</summary>
 public static class ConvexNGonDecomposer
 {
     public static List<ConvexNGon> Decompose(IEnumerable<NGonRaw> nGons)
@@ -28,11 +27,11 @@ public static class ConvexNGonDecomposer
         List<Vector3> verts = nGon.Vertices;
         if (verts.Count < 3) return;
 
-        Vector3 normal = NewellNormal(verts);
+        Vector3 normal = NGonMath.NewellNormal(verts);
         if (normal.sqrMagnitude < 1e-12f) return; // degenerate
         normal = normal.normalized;
 
-        // Build orthonormal basis on polygon plane; project e1 to remove normal component
+        // Build orthonormal basis for 2D projection
         Vector3 origin = verts[0];
         Vector3 e1 = verts[1] - origin;
         e1 -= Vector3.Dot(e1, normal) * normal;
@@ -52,7 +51,7 @@ public static class ConvexNGonDecomposer
             indexMap.Add(i);
         }
 
-        // Ensure CCW winding in 2D (= CCW in 3D relative to normal)
+        // Ensure CCW winding in 2D
         if (SignedArea2D(p2D) < 0f)
         {
             p2D.Reverse();
@@ -103,7 +102,7 @@ public static class ConvexNGonDecomposer
             t[2],
         ]));
 
-        // Greedily merge adjacent convex pieces
+        // Greedily merge adjacent convex pieces into larger convex polygons
         var changed = true;
         int safety = pieces.Count * pieces.Count + 16;
 
@@ -129,7 +128,7 @@ public static class ConvexNGonDecomposer
         return pieces;
     }
 
-    // Ear-clip triangulate CCW polygon
+    // Triangulate CCW polygon using ear clipping
     static List<int[]> EarClipTriangulate(List<Vector2> polygon)
     {
         var triangles = new List<int[]>();
@@ -172,7 +171,7 @@ public static class ConvexNGonDecomposer
         return triangles;
     }
 
-    // Check if vertex cur is an ear (convex + no vertices inside triangle)
+    // Check if vertex cur forms an ear (convex + no internal vertices)
     static bool IsEar(List<Vector2> polygon, List<int> indices, int prev, int cur, int next)
     {
         Vector2 a = polygon[prev], b = polygon[cur], c = polygon[next];
@@ -189,10 +188,11 @@ public static class ConvexNGonDecomposer
         return true;
     }
 
-    // Merge p1 and p2 along shared edge if union is convex
+    // Try merging two convex pieces along their shared edge
     static bool TryMergePieces(List<int> p1, List<int> p2, List<Vector2> polygon, out List<int>? merged)
     {
         merged = null;
+
         for (var i = 0; i < p1.Count; i++)
         {
             int a = p1[i];
@@ -218,7 +218,7 @@ public static class ConvexNGonDecomposer
         return false;
     }
 
-    // Merge p1 and p2 along shared edge (p1[i1]→p1[i1+1]) and (p2[j2+1]→p2[j2])
+    // Merge two pieces along their shared edge
     static List<int> MergeAlongSharedEdge(List<int> p1, int i1, List<int> p2, int j2)
     {
         var merged = new List<int>();
@@ -313,22 +313,4 @@ public static class ConvexNGonDecomposer
     }
 
     static float Cross2D(Vector2 a, Vector2 b) => a.x * b.y - a.y * b.x;
-
-    // Newell normal for near-planar polygon
-    static Vector3 NewellNormal(List<Vector3> poly)
-    {
-        Vector3 n = Vector3.zero;
-        int count = poly.Count;
-
-        for (var i = 0; i < count; i++)
-        {
-            Vector3 c = poly[i];
-            Vector3 nx = poly[(i + 1) % count];
-            n.x += (c.y - nx.y) * (c.z + nx.z);
-            n.y += (c.z - nx.z) * (c.x + nx.x);
-            n.z += (c.x - nx.x) * (c.y + nx.y);
-        }
-
-        return n;
-    }
 }

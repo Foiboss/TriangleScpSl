@@ -94,7 +94,7 @@ public sealed class ExportSchematicNGonV2Command : ICommand
     {
         try
         {
-            if (!NGonModelBuilder.TryLoad(requestedFile, Color.white, out List<ModelParallelogram> parallelograms, out _, out string modelError, planarThreshold))
+            if (!NGonModelBuilder.TryLoad(requestedFile, Color.white, out List<ModelParallelogram> parallelograms, out List<ModelPrimitive> detectedPrimitives, out _, out string modelError, planarThreshold))
             {
                 Log.Warn($"[ExportSchematicNGonV2] {modelError}");
                 yield break;
@@ -102,13 +102,14 @@ public sealed class ExportSchematicNGonV2Command : ICommand
 
             _activeModel = ApproximateModel.CreateDeferred(
                 parallelograms,
+                detectedPrimitives,
                 Vector3.zero,
                 PrimitiveFlags.Visible,
                 accuracy);
 
             yield return _activeModel.BuildTrianglesCoroutine(PrimitiveFlags.Visible, buildBatch);
 
-            if (_activeModel.ParallelogramCount == 0)
+            if (_activeModel.ParallelogramCount == 0 && _activeModel.NativePrimitiveCount == 0)
             {
                 Log.Warn("[ExportSchematicNGonV2] Model has no valid non-degenerate triangles.");
                 yield break;
@@ -142,7 +143,7 @@ public sealed class ExportSchematicNGonV2Command : ICommand
                 yield break;
             }
 
-            Log.Info($"[ExportSchematicNGonV2] Exported: {outputPath} (triangles={_activeModel.ParallelogramCount}, quads={_activeModel.QuadCount} planarThreshold={planarThreshold.ToString(CultureInfo.InvariantCulture)}, accuracy={accuracy.ToString(CultureInfo.InvariantCulture)}).");
+            Log.Info($"[ExportSchematicNGonV2] Exported: {outputPath} (ParallelogramCount={_activeModel.ParallelogramCount}, PrimitiveCount={_activeModel.PrimitiveCount} planarThreshold={planarThreshold.ToString(CultureInfo.InvariantCulture)}, accuracy={accuracy.ToString(CultureInfo.InvariantCulture)}).");
         }
         finally
         {

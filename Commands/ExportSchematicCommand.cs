@@ -115,7 +115,7 @@ public sealed class ExportSchematicCommand : ICommand
                 yield break;
             }
 
-            Log.Info($"[ExportSchematic] Exported: {outputPath} (parallelograms={_activeModel.ParallelogramCount}, quads={_activeModel.QuadCount}, previewScale={previewScale.ToString(CultureInfo.InvariantCulture)}).");
+            Log.Info($"[ExportSchematic] Exported: {outputPath} (ParallelogramCount={_activeModel.ParallelogramCount}, PrimitiveCount={_activeModel.PrimitiveCount}, previewScale={previewScale.ToString(CultureInfo.InvariantCulture)}).");
         }
         finally
         {

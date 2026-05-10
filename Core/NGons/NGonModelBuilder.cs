@@ -1,3 +1,4 @@
+using TriangleScpSl.Core.NGons.Detectors;
 using TriangleScpSl.Core.Paths;
 using TriangleScpSl.Core.Triangulation.Parallelogram;
 using UnityEngine;
@@ -6,17 +7,24 @@ namespace TriangleScpSl.Core.NGons;
 
 public static class NGonModelBuilder
 {
-    // planarThreshold: max vertex displacement during plane snapping (0 = disabled)
     public static bool TryLoad
     (
         string requestedFile,
         Color defaultColor,
         out List<ModelParallelogram> parallelograms,
+        out List<ModelPrimitive> detectedPrimitives,
         out string normalizedFileName,
         out string error,
-        float planarThreshold = 0f)
+        float planarThreshold = 0f,
+        bool useHiddenTailOptimization = true,
+        bool detectPrimitives = true,
+        float deduplicateVertexThreshold = 1e-4f,
+        float deduplicatePlaneDistThreshold = 1e-4f,
+        float smoothMaxAngle = SmoothnessCheck.DefaultMaxAngle,
+        float smoothMinFraction = SmoothnessCheck.DefaultMinFraction)
     {
         parallelograms = [];
+        detectedPrimitives = [];
         normalizedFileName = string.Empty;
         error = string.Empty;
 
@@ -71,7 +79,8 @@ public static class NGonModelBuilder
 
             if (modelPath.EndsWith(".obj", StringComparison.OrdinalIgnoreCase))
             {
-                if (!ObjNGonParser.TryParseFile(modelPath, defaultColor, out ngons, out string objError))
+                if (!ObjNGonParser.TryParseFile(modelPath, defaultColor, out ngons,
+                    out string objError))
                 {
                     error = objError;
                     return false;
@@ -84,13 +93,34 @@ public static class NGonModelBuilder
                 return false;
             }
 
-            // Split non-planar faces (when planarThreshold > 0)
-            List<NGonRaw> planarNgons = PlanarNGonSplitter.SplitAll(ngons, planarThreshold);
+            ngons = NGonDeduplicator.Deduplicate(ngons,
+                deduplicateVertexThreshold, deduplicatePlaneDistThreshold);
+
+            // Build solid volume for winding number calculations (used by primitive
+            // detection and hidden-tail optimization)
+            ModelSolidVolume? solid = useHiddenTailOptimization
+                ? ModelSolidVolume.Build(ngons)
+                : null;
+
+            // Detect primitives before planar merging (to preserve topology)
+            List<NGonRaw> remainingNgons;
+
+            if (detectPrimitives)
+            {
+                (detectedPrimitives, remainingNgons) = PrimitiveShapeDetector.Detect(ngons, solid, smoothMaxAngle, smoothMinFraction);
+            }
+            else
+            {
+                remainingNgons = ngons;
+            }
+
+            List<NGonRaw> planarNgons = PlanarNGonSplitter.SplitAll(remainingNgons, planarThreshold);
 
             List<ConvexNGon> convexNgons = ConvexNGonDecomposer.Decompose(planarNgons);
-            parallelograms = ParallelogramProcessor.Process(convexNgons);
 
-            if (parallelograms.Count == 0)
+            parallelograms = HiddenTailParallelogramProcessor.Process(convexNgons, solid);
+
+            if (parallelograms.Count == 0 && detectedPrimitives.Count == 0)
             {
                 error = "No valid triangles produced from model polygons.";
                 return false;

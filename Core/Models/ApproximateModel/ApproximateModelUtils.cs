@@ -58,9 +58,8 @@ public static class ApproximateModelUtils
         double sy = vLocal.y * (sp * f);
         double c = Math.Cos(theta), s = Math.Sin(theta);
 
-        // Validate to catch NaN
         if (double.IsNaN(sx) || double.IsNaN(sy))
-            return vLocal; // Safety fallback
+            throw new InvalidOperationException($"InverseTransform produced NaN: sx={sx}, sy={sy}, vLocal={vLocal}, theta={theta}, phi={phi}");
 
         // Inverse of R(-theta) is R(theta)
         return new Vector3(
@@ -74,7 +73,7 @@ public static class ApproximateModelUtils
     // when CreateParallelogram is run with this candidate stretch instead of one
     // that exactly fits (vLeft, vUp). Returns absolute world units, scales linearly
     // with parallelogram size, and equals 0 whenever the candidate would render
-    // (vLeft, vUp) exactly — including non-trivial cases where (candTheta, candPhi)
+    // (vLeft, vUp) exactly — including non-trivial cases where (candidateTheta, candidatePhi)
     // differs from the "true" solver output but still satisfies |v1C| = |v2C|.
     public static float MaxVertexError
     (

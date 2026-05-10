@@ -5,9 +5,7 @@ using UnityEngine;
 
 namespace TriangleScpSl.Core.NGons;
 
-// Decompose convex n-gons into (n-3) parallelograms + 1 triangle per n-gon
-// Algorithm: greedily peel off parallelograms (find V where P=A+B-V is inside polygon),
-// then triangulate remaining 3 vertices. CCW order preserved throughout
+/// <summary>Decomposes convex n-gons into parallelograms and triangles.</summary>
 public static class ParallelogramProcessor
 {
     public static List<ModelParallelogram> Process
@@ -30,11 +28,11 @@ public static class ParallelogramProcessor
 
         Vector3 normal = nGon.Normal.sqrMagnitude > 1e-12f
             ? nGon.Normal.normalized
-            : NewellNormal(verts).normalized;
+            : NGonMath.NewellNormal(verts).normalized;
 
         var poly = new List<Vector3>(verts);
 
-        if (Vector3.Dot(NewellNormal(poly), normal) < 0f)
+        if (Vector3.Dot(NGonMath.NewellNormal(poly), normal) < 0f)
             poly.Reverse();
 
         if (poly.Count == 3)
@@ -43,11 +41,14 @@ public static class ParallelogramProcessor
             return;
         }
 
-        if (!IsPlanar(poly, normal))
+        if (!NGonMath.IsPlanar(poly, normal))
         {
-            // Non-planar; fall back to triangulation
+            // Non-planar polygon: fall back to simple triangulation
             for (var i = 1; i < poly.Count - 1; i++)
+            {
                 AddTriangle(poly[0], poly[i], poly[i + 1], color, parallelograms);
+            }
+
             return;
         }
 
@@ -62,6 +63,7 @@ public static class ParallelogramProcessor
                 return;
             }
 
+            // Extract parallelogram from polygon
             Vector3 v = poly[idx];
             Vector3 a = poly[(idx - 1 + n) % n];
             Vector3 b = poly[(idx + 1) % n];
@@ -111,6 +113,7 @@ public static class ParallelogramProcessor
         BuildPlaneBasis(poly, normal, out Vector3 origin, out Vector3 e1, out Vector3 e2);
         List<Vector2> poly2D = ProjectPolygon(poly, origin, e1, e2);
 
+        // Try each vertex: check if P = A + B - V is inside the polygon
         for (var i = 0; i < n; i++)
         {
             Vector3 v = poly[i];
@@ -173,44 +176,4 @@ public static class ParallelogramProcessor
     }
 
     static float Cross2D(Vector2 a, Vector2 b) => a.x * b.y - a.y * b.x;
-
-    static bool IsPlanar(List<Vector3> poly, Vector3 normal)
-    {
-        Vector3 origin = poly[0];
-        var maxDeviation = 0f;
-        var avgEdgeLength = 0f;
-
-        for (var i = 0; i < poly.Count; i++)
-        {
-            Vector3 a = poly[i];
-            Vector3 b = poly[(i + 1) % poly.Count];
-            avgEdgeLength += (b - a).magnitude;
-
-            float deviation = Mathf.Abs(Vector3.Dot(a - origin, normal));
-
-            if (deviation > maxDeviation)
-                maxDeviation = deviation;
-        }
-
-        avgEdgeLength = poly.Count > 0 ? avgEdgeLength / poly.Count : 0f;
-        float tolerance = avgEdgeLength * 1e-4f + 1e-6f;
-        return maxDeviation <= tolerance;
-    }
-
-    static Vector3 NewellNormal(List<Vector3> poly)
-    {
-        Vector3 n = Vector3.zero;
-        int count = poly.Count;
-
-        for (var i = 0; i < count; i++)
-        {
-            Vector3 c = poly[i];
-            Vector3 nx = poly[(i + 1) % count];
-            n.x += (c.y - nx.y) * (c.z + nx.z);
-            n.y += (c.z - nx.z) * (c.x + nx.x);
-            n.z += (c.x - nx.x) * (c.y + nx.y);
-        }
-
-        return n;
-    }
 }
