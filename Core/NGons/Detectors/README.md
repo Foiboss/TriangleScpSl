@@ -1,10 +1,12 @@
-# Detectors — Primitive Shape Detection
+# Detectors - Primitive Shape Detection
 
-Detects when a cluster of mesh faces forms a recognizable primitive shape (sphere, cylinder, cube) that can be replaced with a single Unity primitive.
+Detects when a cluster of mesh faces forms a recognizable Unity primitive shape (Sphere, Cylinder, Cube) that can be replaced with a single native primitive, saving hundreds or thousands of parallelogram primitives.
 
-## How Detection Works
+## Detection Flow
 
-`PrimitiveShapeDetector` groups faces into clusters by color and edge adjacency, then tries each detector in order. The first match wins.
+`PrimitiveShapeDetector` groups faces into connected components by color and edge adjacency, then runs detectors in priority order. The first match wins.
+
+**Smoothness gate:** Before trying sphere or cylinder detection, `SmoothnessCheck` verifies that the surface is smooth (not faceted). This prevents replacing intentionally low-poly geometry (like an icosahedron) with a smooth sphere.
 
 ## Detectors
 
@@ -14,16 +16,16 @@ Fits a sphere or ellipsoid to a face cluster.
 
 **Algorithm:**
 
-1. Compute centroid of unique vertices
-2. Sphere fit: check if all vertices are equidistant from centroid (tolerance: 2%)
-3. Ellipsoid fallback: covariance eigendecomposition → semi-axes, check unit-sphere fit in eigen-frame
-4. Validate normals point outward from center
-5. Check solid angle coverage (at least half-sphere)
-6. For partial coverage: verify uncovered surface is inside solid (Fibonacci sphere sampling)
+1. Compute centroid C of all unique vertices
+2. **Sphere test:** check `max(|r_i - r_mean|) / r_mean < 0.02` (all vertices equidistant from center)
+3. **Ellipsoid fallback:** compute 3x3 covariance matrix of `(v_i - C)`, perform **Jacobi eigendecomposition** to get principal axes and semi-axis lengths. Transform vertices into the eigen-frame and check unit-sphere fit.
+4. **Normal validation:** verify face normals point outward from center
+5. **Coverage check:** compute total solid angle subtended by faces from center (must be >= 2pi, at least half-sphere)
+6. For partial coverage: verify uncovered surface is inside solid material using **Fibonacci sphere sampling**
 
-**Approximate mode:** 10% tolerance, lower coverage requirement. Used in Pass 2 when solid volume is available.
+**Approximate mode** (Pass 2): 10% tolerance, lower coverage. Requires solid volume for hidden surface verification.
 
-Unity sphere has diameter 1 at scale 1. Output Scale = (2×semi-axis₁, 2×semi-axis₂, 2×semi-axis₃).
+Unity sphere has diameter 1 at scale 1. Output: `Scale = (2*a1, 2*a2, 2*a3)`.
 
 ### CylinderDetector
 
@@ -31,34 +33,58 @@ Fits a cylinder to a face cluster.
 
 **Algorithm:**
 
-1. Build area-weighted normal covariance matrix
-2. Smallest eigenvector = cylinder axis (lateral normals are perpendicular to axis)
+1. Build **area-weighted normal covariance matrix** `N = sum(area_i * n_i * n_i^T)`
+2. Smallest eigenvector of N = cylinder axis (lateral face normals are perpendicular to axis)
 3. Project vertices onto plane perpendicular to axis
-4. Kasa circle fit in 2D projected space
-5. Check radial deviation (tolerance: 2%)
-6. Height = extent along axis
+4. **Kasa circle fitting** in 2D projected space (least-squares circle fit)
+5. Check radial deviation: `max(|dist - r|) / r < 0.02`
+6. Height = extent of vertices along axis
 
-Unity cylinder has radius 0.5, height 2. Output Scale = (2r, h/2, 2r).
+Unity cylinder has radius 0.5, height 2. Output: `Scale = (2r, h/2, 2r)`.
 
 ### CubeDetector
 
 Detects axis-aligned or arbitrarily rotated boxes.
 
-**Exact mode (TryDetect):** Requires exactly 6 faces. Clusters normals into 3 anti-parallel pairs, checks orthogonality, verifies vertices lie on box surface.
+**Exact mode** (`TryDetect`): Requires exactly 6 faces.
 
-**Partial mode (TryDetectPartial):** For 3-5 visible faces forming a box protrusion. Two approaches:
+1. Cluster face normals into 3 anti-parallel pairs (tolerance: ~5 degrees)
+2. Check mutual orthogonality: `|dot(d_i, d_j)| < 0.05`
+3. Project vertices onto each axis for extents
+4. Verify all vertices lie on box surface
 
-1. Normal-based: cluster visible face normals into orthogonal groups, infer missing axes
-2. OBB fallback: covariance eigendecomposition of vertex positions for arbitrarily rotated boxes
+**Partial mode** (`TryDetectPartial`): For 3-5 visible faces forming a box protrusion. Two approaches:
 
-Both verify that missing faces are inside solid material.
+1. **Normal-based:** cluster visible face normals into orthogonal groups, infer missing axes from cross products
+2. **OBB fallback:** covariance eigendecomposition of vertex positions, fit oriented bounding box (**OBB**), verify vertices on surface
+
+Both partial methods verify hidden faces are inside solid material.
 
 ### SmoothnessCheck
 
-Shared gate for sphere/cylinder detection. Prevents replacing low-poly (faceted) geometry with smooth primitives.
+Shared gate that prevents replacing faceted geometry with smooth primitives.
 
-Measures the angle between normals of adjacent faces. Requires at least 70% of shared edges to have angle < 18° (~0.32 radians). Both thresholds are configurable via the `smoothness` command parameter.
+**Algorithm:** builds edge adjacency map, measures dihedral angle between normals of adjacent faces. Requires at least 70% of shared edges to have angle below the threshold (default 0.32 radians ~ 18 degrees).
 
-## Eigendecomposition
+Both thresholds (max angle, min fraction) are configurable via the `smoothness` command parameter.
 
-`SphereDetector.Eigen3x3` implements Jacobi iteration for 3×3 symmetric matrices. Used by both sphere (covariance of vertex positions) and cylinder (covariance of face normals) detectors, and by the OBB fitting in CubeDetector.
+## Mathematical Methods used
+
+| Method                                | Used by                      | Description                                                                                          |
+|---------------------------------------|------------------------------|------------------------------------------------------------------------------------------------------|
+| **Jacobi eigendecomposition**         | Sphere, Cylinder, Cube (OBB) | Iterative eigenvalue solver for 3x3 symmetric matrices. Finds principal axes of covariance matrices. |
+| **Kasa circle fitting**               | Cylinder                     | Least-squares 2D circle fit. Minimizes algebraic distance.                                           |
+| **Solid angle (van Oosterom-Strang)** | Sphere coverage              | Computes solid angle subtended by a triangle from a point using the atan2 formula.                   |
+| **Fibonacci sphere sampling**         | Sphere (partial)             | Quasi-uniform point distribution on sphere surface for hidden-surface verification.                  |
+
+## Files
+
+| File                           | Content                                                              |
+|--------------------------------|----------------------------------------------------------------------|
+| `SphereDetector.cs`            | `TryDetect` and `TryDetectApproximate` for sphere/ellipsoid fitting  |
+| `SphereDetector.Validation.cs` | Normal validation, solid angle coverage, hidden surface verification |
+| `SphereDetector.Eigen.cs`      | Jacobi eigendecomposition for 3x3 symmetric matrices                 |
+| `CylinderDetector.cs`          | `TryDetect` for cylinder axis + Kasa circle fitting                  |
+| `CubeDetector.cs`              | `TryDetect` (exact 6-face) and `TryDetectPartial` (3-5 face)         |
+| `CubeDetector.Fitting.cs`      | Normal-based fitting, OBB fitting, shared box verification           |
+| `SmoothnessCheck.cs`           | `IsSurfaceSmooth` dihedral angle gate                                |
