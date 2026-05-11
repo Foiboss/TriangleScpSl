@@ -1,3 +1,4 @@
+using AdminToys;
 using Exiled.API.Features.Toys;
 using TriangleScpSl.Core.NGons;
 using TriangleScpSl.Core.ProjectMerExport;
@@ -82,16 +83,40 @@ public partial class ExactModel
             });
         }
 
-        for (var i = 0; i < NativePrimitives.Count; i++)
+        // Export native primitives from ModelPrimitive data directly,
+        // without relying on spawned Unity objects (which may not exist during export).
+        Quaternion inverseRotation = Quaternion.Inverse(modelRotation);
+        PrimitiveFlags currentFlags = Flags;
+
+        for (var i = 0; i < ModelPrimitives.Count; i++)
         {
-            Primitive native = NativePrimitives[i];
-            ModelPrimitive model = ModelPrimitives[i];
+            ModelPrimitive mp = ModelPrimitives[i];
 
-            bool hasBase = i < NativePrimitiveBases.Count && NativePrimitiveBases[i] != null;
+            Vector3 worldCenter = TransformPoint(mp.Center);
+            Quaternion worldRot = Rotation * mp.Rotation;
 
-            if (hasBase)
+            if (IsUniformScale(mp.Scale))
             {
-                Primitive basePrim = NativePrimitiveBases[i];
+                int shapeId = objectId++;
+
+                blocks.Add(new ProjectMerBlock
+                {
+                    Name = $"(Native.{i + 1})",
+                    ObjectId = shapeId,
+                    ParentId = modelObjectId,
+                    Position = inverseTransformPoint(worldCenter),
+                    Rotation = (inverseRotation * worldRot).eulerAngles,
+                    Scale = mp.Scale,
+                    BlockType = 1,
+                    IsPrimitive = true,
+                    PrimitiveType = (int)mp.Type,
+                    PrimitiveColor = mp.Color,
+                    PrimitiveFlags = currentFlags,
+                    Static = false,
+                });
+            }
+            else
+            {
                 int baseId = objectId++;
                 int shapeId = objectId++;
 
@@ -100,9 +125,9 @@ public partial class ExactModel
                     Name = $"(Native.{i + 1}).Base",
                     ObjectId = baseId,
                     ParentId = modelObjectId,
-                    Position = inverseTransformPoint(basePrim.Position),
-                    Rotation = (Quaternion.Inverse(modelRotation) * basePrim.Rotation).eulerAngles,
-                    Scale = basePrim.Scale,
+                    Position = inverseTransformPoint(worldCenter),
+                    Rotation = (inverseRotation * worldRot).eulerAngles,
+                    Scale = mp.Scale,
                     BlockType = 0,
                     IsPrimitive = false,
                     Static = false,
@@ -113,34 +138,14 @@ public partial class ExactModel
                     Name = $"(Native.{i + 1})",
                     ObjectId = shapeId,
                     ParentId = baseId,
-                    Position = native.Transform.localPosition,
-                    Rotation = native.Transform.localRotation.eulerAngles,
-                    Scale = native.Transform.localScale,
+                    Position = Vector3.zero,
+                    Rotation = Vector3.zero,
+                    Scale = Vector3.one,
                     BlockType = 1,
                     IsPrimitive = true,
-                    PrimitiveType = (int)model.Type,
-                    PrimitiveColor = model.Color,
-                    PrimitiveFlags = native.Flags,
-                    Static = false,
-                });
-            }
-            else
-            {
-                int shapeId = objectId++;
-
-                blocks.Add(new ProjectMerBlock
-                {
-                    Name = $"(Native.{i + 1})",
-                    ObjectId = shapeId,
-                    ParentId = modelObjectId,
-                    Position = inverseTransformPoint(native.Position),
-                    Rotation = (Quaternion.Inverse(modelRotation) * native.Rotation).eulerAngles,
-                    Scale = native.Scale,
-                    BlockType = 1,
-                    IsPrimitive = true,
-                    PrimitiveType = (int)model.Type,
-                    PrimitiveColor = model.Color,
-                    PrimitiveFlags = native.Flags,
+                    PrimitiveType = (int)mp.Type,
+                    PrimitiveColor = mp.Color,
+                    PrimitiveFlags = currentFlags,
                     Static = false,
                 });
             }

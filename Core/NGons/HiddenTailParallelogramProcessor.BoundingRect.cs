@@ -125,7 +125,7 @@ public static partial class HiddenTailParallelogramProcessor
     )
     {
         const int samplesPerEdge = 3;
-        var pullIn = 0.03f;
+        const float pullIn = 0.03f;
         Vector3 pullDir = normal * pullIn;
 
         // Check corners and edge samples

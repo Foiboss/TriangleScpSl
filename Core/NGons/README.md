@@ -37,7 +37,7 @@ Parses `.obj` files into `NGonRaw` faces. Supports `v`, `f`, `vn`, `usemtl`, `mt
 
 Removes duplicate faces that appear from boolean operations, overlapping geometry.
 
-**Matching criteria:** same vertex count, similar colors, coplanar normals, close centroids, and 1-to-1 vertex match (regardless of winding or starting vertex).
+**Matching criteria:** same vertex count, similar colors, same-direction normals, close centroids, and 1-to-1 vertex match (regardless of starting vertex). Opposite-winding faces (back-to-back geometry like plant leaves) are intentionally preserved so double-sided surfaces remain visible from both sides.
 
 ### 3. ModelSolidVolume
 

@@ -82,12 +82,13 @@ Every command can be run again while building to cancel, or run again after the 
 
 ### Export Commands (also works in server console)
 
-| Command                                                     | Pipeline      | Description                          |
-|-------------------------------------------------------------|---------------|--------------------------------------|
-| `ExportSchematicNGonV2 <file> <output> [planar] [accuracy]` | N-gon + V2    | Export to ProjectMER schematic JSON. |
-| `ExportSchematicNGon <file> <output> [planar]`              | N-gon + V1    | Export to ProjectMER schematic JSON. |
-| `ExportSchematicV2 <file> <output> [accuracy]`              | Triangle + V2 | Export to ProjectMER schematic JSON. |
-| `ExportSchematic <file> <output>`                           | Triangle + V1 | Export to ProjectMER schematic JSON. |
+| Command                                                          | Pipeline              | Description                                                              |
+|------------------------------------------------------------------|-----------------------|--------------------------------------------------------------------------|
+| `ExportSchematicNGonOpt <file> <output> [accuracy] [smoothness]` | N-gon + V2 + all opts | **Best export.** All optimizations, same pipeline as TriangulateNGonOpt. |
+| `ExportSchematicNGonV2 <file> <output> [planar] [accuracy]`      | N-gon + V2            | Export to ProjectMER schematic JSON.                                     |
+| `ExportSchematicNGon <file> <output> [planar]`                   | N-gon + V1            | Export to ProjectMER schematic JSON.                                     |
+| `ExportSchematicV2 <file> <output> [accuracy]`                   | Triangle + V2         | Export to ProjectMER schematic JSON.                                     |
+| `ExportSchematic <file> <output>`                                | Triangle + V1         | Export to ProjectMER schematic JSON.                                     |
 
 ### Debug Commands (player only)
 

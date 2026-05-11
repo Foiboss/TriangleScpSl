@@ -12,9 +12,7 @@ public static partial class HiddenTailParallelogramProcessor
         if (Vector3.Dot(Vector3.Cross(vUp, vLeft), normal) < 0f)
             vUp = -vUp;
 
-        // Rectangle = equal-length diagonals (|VLeft| = |VUp|)
-        // VLeft/VUp are half-diagonals; edges are (VLeft±VUp).
-        // dot(VLeft+VUp, VLeft-VUp) = |VLeft|²-|VUp|² = 0 when |VLeft|=|VUp|
+        // Rectangle = equal-length half diagonals (|VLeft| = |VUp|)
         float lengthLeft = vLeft.magnitude;
         float lengthUp = vUp.magnitude;
 

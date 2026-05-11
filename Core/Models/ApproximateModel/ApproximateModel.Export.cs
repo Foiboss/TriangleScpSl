@@ -1,4 +1,5 @@
 using AdminToys;
+using TriangleScpSl.Core.NGons;
 using TriangleScpSl.Core.ProjectMerExport;
 using UnityEngine;
 
@@ -15,11 +16,11 @@ public partial class ApproximateModel
     {
         if (IsDestroyedValue) return [];
 
-        IReadOnlyList<PrimitiveSnapshot> primitives = GetPrimitiveSnapshot();
+        IReadOnlyList<PrimitiveSnapshot> primitives = GetPrimitiveSnapshotWithoutNatives();
 
-        if (primitives.Count == 0) return [];
+        if (primitives.Count == 0 && ModelPrimitives.Count == 0) return [];
 
-        List<ProjectMerBlock> blocks = new(primitives.Count);
+        List<ProjectMerBlock> blocks = new(primitives.Count + ModelPrimitives.Count * 2);
         List<int> primitiveObjectIds = new(primitives.Count);
         int objectId = startObjectId;
 
@@ -63,6 +64,74 @@ public partial class ApproximateModel
                 PrimitiveFlags = primitive.Flags,
                 Static = false,
             });
+        }
+
+        // Export native primitives from ModelPrimitive data directly,
+        // without relying on spawned Unity objects (which may not exist during export).
+        Quaternion inverseRotation = Quaternion.Inverse(modelRotation);
+        PrimitiveFlags currentFlags = Flags;
+
+        for (var i = 0; i < ModelPrimitives.Count; i++)
+        {
+            ModelPrimitive mp = ModelPrimitives[i];
+
+            Vector3 worldCenter = TransformPoint(mp.Center);
+            Quaternion worldRot = Rotation * mp.Rotation;
+
+            if (IsUniformScale(mp.Scale))
+            {
+                int shapeId = objectId++;
+
+                blocks.Add(new ProjectMerBlock
+                {
+                    Name = $"(Native.{i + 1})",
+                    ObjectId = shapeId,
+                    ParentId = modelObjectId,
+                    Position = inverseTransformPoint(worldCenter),
+                    Rotation = (inverseRotation * worldRot).eulerAngles,
+                    Scale = mp.Scale,
+                    BlockType = 1,
+                    IsPrimitive = true,
+                    PrimitiveType = (int)mp.Type,
+                    PrimitiveColor = mp.Color,
+                    PrimitiveFlags = currentFlags,
+                    Static = false,
+                });
+            }
+            else
+            {
+                int baseId = objectId++;
+                int shapeId = objectId++;
+
+                blocks.Add(new ProjectMerBlock
+                {
+                    Name = $"(Native.{i + 1}).Base",
+                    ObjectId = baseId,
+                    ParentId = modelObjectId,
+                    Position = inverseTransformPoint(worldCenter),
+                    Rotation = (inverseRotation * worldRot).eulerAngles,
+                    Scale = mp.Scale,
+                    BlockType = 0,
+                    IsPrimitive = false,
+                    Static = false,
+                });
+
+                blocks.Add(new ProjectMerBlock
+                {
+                    Name = $"(Native.{i + 1})",
+                    ObjectId = shapeId,
+                    ParentId = baseId,
+                    Position = Vector3.zero,
+                    Rotation = Vector3.zero,
+                    Scale = Vector3.one,
+                    BlockType = 1,
+                    IsPrimitive = true,
+                    PrimitiveType = (int)mp.Type,
+                    PrimitiveColor = mp.Color,
+                    PrimitiveFlags = currentFlags,
+                    Static = false,
+                });
+            }
         }
 
         return blocks;
