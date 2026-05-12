@@ -16,7 +16,7 @@ OBJ file
   - List<ModelParallelogram> + List<ModelPrimitive>
 ```
 
-`NGonModelBuilder.TryLoad()` is the single entry point that runs this entire pipeline.
+`NGonModelBuilder.Load()` (sync) and `NGonModelBuilder.LoadCoroutine()` (async) are the entry points that run this entire pipeline. Both accept an `NGonModelConfig` for all processing parameters.
 
 ## Key Data Types
 
@@ -37,7 +37,8 @@ Parses `.obj` files into `NGonRaw` faces. Supports `v`, `f`, `vn`, `usemtl`, `mt
 
 Removes duplicate faces that appear from boolean operations, overlapping geometry.
 
-**Matching criteria:** same vertex count, similar colors, same-direction normals, close centroids, and 1-to-1 vertex match (regardless of starting vertex). Opposite-winding faces (back-to-back geometry like plant leaves) are intentionally preserved so double-sided surfaces remain visible from both sides.
+**Matching criteria:** same vertex count, similar colors, same-direction normals, close centroids, and 1-to-1 vertex match (regardless of starting vertex). Opposite-winding faces (back-to-back geometry like plant leaves) are intentionally preserved so double-sided surfaces remain visible from both
+sides.
 
 ### 3. ModelSolidVolume
 
@@ -103,7 +104,9 @@ The vertex selection for peeling uses the **fourth parallelogram vertex test**: 
 
 | File                                               | Content                                                          |
 |----------------------------------------------------|------------------------------------------------------------------|
-| `NGonModelBuilder.cs`                              | Entry point: `TryLoad()` runs the full pipeline                  |
+| `NGonModelBuilder.cs`                              | Entry point: `Load()` / `LoadCoroutine()` run the full pipeline  |
+| `NGonModelConfig.cs`                               | Session-scoped config with reflection-based get/set              |
+| `NGonModelResult.cs`                               | Result container: parallelograms + detected primitives           |
 | `ObjNGonParser.cs`                                 | OBJ/MTL parser producing `NGonRaw` faces                         |
 | `NGonRaw.cs`                                       | Raw polygon data structure (vertices + color)                    |
 | `NGonDeduplicator.cs`                              | Duplicate face removal                                           |

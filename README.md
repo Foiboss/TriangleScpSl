@@ -53,16 +53,16 @@ The plugin applies several tricks to minimize the number of primitives needed:
 
 ## Best Command to Use
 
-> ### `TriangulateNGonOpt` — the recommended command
+> ### `TriangulateNGonV2` — the recommended display command
 >
-> This command applies **all optimizations**: N-gon decomposition, coplanar merging, rectangle detection, primitive shape detection, hidden tail optimization, and V2 stretch clustering. It produces the lowest primitive count.
+> This command applies the N-gon pipeline with V2 stretch clustering. Enable all optimizations
+> (hidden tails, primitive detection, smoothness) via `NGonConfig` for the lowest primitive count.
 >
 > ```
-> TriangulateNGonOpt <model.obj> [accuracy] [smoothness]
+> TriangulateNGonV2 <model.obj> [planar threshold] [accuracy]
 > ```
 >
-> - `accuracy` (default `0.001`): max vertex error in world units. Lower = more precise, more primitives.
-> - `smoothness` (default `0.32`): max dihedral angle (radians) for primitive shape detection. Controls how aggressively spheres/cylinders are detected. `0.32 rad ~ 18 degrees`.
+> For export, use `ExportSchematicNGonV2` with the same pipeline.
 
 ---
 
@@ -72,53 +72,93 @@ Every command can be run again while building to cancel, or run again after the 
 
 ### Display Commands (player only)
 
-| Command                                             | Pipeline              | Description                                                                             |
-|-----------------------------------------------------|-----------------------|-----------------------------------------------------------------------------------------|
-| `TriangulateNGonOpt <file> [accuracy] [smoothness]` | N-gon + V2 + all opts | **Best result.** Lowest primitive count with all optimizations.                         |
-| `TriangulateNGonV2 <file> [planar] [accuracy]`      | N-gon + V2            | N-gon decomposition with stretch clustering. No primitive shape detection.              |
-| `TriangulateNGon <file> [planar]`                   | N-gon + V1            | N-gon decomposition with exact parallelograms.                                          |
-| `TriangulateV2 <file> [accuracy]`                   | Triangle + V2         | Triangle-based with stretch clustering. Simpler, but higher primitive count than N-gon. |
-| `Triangulate <file>`                                | Triangle + V1         | Simplest pipeline. Triangle-based, exact parallelograms. Highest primitive count.       |
+| Command                                        | Pipeline      | Description                                                              |
+|------------------------------------------------|---------------|--------------------------------------------------------------------------|
+| `TriangulateNGonV2 <file> [planar] [accuracy]` | N-gon + V2    | **Best result.** N-gon decomposition with stretch clustering.            |
+| `TriangulateNGon <file> [planar]`              | N-gon + V1    | N-gon decomposition with exact parallelograms.                           |
+| `TriangulateV2 <file> [accuracy]`              | Triangle + V2 | Triangle-based with stretch clustering. Simpler, higher primitive count. |
+| `Triangulate <file>`                           | Triangle + V1 | Simplest pipeline. Triangle-based, exact parallelograms.                 |
 
 ### Export Commands (also works in server console)
 
-| Command                                                          | Pipeline              | Description                                                              |
-|------------------------------------------------------------------|-----------------------|--------------------------------------------------------------------------|
-| `ExportSchematicNGonOpt <file> <output> [accuracy] [smoothness]` | N-gon + V2 + all opts | **Best export.** All optimizations, same pipeline as TriangulateNGonOpt. |
-| `ExportSchematicNGonV2 <file> <output> [planar] [accuracy]`      | N-gon + V2            | Export to ProjectMER schematic JSON.                                     |
-| `ExportSchematicNGon <file> <output> [planar]`                   | N-gon + V1            | Export to ProjectMER schematic JSON.                                     |
-| `ExportSchematicV2 <file> <output> [accuracy]`                   | Triangle + V2         | Export to ProjectMER schematic JSON.                                     |
-| `ExportSchematic <file> <output>`                                | Triangle + V1         | Export to ProjectMER schematic JSON.                                     |
+| Command                                                     | Pipeline      | Description                                          |
+|-------------------------------------------------------------|---------------|------------------------------------------------------|
+| `ExportSchematicNGonV2 <file> <output> [planar] [accuracy]` | N-gon + V2    | **Best export.** Same pipeline as TriangulateNGonV2. |
+| `ExportSchematicNGon <file> <output> [planar]`              | N-gon + V1    | Export N-gon V1 to ProjectMER schematic JSON.        |
+| `ExportSchematicV2 <file> <output> [accuracy]`              | Triangle + V2 | Export triangle V2 to ProjectMER schematic JSON.     |
+| `ExportSchematic <file> <output>`                           | Triangle + V1 | Export triangle V1 to ProjectMER schematic JSON.     |
 
-### Debug Commands (player only)
+### Config & Debug Commands
 
-| Command                      | Description                                                                     |
-|------------------------------|---------------------------------------------------------------------------------|
-| `TriangleExample`            | Spawns a random triangle with colored vertex markers.                           |
-| `TestParallelograms [count]` | Visualizes V2 stretch clustering with random parallelograms.                    |
-| `TestNGons <file> [stage]`   | Visualizes N-gon pipeline stages (0=raw, 1=merged, 2=convex, 3=parallelograms). |
-
-### Parameters
-
-- **`accuracy`** — Maximum vertex error (world units) when reusing stretch primitives. Default: `0.001`. Lower = more precise but more primitives.
-- **`planar threshold`** — Maximum vertex displacement during coplanar face merging. Default: `0`. Set to `0` to disable merging; higher values merge more aggressively.
-- **`smoothness`** — Maximum dihedral angle (radians) between adjacent faces for primitive shape detection. Default: `0.32` (~18 degrees). Higher values detect shapes more aggressively.
+| Command                         | Description                                                                     |
+|---------------------------------|---------------------------------------------------------------------------------|
+| `NGonConfig [property] [value]` | View or change session config for the N-gon pipeline (see below).               |
+| `TriangleExample`               | Spawns a random triangle with colored vertex markers.                           |
+| `TestParallelograms [count]`    | Visualizes V2 stretch clustering with random parallelograms.                    |
+| `TestNGons <file> [stage]`      | Visualizes N-gon pipeline stages (0=raw, 1=merged, 2=convex, 3=parallelograms). |
 
 ---
 
-## Configuration
+## Session Config (`NGonConfig`)
 
-In the EXILED config file:
+The NGon pipeline is configured through `NGonModelConfig`, a session-scoped config that persists until the server restarts. Use the `NGonConfig` RA command to view and change values at runtime. All subsequent NGon commands (`TriangulateNGon`, `TriangulateNGonV2`, and their export variants) will use
+the updated defaults.
 
-| Setting                            | Default | Description                                 |
-|------------------------------------|---------|---------------------------------------------|
-| `TriangulateBuildBatchSize`        | `128`   | Primitives per frame for Triangulate        |
-| `TriangulateV2BuildBatchSize`      | `64`    | Primitives per frame for TriangulateV2      |
-| `TriangulateNGonBuildBatchSize`    | `128`   | Primitives per frame for TriangulateNGon    |
-| `TriangulateNGonV2BuildBatchSize`  | `64`    | Primitives per frame for TriangulateNGonV2  |
-| `TriangulateNGonOptBuildBatchSize` | `128`   | Primitives per frame for TriangulateNGonOpt |
-| `ExportBuildBatchSize`             | `128`   | Primitives per frame during export          |
-| `ExportWriteBatchSize`             | `512`   | Blocks per write batch during export        |
+```
+NGonConfig                          -- list all current values
+NGonConfig PlanarThreshold          -- get a single value
+NGonConfig PlanarThreshold 0.01     -- set a value for this session
+```
+
+### Config Properties
+
+| Property                        | Type  | Default | Effect on Quality and Primitive Count                                                                                                                                                                                              |
+|---------------------------------|-------|---------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `PlanarThreshold`               | float | `0`     | Maximum vertex displacement when merging coplanar faces. `0` = exact only. Higher values merge more aggressively, producing fewer larger polygons and fewer primitives.                                                            |
+| `UseHiddenTailOptimization`     | bool  | `True`  | Hides parallelogram tail triangles inside solid geometry. Saves ~10-30% primitives on complex models.                                                                                                                              |
+| `DetectPrimitives`              | bool  | `True`  | Detects spheres, cylinders, cubes and replaces them with 1 native primitive each.                                                                                                                                                  |
+| `Accuracy`                      | float | `0.001` | Max vertex error (world units) for V2 stretch clustering. Lower = more precise but more primitives. Only affects V2 commands.                                                                                                      |
+| `SmoothMaxAngle`                | float | `0.32`  | Max dihedral angle (radians, ~18 deg) between adjacent faces to consider a surface smooth. Controls how aggressively primitive shapes are detected. Higher = more shape detection.                                                 |
+| `SmoothMinFraction`             | float | `0.7`   | Minimum fraction of smooth edges required for a surface cluster to qualify for primitive detection. Lower = more lenient shape detection.                                                                                          |
+| `UseEdgeWalkSampling`           | bool  | `False` | Enables edge-walk sampling during hidden-tail verification. Catches pits/gaps between discrete sample points, so pits and holes in model will not beaccidentaly covered by HidingParallelogramTail. More accurate but MUCH slower. |
+| `HiddenTailPullIn`              | float | `0.1`   | Pull-in distance along normal for hidden-tail solid checks. Larger values are more conservative (less likely to hide tails near edges).                                                                                            |
+| `DeduplicateVertexThreshold`    | float | `1E-04` | Vertex deduplication distance. Vertices closer than this are merged. Rarely needs changing.                                                                                                                                        |
+| `DeduplicatePlaneDistThreshold` | float | `1E-04` | Plane distance deduplication threshold for coplanar detection. Rarely needs changing.                                                                                                                                              |
+| `MaxMsPerFrame`                 | float | `8`     | Maximum milliseconds per frame before yielding in coroutine mode. Higher = faster loading but more lag. Lower = smoother but slower loading.                                                                                       |
+
+### Tuning Guide
+
+**To reduce primitive count** (at the cost of accuracy):
+
+- Increase `PlanarThreshold` (e.g. `0.01` - `0.05`) to merge more coplanar faces
+- Increase `Accuracy` (e.g. `0.01`) to allow more stretch reuse
+- Enable `UseHiddenTailOptimization` and `DetectPrimitives` if disabled
+- Increase `SmoothMaxAngle` (e.g. `0.5`) for more aggressive shape detection
+
+**To increase visual accuracy** (at the cost of more primitives):
+
+- Set `PlanarThreshold` to `0`
+- Decrease `Accuracy` (e.g. `0.0001`)
+- Decrease `SmoothMaxAngle` to avoid replacing low-poly geometry with smooth shapes
+
+**To speed up loading** (at the cost of gameplay smoothness):
+
+- Increase `MaxMsPerFrame` (e.g. `16` or `32`)
+
+---
+
+## EXILED Config
+
+In the EXILED config file (static settings, require restart):
+
+| Setting                           | Default | Description                                |
+|-----------------------------------|---------|--------------------------------------------|
+| `TriangulateBuildBatchSize`       | `128`   | Primitives per frame for Triangulate       |
+| `TriangulateV2BuildBatchSize`     | `64`    | Primitives per frame for TriangulateV2     |
+| `TriangulateNGonBuildBatchSize`   | `128`   | Primitives per frame for TriangulateNGon   |
+| `TriangulateNGonV2BuildBatchSize` | `64`    | Primitives per frame for TriangulateNGonV2 |
+| `ExportBuildBatchSize`            | `128`   | Primitives per frame during export         |
+| `ExportWriteBatchSize`            | `512`   | Blocks per write batch during export       |
 
 ---
 
@@ -154,18 +194,22 @@ TriangleScpSl/
 For programmatic use, the key entry points are:
 
 ```csharp
-// Load an OBJ and get parallelograms + detected primitives (recommended)
-NGonModelBuilder.TryLoad("model.obj", Color.white,
-    out List<ModelParallelogram> parallelograms,
-    out List<ModelPrimitive> detectedPrimitives,
-    out string fileName, out string error);
+// Load an OBJ with the full N-gon pipeline (recommended, coroutine)
+NGonModelConfig config = NGonModelConfig.CreateFromSession();
+yield return NGonModelBuilder.LoadCoroutine("model.obj", Color.white, result =>
+{
+    // result.Parallelograms, result.DetectedPrimitives, result.NormalizedFileName
+}, config);
+
+// Or synchronous (blocks the main thread)
+NGonModelResult result = NGonModelBuilder.Load("model.obj", Color.white, config);
 
 // Create models
-var exact = ExactModel.Create(parallelograms, detectedPrimitives, position);
-var approx = ApproximateModel.Create(parallelograms, detectedPrimitives, position);
+var exact = ExactModel.Create(result.Parallelograms, result.DetectedPrimitives, position);
+var approx = ApproximateModel.Create(result.Parallelograms, result.DetectedPrimitives, position);
 
 // Or deferred (build in coroutine to avoid lag)
-var model = ApproximateModel.CreateDeferred(parallelograms, detectedPrimitives, position);
+var model = ApproximateModel.CreateDeferred(result.Parallelograms, result.DetectedPrimitives, position);
 yield return model.BuildTrianglesCoroutine(PrimitiveFlags.Visible, batchSize: 64);
 
 // Control

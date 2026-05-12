@@ -2,7 +2,7 @@
 
 Static factory that loads OBJ files via the legacy triangle parser and creates models.
 
-Used by the simple `Triangulate` / `TriangulateV2` commands. **For best results, use `NGonModelBuilder.TryLoad()` instead**, which applies the full N-gon optimization pipeline.
+Used by the simple `Triangulate` / `TriangulateV2` commands. **For best results, use `NGonModelBuilder.Load()` or `NGonModelBuilder.LoadCoroutine()` instead**, which apply the full N-gon optimization pipeline.
 
 ## Files
 

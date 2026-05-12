@@ -12,5 +12,4 @@ public sealed class Config : IConfig
     public int ExportWriteBatchSize { get; set; } = 512;
     public int TriangulateNGonBuildBatchSize { get; set; } = 128;
     public int TriangulateNGonV2BuildBatchSize { get; set; } = 64;
-    public int TriangulateNGonOptBuildBatchSize { get; set; } = 128;
 }
