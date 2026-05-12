@@ -21,7 +21,7 @@ public sealed class ExportSchematicNGonV2Command : ICommand
 
     public string Command { get; } = "ExportSchematicNGonV2";
     public string[] Aliases { get; } = [];
-    public string Description { get; } = "Exports an OBJ as ProjectMER schematic JSON using ApproximateModel. Usage: <model file (.obj)> <output JSON file> [planar threshold(0)] [accuracy(0.001)]";
+    public string Description { get; } = "Exports an OBJ as ProjectMER schematic JSON using ApproximateModel. Usage: <model file (.obj)> <output JSON file> [planar threshold] [accuracy]";
 
     public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)
     {
@@ -34,7 +34,7 @@ public sealed class ExportSchematicNGonV2Command : ICommand
 
         if (arguments.Count is < 2 or > 4)
         {
-            response = "Usage: ExportSchematicNGonV2 <model file (.obj)> <output JSON file> [planar threshold(0)] [accuracy(0.001)]";
+            response = "Usage: ExportSchematicNGonV2 <model file (.obj)> <output JSON file> [planar threshold] [accuracy]";
             return false;
         }
 
@@ -47,44 +47,41 @@ public sealed class ExportSchematicNGonV2Command : ICommand
             return false;
         }
 
-        var planarThreshold = 0f;
+        var config = NGonModelConfig.CreateFromSession();
+        config.UseHiddenTailOptimization = true;
+        config.DetectPrimitives = false;
 
         if (arguments.Count >= 3)
         {
             string rawPlanarThreshold = arguments.Array?[arguments.Offset + 2] ?? string.Empty;
 
-            if (!float.TryParse(rawPlanarThreshold, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out planarThreshold) || planarThreshold < 0f)
+            if (!float.TryParse(rawPlanarThreshold, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out float planarThreshold) || planarThreshold < 0f)
             {
-                response = "Invalid planar threshold value. Use a nonnegative number (example: 0.001 or 0).";
+                response = "Invalid planar threshold value. Use a nonnegative number.";
                 return false;
             }
-        }
 
-        var accuracy = 0.001f;
+            config.PlanarThreshold = planarThreshold;
+        }
 
         if (arguments.Count >= 4)
         {
-            string rawAcuracy = arguments.Array?[arguments.Offset + 3] ?? string.Empty;
+            string rawAccuracy = arguments.Array?[arguments.Offset + 3] ?? string.Empty;
 
-            if (!float.TryParse(rawAcuracy, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out accuracy) || accuracy <= 0f)
+            if (!float.TryParse(rawAccuracy, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out float accuracy) || accuracy <= 0f)
             {
-                response = "Invalid accuracy. Use a positive number (example: 0.001).";
+                response = "Invalid accuracy. Use a positive number.";
                 return false;
             }
+
+            config.Accuracy = accuracy;
         }
 
         int buildBatch = Mathf.Max(1, Plugin.Instance?.Config.ExportBuildBatchSize ?? 64);
         int writeBatch = Mathf.Max(1, Plugin.Instance?.Config.ExportWriteBatchSize ?? 256);
 
-        var config = new NGonModelConfig
-        {
-            PlanarThreshold = planarThreshold,
-            UseHiddenTailOptimization = true,
-            DetectPrimitives = false,
-        };
-
         _isExporting = true;
-        _exportCoroutine = CoroutineHost.Run(ExportRoutine(requestedFile, outputFileName, config, accuracy, buildBatch, writeBatch));
+        _exportCoroutine = CoroutineHost.Run(ExportRoutine(requestedFile, outputFileName, config, buildBatch, writeBatch));
 
         response = "Export started asynchronously. Run command again to cancel.";
         return true;
@@ -95,7 +92,6 @@ public sealed class ExportSchematicNGonV2Command : ICommand
         string requestedFile,
         string outputFileName,
         NGonModelConfig config,
-        float accuracy,
         int buildBatch,
         int writeBatch)
     {
@@ -116,7 +112,7 @@ public sealed class ExportSchematicNGonV2Command : ICommand
                 loadResult.DetectedPrimitives,
                 Vector3.zero,
                 PrimitiveFlags.Visible,
-                accuracy);
+                config.Accuracy);
 
             yield return _activeModel.BuildTrianglesCoroutine(PrimitiveFlags.Visible, buildBatch);
 
@@ -154,7 +150,7 @@ public sealed class ExportSchematicNGonV2Command : ICommand
                 yield break;
             }
 
-            Log.Info($"[ExportSchematicNGonV2] Exported: {outputPath} (ParallelogramCount={_activeModel.ParallelogramCount}, PrimitiveCount={_activeModel.PrimitiveCount} planarThreshold={config.PlanarThreshold.ToString(CultureInfo.InvariantCulture)}, accuracy={accuracy.ToString(CultureInfo.InvariantCulture)}).");
+            Log.Info($"[ExportSchematicNGonV2] Exported: {outputPath} (ParallelogramCount={_activeModel.ParallelogramCount}, PrimitiveCount={_activeModel.PrimitiveCount}, accuracy={config.Accuracy.ToString(CultureInfo.InvariantCulture)}).");
         }
         finally
         {

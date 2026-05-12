@@ -18,7 +18,7 @@ public class TriangulateNGonCommand : ICommand
 
     public string Command { get; } = "TriangulateNGon";
     public string[] Aliases { get; } = [];
-    public string Description { get; } = "Displays an OBJ model using ExactModel. Usage: <filename(.obj)> [planar threshold(0)]";
+    public string Description { get; } = "Displays an OBJ model using ExactModel. Usage: <filename(.obj)> [planar threshold]";
 
     void Clear()
     {
@@ -57,29 +57,26 @@ public class TriangulateNGonCommand : ICommand
 
         if (arguments.Count is < 1 or > 2)
         {
-            response = "Usage: TriangulateNGon <model file (.obj)>";
+            response = "Usage: TriangulateNGon <model file (.obj)> [planar threshold]";
             return false;
         }
 
-        var planarThreshold = 0f;
+        string requestedFile = arguments.Array?[arguments.Offset] ?? string.Empty;
+
+        var config = NGonModelConfig.CreateFromSession();
 
         if (arguments.Count == 2)
         {
             string rawPlanar = arguments.Array?[arguments.Offset + 1] ?? string.Empty;
 
-            if (!float.TryParse(rawPlanar, out planarThreshold))
+            if (!float.TryParse(rawPlanar, out float planarThreshold))
             {
                 response = "Invalid planar threshold value.";
                 return false;
             }
+
+            config.PlanarThreshold = planarThreshold;
         }
-
-        string requestedFile = arguments.Array?[arguments.Offset] ?? string.Empty;
-
-        var config = new NGonModelConfig
-        {
-            PlanarThreshold = planarThreshold,
-        };
 
         _isBuilding = true;
 
@@ -93,9 +90,7 @@ public class TriangulateNGonCommand : ICommand
         return true;
     }
 
-    IEnumerator BuildRoutine
-    (
-        string requestedFile, NGonModelConfig config, int batchSize, Vector3 spawnPosition)
+    IEnumerator BuildRoutine(string requestedFile, NGonModelConfig config, int batchSize, Vector3 spawnPosition)
     {
         NGonModelResult? loadResult = null;
 

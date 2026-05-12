@@ -4,7 +4,6 @@ using Exiled.API.Features;
 using System.Collections;
 using TriangleScpSl.Core.Models.ApproximateModel;
 using TriangleScpSl.Core.NGons;
-using TriangleScpSl.Core.NGons.Detectors;
 using TriangleScpSl.Core.Runtime;
 using TriangleScpSl.Core.Triangulation.Parallelogram;
 using UnityEngine;
@@ -20,7 +19,7 @@ public class TriangulateNGonOptCommand : ICommand
 
     public string Command { get; } = "TriangulateNGonOpt";
     public string[] Aliases { get; } = [];
-    public string Description { get; } = "Displays an OBJ model with all optimizations for minimal primitive count. Usage: <filename(.obj)> [accuracy(0.001)] [smoothness(0.32)]";
+    public string Description { get; } = "Displays an OBJ model with all optimizations. Usage: <filename(.obj)> [accuracy] [smoothness]";
 
     void Clear()
     {
@@ -59,43 +58,41 @@ public class TriangulateNGonOptCommand : ICommand
 
         if (arguments.Count < 1 || arguments.Count > 3)
         {
-            response = "Usage: TriangulateNGonOpt <model file (.obj)> [accuracy(0.001)] [smoothness(0.32)]";
+            response = "Usage: TriangulateNGonOpt <model file (.obj)> [accuracy] [smoothness]";
             return false;
         }
 
-        var accuracy = 0.001f;
-        float smoothness = SmoothnessCheck.DefaultMaxAngle;
+        var config = NGonModelConfig.CreateFromSession();
+        config.UseHiddenTailOptimization = true;
+        config.DetectPrimitives = true;
 
         if (arguments.Count >= 2)
         {
             string rawAccuracy = arguments.Array?[arguments.Offset + 1] ?? string.Empty;
 
-            if (!float.TryParse(rawAccuracy, out accuracy))
+            if (!float.TryParse(rawAccuracy, out float accuracy))
             {
                 response = "Invalid accuracy value.";
                 return false;
             }
+
+            config.Accuracy = accuracy;
         }
 
         if (arguments.Count >= 3)
         {
             string rawSmoothness = arguments.Array?[arguments.Offset + 2] ?? string.Empty;
 
-            if (!float.TryParse(rawSmoothness, out smoothness) || smoothness <= 0f)
+            if (!float.TryParse(rawSmoothness, out float smoothness) || smoothness <= 0f)
             {
-                response = "Invalid smoothness value. Use a positive number in radians (default: 0.32 ~ 18 deg).";
+                response = "Invalid smoothness value. Use a positive number in radians.";
                 return false;
             }
+
+            config.SmoothMaxAngle = smoothness;
         }
 
         string requestedFile = arguments.Array?[arguments.Offset] ?? string.Empty;
-
-        var config = new NGonModelConfig
-        {
-            UseHiddenTailOptimization = true,
-            DetectPrimitives = true,
-            SmoothMaxAngle = smoothness,
-        };
 
         _isBuilding = true;
 
@@ -103,15 +100,13 @@ public class TriangulateNGonOptCommand : ICommand
         Vector3 spawnPosition = player.Position + player.GameObject.transform.forward * 2.5f + Vector3.up * 1.2f;
 
         _buildCoroutine = CoroutineHost.Run(
-            BuildRoutine(requestedFile, config, accuracy, batchSize, spawnPosition));
+            BuildRoutine(requestedFile, config, batchSize, spawnPosition));
 
-        response = $"Building '{requestedFile}' asynchronously with smoothness={smoothness:F2}rad, accuracy={accuracy}. Run command again to cancel.";
+        response = $"Building '{requestedFile}' asynchronously (accuracy={config.Accuracy}, smoothness={config.SmoothMaxAngle:F2}rad). Run command again to cancel.";
         return true;
     }
 
-    IEnumerator BuildRoutine
-    (
-        string requestedFile, NGonModelConfig config, float accuracy, int batchSize, Vector3 spawnPosition)
+    IEnumerator BuildRoutine(string requestedFile, NGonModelConfig config, int batchSize, Vector3 spawnPosition)
     {
         NGonModelResult? loadResult = null;
 
@@ -139,7 +134,7 @@ public class TriangulateNGonOptCommand : ICommand
             loadResult.DetectedPrimitives,
             spawnPosition,
             PrimitiveFlags.Visible,
-            accuracy);
+            config.Accuracy);
 
         _model = createdModel;
 
@@ -160,7 +155,7 @@ public class TriangulateNGonOptCommand : ICommand
         }
 
         Log.Info($"[TriangulateNGonOpt] Created model '{loadResult.NormalizedFileName}': " +
-            $"ParallelogramCount={loadResult.Parallelograms.Count} ({rectCount} rect, {nonRectCount} normal parallelograms), " +
+            $"ParallelogramCount={loadResult.Parallelograms.Count} ({rectCount} rect, {nonRectCount} normal), " +
             $"NativePrimitiveCount={loadResult.DetectedPrimitives.Count}, PrimitiveCount={createdModel.PrimitiveCount}.");
     }
 }

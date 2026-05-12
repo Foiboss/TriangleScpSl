@@ -21,7 +21,7 @@ public sealed class ExportSchematicNGonCommand : ICommand
 
     public string Command { get; } = "ExportSchematicNGon";
     public string[] Aliases { get; } = [];
-    public string Description { get; } = "Exports an OBJ as ProjectMER schematic JSON using ExactModel. Usage: <model file (.obj)> <output JSON file> [planar threshold(0)]";
+    public string Description { get; } = "Exports an OBJ as ProjectMER schematic JSON using ExactModel. Usage: <model file (.obj)> <output JSON file> [planar threshold]";
 
     public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)
     {
@@ -34,7 +34,7 @@ public sealed class ExportSchematicNGonCommand : ICommand
 
         if (arguments.Count is < 2 or > 3)
         {
-            response = "Usage: ExportSchematicNGon <model file (.obj)> <output JSON file> [planar threshold(0)]";
+            response = "Usage: ExportSchematicNGon <model file (.obj)> <output JSON file> [planar threshold]";
             return false;
         }
 
@@ -47,26 +47,23 @@ public sealed class ExportSchematicNGonCommand : ICommand
             return false;
         }
 
-        var planarThreshold = 0f;
+        var config = NGonModelConfig.CreateFromSession();
 
         if (arguments.Count >= 3)
         {
             string rawPlanarThreshold = arguments.Array?[arguments.Offset + 2] ?? string.Empty;
 
-            if (!float.TryParse(rawPlanarThreshold, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out planarThreshold) || planarThreshold < 0f)
+            if (!float.TryParse(rawPlanarThreshold, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out float planarThreshold) || planarThreshold < 0f)
             {
-                response = "Invalid planarThreshold. Use a nonnegative number (example: 0.001 or 0).";
+                response = "Invalid planarThreshold. Use a nonnegative number.";
                 return false;
             }
+
+            config.PlanarThreshold = planarThreshold;
         }
 
         int buildBatch = Mathf.Max(1, Plugin.Instance?.Config.ExportBuildBatchSize ?? 64);
         int writeBatch = Mathf.Max(1, Plugin.Instance?.Config.ExportWriteBatchSize ?? 256);
-
-        var config = new NGonModelConfig
-        {
-            PlanarThreshold = planarThreshold,
-        };
 
         _isExporting = true;
         _exportCoroutine = CoroutineHost.Run(ExportRoutine(requestedFile, outputFileName, config, buildBatch, writeBatch));
@@ -132,7 +129,7 @@ public sealed class ExportSchematicNGonCommand : ICommand
                 yield break;
             }
 
-            Log.Info($"[ExportSchematicNGon] Exported: {outputPath} (ParallelogramCount={_activeModel.ParallelogramCount}, PrimitiveCount={_activeModel.PrimitiveCount}, planarThreshold={config.PlanarThreshold.ToString(CultureInfo.InvariantCulture)}).");
+            Log.Info($"[ExportSchematicNGon] Exported: {outputPath} (ParallelogramCount={_activeModel.ParallelogramCount}, PrimitiveCount={_activeModel.PrimitiveCount}).");
         }
         finally
         {

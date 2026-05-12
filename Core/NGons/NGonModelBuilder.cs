@@ -9,16 +9,11 @@ namespace TriangleScpSl.Core.NGons;
 public static class NGonModelBuilder
 {
     /// <summary>
-    ///     Maximum milliseconds per frame before yielding in coroutine mode.
-    /// </summary>
-    public static readonly float MaxMsPerFrame = 8f;
-
-    /// <summary>
     ///     Loads a model synchronously. Throws on failure.
     /// </summary>
     public static NGonModelResult Load(string requestedFile, Color defaultColor, NGonModelConfig? config = null)
     {
-        config ??= NGonModelConfig.Default;
+        config ??= NGonModelConfig.CreateFromSession();
 
         (string fileName, string modelPath) = ResolveModelPath(requestedFile);
 
@@ -73,7 +68,7 @@ public static class NGonModelBuilder
         Action<NGonModelResult?> onComplete,
         NGonModelConfig? config = null)
     {
-        config ??= NGonModelConfig.Default;
+        config ??= NGonModelConfig.CreateFromSession();
 
         string fileName;
         List<NGonRaw> ngons;
@@ -93,17 +88,16 @@ public static class NGonModelBuilder
             yield break;
         }
 
-        yield return null; // yield after parsing/dedup
+        yield return null;
 
         ModelSolidVolume? solid = null;
 
         if (config.UseHiddenTailOptimization || config.DetectPrimitives)
         {
             solid = ModelSolidVolume.Build(ngons);
-            yield return null; // yield after building solid volume
+            yield return null;
         }
 
-        // --- Primitive detection (async) ---
         List<ModelPrimitive> detectedPrimitives = [];
         List<NGonRaw> remainingNgons = ngons;
 
@@ -112,7 +106,7 @@ public static class NGonModelBuilder
             var detectDone = false;
 
             yield return PrimitiveShapeDetector.DetectCoroutine(
-                ngons, solid, config.SmoothMaxAngle, config.SmoothMinFraction, MaxMsPerFrame,
+                ngons, solid, config.SmoothMaxAngle, config.SmoothMinFraction, config.MaxMsPerFrame,
                 (primitives, remaining) =>
                 {
                     detectedPrimitives = primitives;
@@ -128,19 +122,17 @@ public static class NGonModelBuilder
             }
         }
 
-        // --- Planar split + convex decompose ---
         List<NGonRaw> planarNgons = PlanarNGonSplitter.SplitAll(remainingNgons, config.PlanarThreshold);
         yield return null;
 
         List<ConvexNGon> convexNgons = ConvexNGonDecomposer.Decompose(planarNgons);
         yield return null;
 
-        // --- Parallelogram processing (async) ---
         List<ModelParallelogram> parallelograms = [];
         var paraDone = false;
 
         yield return HiddenTailParallelogramProcessor.ProcessCoroutine(
-            convexNgons, solid, config.UseEdgeWalkSampling, config.HiddenTailPullIn, MaxMsPerFrame,
+            convexNgons, solid, config.UseEdgeWalkSampling, config.HiddenTailPullIn, config.MaxMsPerFrame,
             result =>
             {
                 parallelograms = result;

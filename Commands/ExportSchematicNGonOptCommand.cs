@@ -5,7 +5,6 @@ using CommandSystem;
 using Exiled.API.Features;
 using TriangleScpSl.Core.Models.ApproximateModel;
 using TriangleScpSl.Core.NGons;
-using TriangleScpSl.Core.NGons.Detectors;
 using TriangleScpSl.Core.Paths;
 using TriangleScpSl.Core.ProjectMerExport;
 using TriangleScpSl.Core.Runtime;
@@ -25,7 +24,7 @@ public sealed class ExportSchematicNGonOptCommand : ICommand
 
     public string Description { get; } =
         "Exports an OBJ as ProjectMER schematic JSON with all optimizations. " +
-        "Usage: <model file (.obj)> <output JSON file> [accuracy(0.001)] [smoothness(0.32)]";
+        "Usage: <model file (.obj)> <output JSON file> [accuracy] [smoothness]";
 
     public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)
     {
@@ -38,7 +37,7 @@ public sealed class ExportSchematicNGonOptCommand : ICommand
 
         if (arguments.Count is < 2 or > 4)
         {
-            response = "Usage: ExportSchematicNGonOpt <model file (.obj)> <output JSON file> [accuracy(0.001)] [smoothness(0.32)]";
+            response = "Usage: ExportSchematicNGonOpt <model file (.obj)> <output JSON file> [accuracy] [smoothness]";
             return false;
         }
 
@@ -51,48 +50,45 @@ public sealed class ExportSchematicNGonOptCommand : ICommand
             return false;
         }
 
-        var accuracy = 0.001f;
+        var config = NGonModelConfig.CreateFromSession();
+        config.UseHiddenTailOptimization = true;
+        config.DetectPrimitives = true;
 
         if (arguments.Count >= 3)
         {
             string rawAccuracy = arguments.Array?[arguments.Offset + 2] ?? string.Empty;
 
             if (!float.TryParse(rawAccuracy, NumberStyles.Float | NumberStyles.AllowThousands,
-                    CultureInfo.InvariantCulture, out accuracy) || accuracy <= 0f)
+                    CultureInfo.InvariantCulture, out float accuracy) || accuracy <= 0f)
             {
                 response = "Invalid accuracy. Use a positive number (example: 0.001).";
                 return false;
             }
-        }
 
-        float smoothness = SmoothnessCheck.DefaultMaxAngle;
+            config.Accuracy = accuracy;
+        }
 
         if (arguments.Count >= 4)
         {
             string rawSmoothness = arguments.Array?[arguments.Offset + 3] ?? string.Empty;
 
             if (!float.TryParse(rawSmoothness, NumberStyles.Float | NumberStyles.AllowThousands,
-                    CultureInfo.InvariantCulture, out smoothness) || smoothness <= 0f)
+                    CultureInfo.InvariantCulture, out float smoothness) || smoothness <= 0f)
             {
-                response = "Invalid smoothness value. Use a positive number in radians (default: 0.32 ~ 18 deg).";
+                response = "Invalid smoothness value. Use a positive number in radians.";
                 return false;
             }
+
+            config.SmoothMaxAngle = smoothness;
         }
 
         int buildBatch = Mathf.Max(1, Plugin.Instance?.Config.ExportBuildBatchSize ?? 64);
         int writeBatch = Mathf.Max(1, Plugin.Instance?.Config.ExportWriteBatchSize ?? 256);
 
-        var config = new NGonModelConfig
-        {
-            UseHiddenTailOptimization = true,
-            DetectPrimitives = true,
-            SmoothMaxAngle = smoothness,
-        };
-
         _isExporting = true;
 
         _exportCoroutine = CoroutineHost.Run(
-            ExportRoutine(requestedFile, outputFileName, config, accuracy, buildBatch, writeBatch));
+            ExportRoutine(requestedFile, outputFileName, config, buildBatch, writeBatch));
 
         response = "Export started asynchronously. Run command again to cancel.";
         return true;
@@ -103,7 +99,6 @@ public sealed class ExportSchematicNGonOptCommand : ICommand
         string requestedFile,
         string outputFileName,
         NGonModelConfig config,
-        float accuracy,
         int buildBatch,
         int writeBatch)
     {
@@ -124,7 +119,7 @@ public sealed class ExportSchematicNGonOptCommand : ICommand
                 loadResult.DetectedPrimitives,
                 Vector3.zero,
                 PrimitiveFlags.Visible,
-                accuracy);
+                config.Accuracy);
 
             yield return _activeModel.BuildTrianglesCoroutine(PrimitiveFlags.Visible, buildBatch);
 
@@ -167,7 +162,7 @@ public sealed class ExportSchematicNGonOptCommand : ICommand
                 $"(ParallelogramCount={_activeModel.ParallelogramCount}, " +
                 $"NativePrimitiveCount={_activeModel.NativePrimitiveCount}, " +
                 $"PrimitiveCount={_activeModel.PrimitiveCount}, " +
-                $"accuracy={accuracy.ToString(CultureInfo.InvariantCulture)}, " +
+                $"accuracy={config.Accuracy.ToString(CultureInfo.InvariantCulture)}, " +
                 $"smoothness={config.SmoothMaxAngle.ToString(CultureInfo.InvariantCulture)}).");
         }
         finally
