@@ -149,21 +149,6 @@ NGonConfig PlanarThreshold 0.01     -- set a value for this session
 
 ---
 
-## EXILED Config
-
-In the EXILED config file (static settings, require restart):
-
-| Setting                           | Default | Description                                |
-|-----------------------------------|---------|--------------------------------------------|
-| `TriangulateBuildBatchSize`       | `128`   | Primitives per frame for Triangulate       |
-| `TriangulateV2BuildBatchSize`     | `64`    | Primitives per frame for TriangulateV2     |
-| `TriangulateNGonBuildBatchSize`   | `128`   | Primitives per frame for TriangulateNGon   |
-| `TriangulateNGonV2BuildBatchSize` | `64`    | Primitives per frame for TriangulateNGonV2 |
-| `ExportBuildBatchSize`            | `128`   | Primitives per frame during export         |
-| `ExportWriteBatchSize`            | `512`   | Blocks per write batch during export       |
-
----
-
 ## Project Structure
 
 Each subfolder with significant logic has its own `README.md` with detailed algorithm descriptions.
