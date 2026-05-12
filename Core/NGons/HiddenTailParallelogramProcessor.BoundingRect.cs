@@ -16,7 +16,9 @@ public static partial class HiddenTailParallelogramProcessor
         Vector3 normal,
         Color color,
         List<ModelParallelogram> parallelograms,
-        ModelSolidVolume solid
+        ModelSolidVolume solid,
+        bool useEdgeWalkSampling,
+        float hiddenTailPullIn
     )
     {
         int n = poly.Count;
@@ -41,7 +43,7 @@ public static partial class HiddenTailParallelogramProcessor
             bestMinU * bestDir + bestMaxV * bestPerp,
         ];
 
-        if (!VerifyExcessInsideSolid(rectCorners2D, poly2D, origin, e1, e2, normal, solid))
+        if (!VerifyExcessInsideSolid(rectCorners2D, poly2D, origin, e1, e2, normal, solid, useEdgeWalkSampling, hiddenTailPullIn))
             return false;
 
         // Map rectangle back to 3D as a parallelogram
@@ -113,7 +115,8 @@ public static partial class HiddenTailParallelogramProcessor
 
     /// <summary>
     ///     Checks that all points of the bounding rectangle outside the polygon
-    ///     are inside solid material (corners, edge samples, and interior grid).
+    ///     are inside solid material. Uses a dense grid with edge-walk sampling
+    ///     between adjacent nodes to catch pits/holes between sample points.
     /// </summary>
     static bool VerifyExcessInsideSolid
     (
@@ -121,44 +124,80 @@ public static partial class HiddenTailParallelogramProcessor
         List<Vector2> poly2D,
         Vector3 origin, Vector3 e1, Vector3 e2,
         Vector3 normal,
-        ModelSolidVolume solid
+        ModelSolidVolume solid,
+        bool useEdgeWalkSampling,
+        float hiddenTailPullIn
     )
     {
-        const int samplesPerEdge = 3;
-        const float pullIn = 0.03f;
-        Vector3 pullDir = normal * pullIn;
+        const int gridU = 6;
+        const int gridV = 6;
+        Vector3 pullDir = normal * hiddenTailPullIn;
 
-        // Check corners and edge samples
-        for (var ci = 0; ci < 4; ci++)
+        var grid = new Vector2[(gridU + 1) * (gridV + 1)];
+        for (int iu = 0; iu <= gridU; iu++)
         {
-            if (!CheckSampleInsideSolid(rectCorners2D[ci], poly2D, origin, e1, e2, pullDir, solid))
-                return false;
-
-            Vector2 nextCorner = rectCorners2D[(ci + 1) % 4];
-
-            for (var s = 1; s <= samplesPerEdge; s++)
+            for (int iv = 0; iv <= gridV; iv++)
             {
-                float t = s / (float)(samplesPerEdge + 1);
-                Vector2 sample = Vector2.Lerp(rectCorners2D[ci], nextCorner, t);
+                Vector2 sample = Vector2.Lerp(
+                    Vector2.Lerp(rectCorners2D[0], rectCorners2D[1], iu / (float)gridU),
+                    Vector2.Lerp(rectCorners2D[3], rectCorners2D[2], iu / (float)gridU),
+                    iv / (float)gridV);
+                grid[iu * (gridV + 1) + iv] = sample;
 
                 if (!CheckSampleInsideSolid(sample, poly2D, origin, e1, e2, pullDir, solid))
                     return false;
             }
         }
 
-        // Interior grid samples
-        for (var iu = 1; iu <= 3; iu++)
-        {
-            for (var iv = 1; iv <= 3; iv++)
-            {
-                Vector2 sample = Vector2.Lerp(
-                    Vector2.Lerp(rectCorners2D[0], rectCorners2D[1], iu / 4f),
-                    Vector2.Lerp(rectCorners2D[3], rectCorners2D[2], iu / 4f),
-                    iv / 4f);
+        if (!useEdgeWalkSampling)
+            return true;
 
-                if (!CheckSampleInsideSolid(sample, poly2D, origin, e1, e2, pullDir, solid))
-                    return false;
+        // Walk edges between adjacent grid nodes to catch gaps
+        for (int iu = 0; iu <= gridU; iu++)
+        {
+            for (int iv = 0; iv <= gridV; iv++)
+            {
+                Vector2 from = grid[iu * (gridV + 1) + iv];
+
+                if (iu + 1 <= gridU)
+                {
+                    Vector2 to = grid[(iu + 1) * (gridV + 1) + iv];
+                    if (!WalkEdgeInsideSolid(from, to, poly2D, origin, e1, e2, pullDir, solid))
+                        return false;
+                }
+
+                if (iv + 1 <= gridV)
+                {
+                    Vector2 to = grid[iu * (gridV + 1) + iv + 1];
+                    if (!WalkEdgeInsideSolid(from, to, poly2D, origin, e1, e2, pullDir, solid))
+                        return false;
+                }
             }
+        }
+
+        return true;
+    }
+
+    static bool WalkEdgeInsideSolid
+    (
+        Vector2 from2D, Vector2 to2D,
+        List<Vector2> poly2D,
+        Vector3 origin, Vector3 e1, Vector3 e2,
+        Vector3 pullDir,
+        ModelSolidVolume solid
+    )
+    {
+        Vector3 from3D = origin + from2D.x * e1 + from2D.y * e2;
+        Vector3 to3D = origin + to2D.x * e1 + to2D.y * e2;
+        float dist = (to3D - from3D).magnitude;
+        int steps = Mathf.Max(2, Mathf.CeilToInt(dist / ModelSolidVolume.MaxEdgeSampleSpacing));
+
+        for (int s = 1; s < steps; s++)
+        {
+            float t = s / (float)steps;
+            Vector2 sample2D = Vector2.Lerp(from2D, to2D, t);
+            if (!CheckSampleInsideSolid(sample2D, poly2D, origin, e1, e2, pullDir, solid))
+                return false;
         }
 
         return true;

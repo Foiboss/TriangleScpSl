@@ -21,7 +21,9 @@ public static class NGonModelBuilder
         float deduplicateVertexThreshold = 1e-4f,
         float deduplicatePlaneDistThreshold = 1e-4f,
         float smoothMaxAngle = SmoothnessCheck.DefaultMaxAngle,
-        float smoothMinFraction = SmoothnessCheck.DefaultMinFraction)
+        float smoothMinFraction = SmoothnessCheck.DefaultMinFraction,
+        bool useEdgeWalkSampling = true,
+        float hiddenTailPullIn = 0.1f)
     {
         parallelograms = [];
         detectedPrimitives = [];
@@ -118,7 +120,7 @@ public static class NGonModelBuilder
 
             List<ConvexNGon> convexNgons = ConvexNGonDecomposer.Decompose(planarNgons);
 
-            parallelograms = HiddenTailParallelogramProcessor.Process(convexNgons, solid);
+            parallelograms = HiddenTailParallelogramProcessor.Process(convexNgons, solid, useEdgeWalkSampling, hiddenTailPullIn);
 
             if (parallelograms.Count == 0 && detectedPrimitives.Count == 0)
             {
