@@ -83,82 +83,84 @@ public class TriangulateNGonOptCommand : ICommand
 
             if (!float.TryParse(rawSmoothness, out smoothness) || smoothness <= 0f)
             {
-                response = "Invalid smoothness value. Use a positive number in radians (default: 0.32 ≈ 18°).";
+                response = "Invalid smoothness value. Use a positive number in radians (default: 0.32 ~ 18 deg).";
                 return false;
             }
         }
 
         string requestedFile = arguments.Array?[arguments.Offset] ?? string.Empty;
 
-        if (!NGonModelBuilder.TryLoad(
-            requestedFile,
-            Color.white,
-            out List<ModelParallelogram> parallelograms,
-            out List<ModelPrimitive> detectedPrimitives,
-            out string fileName,
-            out string error,
-            0f,
-            true,
-            true,
-            1e-4f,
-            1e-4f,
-            smoothness))
+        var config = new NGonModelConfig
         {
-            response = error;
-            return false;
+            UseHiddenTailOptimization = true,
+            DetectPrimitives = true,
+            SmoothMaxAngle = smoothness,
+        };
+
+        _isBuilding = true;
+
+        int batchSize = Mathf.Max(1, Plugin.Instance?.Config.TriangulateNGonOptBuildBatchSize ?? 128);
+        Vector3 spawnPosition = player.Position + player.GameObject.transform.forward * 2.5f + Vector3.up * 1.2f;
+
+        _buildCoroutine = CoroutineHost.Run(
+            BuildRoutine(requestedFile, config, accuracy, batchSize, spawnPosition));
+
+        response = $"Building '{requestedFile}' asynchronously with smoothness={smoothness:F2}rad, accuracy={accuracy}. Run command again to cancel.";
+        return true;
+    }
+
+    IEnumerator BuildRoutine
+    (
+        string requestedFile, NGonModelConfig config, float accuracy, int batchSize, Vector3 spawnPosition)
+    {
+        NGonModelResult? loadResult = null;
+
+        yield return NGonModelBuilder.LoadCoroutine(requestedFile, Color.white, result => { loadResult = result; }, config);
+
+        if (loadResult == null)
+        {
+            _buildCoroutine = null;
+            _isBuilding = false;
+            Log.Warn("[TriangulateNGonOpt] Failed to load model.");
+            yield break;
         }
 
         var rectCount = 0;
         var nonRectCount = 0;
 
-        foreach (ModelParallelogram p in parallelograms)
+        foreach (ModelParallelogram p in loadResult.Parallelograms)
         {
             if (p.IsRectangle) rectCount++;
             else nonRectCount++;
         }
 
-        Vector3 spawnPosition = player.Position + player.GameObject.transform.forward * 2.5f + Vector3.up * 1.2f;
-
         var createdModel = ApproximateModel.CreateDeferred(
-            parallelograms,
-            detectedPrimitives,
+            loadResult.Parallelograms,
+            loadResult.DetectedPrimitives,
             spawnPosition,
             PrimitiveFlags.Visible,
             accuracy);
 
         _model = createdModel;
-        _isBuilding = true;
 
-        int batchSize = Mathf.Max(1, Plugin.Instance?.Config.TriangulateNGonOptBuildBatchSize ?? 128);
-
-        _buildCoroutine = CoroutineHost.Run(BuildRoutine(createdModel, fileName, batchSize,
-            parallelograms.Count, detectedPrimitives.Count, rectCount, nonRectCount));
-
-        response = $"Building '{fileName}': {parallelograms.Count} parallelograms ({rectCount} rectangles, {nonRectCount} normal parallelograms), " +
-            $"{detectedPrimitives.Count} native primitives, accuracy={accuracy}, smoothness={smoothness:F2}rad.";
-        return true;
-    }
-
-    IEnumerator BuildRoutine
-    (ApproximateModel model, string fileName, int batchSize,
-        int paraCount, int nativeCount, int rectCount, int nonRectCount)
-    {
-        yield return model.BuildTrianglesCoroutine(PrimitiveFlags.Visible, batchSize);
+        yield return createdModel.BuildTrianglesCoroutine(PrimitiveFlags.Visible, batchSize);
 
         _buildCoroutine = null;
         _isBuilding = false;
 
-        if (!ReferenceEquals(_model, model))
+        if (!ReferenceEquals(_model, createdModel))
             yield break;
 
-        if (model is { ParallelogramCount: 0, NativePrimitiveCount: 0 })
+        if (createdModel is { ParallelogramCount: 0, NativePrimitiveCount: 0 })
         {
-            model.Destroy();
+            createdModel.Destroy();
             _model = null;
-            Log.Warn($"[TriangulateNGonOpt] Model '{fileName}' has no valid geometry after async build.");
+            Log.Warn($"[TriangulateNGonOpt] Model '{loadResult.NormalizedFileName}' has no valid geometry after async build.");
             yield break;
         }
 
-        Log.Info($"[TriangulateNGonOpt] Created model '{fileName}': ParallelogramCount={paraCount} ({rectCount} rect, {nonRectCount} normal parallelograms), NativePrimitiveCount={nativeCount}, PrimitiveCount={model.PrimitiveCount}.");
+        Log.Info($"[TriangulateNGonOpt] Created model '{loadResult.NormalizedFileName}': " +
+            $"ParallelogramCount={loadResult.Parallelograms.Count} ({rectCount} rect, {nonRectCount} normal parallelograms), " +
+            $"NativePrimitiveCount={loadResult.DetectedPrimitives.Count}, PrimitiveCount={createdModel.PrimitiveCount}.");
     }
 }

@@ -9,7 +9,6 @@ using TriangleScpSl.Core.NGons.Detectors;
 using TriangleScpSl.Core.Paths;
 using TriangleScpSl.Core.ProjectMerExport;
 using TriangleScpSl.Core.Runtime;
-using TriangleScpSl.Core.Triangulation.Parallelogram;
 using UnityEngine;
 
 namespace TriangleScpSl.Commands;
@@ -75,7 +74,7 @@ public sealed class ExportSchematicNGonOptCommand : ICommand
             if (!float.TryParse(rawSmoothness, NumberStyles.Float | NumberStyles.AllowThousands,
                     CultureInfo.InvariantCulture, out smoothness) || smoothness <= 0f)
             {
-                response = "Invalid smoothness value. Use a positive number in radians (default: 0.32 ≈ 18°).";
+                response = "Invalid smoothness value. Use a positive number in radians (default: 0.32 ~ 18 deg).";
                 return false;
             }
         }
@@ -83,10 +82,17 @@ public sealed class ExportSchematicNGonOptCommand : ICommand
         int buildBatch = Mathf.Max(1, Plugin.Instance?.Config.ExportBuildBatchSize ?? 64);
         int writeBatch = Mathf.Max(1, Plugin.Instance?.Config.ExportWriteBatchSize ?? 256);
 
+        var config = new NGonModelConfig
+        {
+            UseHiddenTailOptimization = true,
+            DetectPrimitives = true,
+            SmoothMaxAngle = smoothness,
+        };
+
         _isExporting = true;
 
         _exportCoroutine = CoroutineHost.Run(
-            ExportRoutine(requestedFile, outputFileName, accuracy, smoothness, buildBatch, writeBatch));
+            ExportRoutine(requestedFile, outputFileName, config, accuracy, buildBatch, writeBatch));
 
         response = "Export started asynchronously. Run command again to cancel.";
         return true;
@@ -96,34 +102,26 @@ public sealed class ExportSchematicNGonOptCommand : ICommand
     (
         string requestedFile,
         string outputFileName,
+        NGonModelConfig config,
         float accuracy,
-        float smoothness,
         int buildBatch,
         int writeBatch)
     {
         try
         {
-            if (!NGonModelBuilder.TryLoad(
-                requestedFile,
-                Color.white,
-                out List<ModelParallelogram> parallelograms,
-                out List<ModelPrimitive> detectedPrimitives,
-                out _,
-                out string modelError,
-                0f,
-                true,
-                true,
-                1e-4f,
-                1e-4f,
-                smoothness))
+            NGonModelResult? loadResult = null;
+
+            yield return NGonModelBuilder.LoadCoroutine(requestedFile, Color.white, result => { loadResult = result; }, config);
+
+            if (loadResult == null)
             {
-                Log.Warn($"[ExportSchematicNGonOpt] {modelError}");
+                Log.Warn("[ExportSchematicNGonOpt] Failed to load model.");
                 yield break;
             }
 
             _activeModel = ApproximateModel.CreateDeferred(
-                parallelograms,
-                detectedPrimitives,
+                loadResult.Parallelograms,
+                loadResult.DetectedPrimitives,
                 Vector3.zero,
                 PrimitiveFlags.Visible,
                 accuracy);
@@ -170,7 +168,7 @@ public sealed class ExportSchematicNGonOptCommand : ICommand
                 $"NativePrimitiveCount={_activeModel.NativePrimitiveCount}, " +
                 $"PrimitiveCount={_activeModel.PrimitiveCount}, " +
                 $"accuracy={accuracy.ToString(CultureInfo.InvariantCulture)}, " +
-                $"smoothness={smoothness.ToString(CultureInfo.InvariantCulture)}).");
+                $"smoothness={config.SmoothMaxAngle.ToString(CultureInfo.InvariantCulture)}).");
         }
         finally
         {

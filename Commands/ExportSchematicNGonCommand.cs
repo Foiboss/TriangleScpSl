@@ -8,7 +8,6 @@ using TriangleScpSl.Core.NGons;
 using TriangleScpSl.Core.Paths;
 using TriangleScpSl.Core.ProjectMerExport;
 using TriangleScpSl.Core.Runtime;
-using TriangleScpSl.Core.Triangulation.Parallelogram;
 using UnityEngine;
 
 namespace TriangleScpSl.Commands;
@@ -64,8 +63,13 @@ public sealed class ExportSchematicNGonCommand : ICommand
         int buildBatch = Mathf.Max(1, Plugin.Instance?.Config.ExportBuildBatchSize ?? 64);
         int writeBatch = Mathf.Max(1, Plugin.Instance?.Config.ExportWriteBatchSize ?? 256);
 
+        var config = new NGonModelConfig
+        {
+            PlanarThreshold = planarThreshold,
+        };
+
         _isExporting = true;
-        _exportCoroutine = CoroutineHost.Run(ExportRoutine(requestedFile, outputFileName, planarThreshold, buildBatch, writeBatch));
+        _exportCoroutine = CoroutineHost.Run(ExportRoutine(requestedFile, outputFileName, config, buildBatch, writeBatch));
 
         response = "Export started asynchronously. Run command again to cancel.";
         return true;
@@ -75,19 +79,23 @@ public sealed class ExportSchematicNGonCommand : ICommand
     (
         string requestedFile,
         string outputFileName,
-        float planarThreshold,
+        NGonModelConfig config,
         int buildBatch,
         int writeBatch)
     {
         try
         {
-            if (!NGonModelBuilder.TryLoad(requestedFile, Color.white, out List<ModelParallelogram> parallelograms, out List<ModelPrimitive> detectedPrimitives, out _, out string modelError, planarThreshold))
+            NGonModelResult? loadResult = null;
+
+            yield return NGonModelBuilder.LoadCoroutine(requestedFile, Color.white, result => { loadResult = result; }, config);
+
+            if (loadResult == null)
             {
-                Log.Warn($"[ExportSchematicNGon] {modelError}");
+                Log.Warn("[ExportSchematicNGon] Failed to load model.");
                 yield break;
             }
 
-            _activeModel = ExactModel.CreateDeferred(parallelograms, detectedPrimitives, Vector3.zero, PrimitiveFlags.Visible, 1f);
+            _activeModel = ExactModel.CreateDeferred(loadResult.Parallelograms, loadResult.DetectedPrimitives, Vector3.zero, PrimitiveFlags.Visible, 1f);
             yield return _activeModel.BuildTrianglesCoroutine(PrimitiveFlags.Visible, buildBatch);
 
             if (_activeModel.ParallelogramCount == 0 && _activeModel.NativePrimitiveCount == 0)
@@ -124,7 +132,7 @@ public sealed class ExportSchematicNGonCommand : ICommand
                 yield break;
             }
 
-            Log.Info($"[ExportSchematicNGon] Exported: {outputPath} (ParallelogramCount={_activeModel.ParallelogramCount}, PrimitiveCount={_activeModel.PrimitiveCount}, planarThreshold={planarThreshold.ToString(CultureInfo.InvariantCulture)}).");
+            Log.Info($"[ExportSchematicNGon] Exported: {outputPath} (ParallelogramCount={_activeModel.ParallelogramCount}, PrimitiveCount={_activeModel.PrimitiveCount}, planarThreshold={config.PlanarThreshold.ToString(CultureInfo.InvariantCulture)}).");
         }
         finally
         {

@@ -5,7 +5,6 @@ using System.Collections;
 using TriangleScpSl.Core.Models.ApproximateModel;
 using TriangleScpSl.Core.NGons;
 using TriangleScpSl.Core.Runtime;
-using TriangleScpSl.Core.Triangulation.Parallelogram;
 using UnityEngine;
 
 namespace TriangleScpSl.Commands;
@@ -88,60 +87,66 @@ public class TriangulateNGonV2Command : ICommand
             }
         }
 
-        if (!NGonModelBuilder.TryLoad(
-                requestedFile,
-                Color.white,
-                out List<ModelParallelogram> parallelograms,
-                out List<ModelPrimitive> detectedPrimitives,
-                out string fileName,
-                out string error,
-                planarThreshold,
-                true,
-                false
-            )
-        )
+        var config = new NGonModelConfig
         {
-            response = error;
-            return false;
-        }
+            PlanarThreshold = planarThreshold,
+            UseHiddenTailOptimization = true,
+            DetectPrimitives = false,
+        };
 
+        _isBuilding = true;
+
+        int batchSize = Mathf.Max(1, Plugin.Instance?.Config.TriangulateNGonV2BuildBatchSize ?? 16);
         Vector3 spawnPosition = player.Position + player.GameObject.transform.forward * 2.5f + Vector3.up * 1.2f;
 
+        _buildCoroutine = CoroutineHost.Run(
+            BuildRoutine(requestedFile, config, accuracy, batchSize, spawnPosition));
+
+        response = $"Started building OBJ model '{requestedFile}' asynchronously. Run command again to cancel.";
+        return true;
+    }
+
+    IEnumerator BuildRoutine
+    (
+        string requestedFile, NGonModelConfig config, float accuracy, int batchSize, Vector3 spawnPosition)
+    {
+        NGonModelResult? loadResult = null;
+
+        yield return NGonModelBuilder.LoadCoroutine(requestedFile, Color.white, result => { loadResult = result; }, config);
+
+        if (loadResult == null)
+        {
+            _buildCoroutine = null;
+            _isBuilding = false;
+            Log.Warn("[TriangulateNGonV2] Failed to load model.");
+            yield break;
+        }
+
         var createdModel = ApproximateModel.CreateDeferred(
-            parallelograms,
-            detectedPrimitives,
+            loadResult.Parallelograms,
+            loadResult.DetectedPrimitives,
             spawnPosition,
             PrimitiveFlags.Visible,
             accuracy);
 
         _model = createdModel;
-        _isBuilding = true;
 
-        int batchSize = Mathf.Max(1, Plugin.Instance?.Config.TriangulateNGonV2BuildBatchSize ?? 16);
-        _buildCoroutine = CoroutineHost.Run(BuildRoutine(createdModel, fileName, batchSize));
-
-        response = $"Started building OBJ model '{fileName}' asynchronously. Run command again to cancel.";
-        return true;
-    }
-
-    IEnumerator BuildRoutine(ApproximateModel model, string fileName, int batchSize)
-    {
-        yield return model.BuildTrianglesCoroutine(PrimitiveFlags.Visible, batchSize);
+        yield return createdModel.BuildTrianglesCoroutine(PrimitiveFlags.Visible, batchSize);
 
         _buildCoroutine = null;
         _isBuilding = false;
 
-        if (!ReferenceEquals(_model, model))
+        if (!ReferenceEquals(_model, createdModel))
             yield break;
 
-        if (model is { ParallelogramCount: 0, NativePrimitiveCount: 0 })
+        if (createdModel is { ParallelogramCount: 0, NativePrimitiveCount: 0 })
         {
-            model.Destroy();
+            createdModel.Destroy();
             _model = null;
-            Log.Warn($"[TriangulateNGonV2] Model '{fileName}' has no valid triangles after async build.");
+            Log.Warn($"[TriangulateNGonV2] Model '{loadResult.NormalizedFileName}' has no valid triangles after async build.");
             yield break;
         }
 
-        Log.Info($"[TriangulateNGonV2] Created model '{fileName}': ParallelogramCount={model.ParallelogramCount}, NativePrimitiveCount={model.NativePrimitiveCount}, PrimitiveCount={model.PrimitiveCount}.");
+        Log.Info($"[TriangulateNGonV2] Created model '{loadResult.NormalizedFileName}': ParallelogramCount={createdModel.ParallelogramCount}, NativePrimitiveCount={createdModel.NativePrimitiveCount}, PrimitiveCount={createdModel.PrimitiveCount}.");
     }
 }

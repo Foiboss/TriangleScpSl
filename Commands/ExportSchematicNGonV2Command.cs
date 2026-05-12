@@ -8,7 +8,6 @@ using TriangleScpSl.Core.NGons;
 using TriangleScpSl.Core.Paths;
 using TriangleScpSl.Core.ProjectMerExport;
 using TriangleScpSl.Core.Runtime;
-using TriangleScpSl.Core.Triangulation.Parallelogram;
 using UnityEngine;
 
 namespace TriangleScpSl.Commands;
@@ -77,32 +76,44 @@ public sealed class ExportSchematicNGonV2Command : ICommand
         int buildBatch = Mathf.Max(1, Plugin.Instance?.Config.ExportBuildBatchSize ?? 64);
         int writeBatch = Mathf.Max(1, Plugin.Instance?.Config.ExportWriteBatchSize ?? 256);
 
+        var config = new NGonModelConfig
+        {
+            PlanarThreshold = planarThreshold,
+            UseHiddenTailOptimization = true,
+            DetectPrimitives = false,
+        };
+
         _isExporting = true;
-        _exportCoroutine = CoroutineHost.Run(ExportRoutine(requestedFile, outputFileName, planarThreshold, accuracy, buildBatch, writeBatch));
+        _exportCoroutine = CoroutineHost.Run(ExportRoutine(requestedFile, outputFileName, config, accuracy, buildBatch, writeBatch));
 
         response = "Export started asynchronously. Run command again to cancel.";
         return true;
     }
 
     IEnumerator ExportRoutine
-    (string requestedFile,
+    (
+        string requestedFile,
         string outputFileName,
-        float planarThreshold,
+        NGonModelConfig config,
         float accuracy,
         int buildBatch,
         int writeBatch)
     {
         try
         {
-            if (!NGonModelBuilder.TryLoad(requestedFile, Color.white, out List<ModelParallelogram> parallelograms, out List<ModelPrimitive> detectedPrimitives, out _, out string modelError, planarThreshold))
+            NGonModelResult? loadResult = null;
+
+            yield return NGonModelBuilder.LoadCoroutine(requestedFile, Color.white, result => { loadResult = result; }, config);
+
+            if (loadResult == null)
             {
-                Log.Warn($"[ExportSchematicNGonV2] {modelError}");
+                Log.Warn("[ExportSchematicNGonV2] Failed to load model.");
                 yield break;
             }
 
             _activeModel = ApproximateModel.CreateDeferred(
-                parallelograms,
-                detectedPrimitives,
+                loadResult.Parallelograms,
+                loadResult.DetectedPrimitives,
                 Vector3.zero,
                 PrimitiveFlags.Visible,
                 accuracy);
@@ -143,7 +154,7 @@ public sealed class ExportSchematicNGonV2Command : ICommand
                 yield break;
             }
 
-            Log.Info($"[ExportSchematicNGonV2] Exported: {outputPath} (ParallelogramCount={_activeModel.ParallelogramCount}, PrimitiveCount={_activeModel.PrimitiveCount} planarThreshold={planarThreshold.ToString(CultureInfo.InvariantCulture)}, accuracy={accuracy.ToString(CultureInfo.InvariantCulture)}).");
+            Log.Info($"[ExportSchematicNGonV2] Exported: {outputPath} (ParallelogramCount={_activeModel.ParallelogramCount}, PrimitiveCount={_activeModel.PrimitiveCount} planarThreshold={config.PlanarThreshold.ToString(CultureInfo.InvariantCulture)}, accuracy={accuracy.ToString(CultureInfo.InvariantCulture)}).");
         }
         finally
         {

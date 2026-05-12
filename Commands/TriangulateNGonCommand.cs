@@ -5,7 +5,6 @@ using System.Collections;
 using TriangleScpSl.Core.Models.ExactModel;
 using TriangleScpSl.Core.NGons;
 using TriangleScpSl.Core.Runtime;
-using TriangleScpSl.Core.Triangulation.Parallelogram;
 using UnityEngine;
 
 namespace TriangleScpSl.Commands;
@@ -77,42 +76,58 @@ public class TriangulateNGonCommand : ICommand
 
         string requestedFile = arguments.Array?[arguments.Offset] ?? string.Empty;
 
-        if (!NGonModelBuilder.TryLoad(requestedFile, Color.white, out List<ModelParallelogram> parallelograms, out List<ModelPrimitive> detectedPrimitives, out string fileName, out string error, planarThreshold))
+        var config = new NGonModelConfig
         {
-            response = error;
-            return false;
-        }
+            PlanarThreshold = planarThreshold,
+        };
 
-        Vector3 spawnPosition = player.Position + player.GameObject.transform.forward * 2.5f + Vector3.up * 1.2f;
-        var createdModel = ExactModel.CreateDeferred(parallelograms, detectedPrimitives, spawnPosition, PrimitiveFlags.Visible, 1f);
-        _model = createdModel;
         _isBuilding = true;
 
         int batchSize = Mathf.Max(1, Plugin.Instance?.Config.TriangulateNGonBuildBatchSize ?? 32);
-        _buildCoroutine = CoroutineHost.Run(BuildRoutine(createdModel, fileName, batchSize));
+        Vector3 spawnPosition = player.Position + player.GameObject.transform.forward * 2.5f + Vector3.up * 1.2f;
 
-        response = $"Started building OBJ model '{fileName}' asynchronously. Run command again to cancel.";
+        _buildCoroutine = CoroutineHost.Run(
+            BuildRoutine(requestedFile, config, batchSize, spawnPosition));
+
+        response = $"Started building OBJ model '{requestedFile}' asynchronously. Run command again to cancel.";
         return true;
     }
 
-    IEnumerator BuildRoutine(ExactModel model, string fileName, int batchSize)
+    IEnumerator BuildRoutine
+    (
+        string requestedFile, NGonModelConfig config, int batchSize, Vector3 spawnPosition)
     {
-        yield return model.BuildTrianglesCoroutine(PrimitiveFlags.Visible, batchSize);
+        NGonModelResult? loadResult = null;
+
+        yield return NGonModelBuilder.LoadCoroutine(requestedFile, Color.white, result => { loadResult = result; }, config);
+
+        if (loadResult == null)
+        {
+            _buildCoroutine = null;
+            _isBuilding = false;
+            Log.Warn("[TriangulateNGon] Failed to load model.");
+            yield break;
+        }
+
+        var createdModel = ExactModel.CreateDeferred(loadResult.Parallelograms, loadResult.DetectedPrimitives, spawnPosition, PrimitiveFlags.Visible, 1f);
+        _model = createdModel;
+
+        yield return createdModel.BuildTrianglesCoroutine(PrimitiveFlags.Visible, batchSize);
 
         _buildCoroutine = null;
         _isBuilding = false;
 
-        if (!ReferenceEquals(_model, model))
+        if (!ReferenceEquals(_model, createdModel))
             yield break;
 
-        if (model is { ParallelogramCount: 0, NativePrimitiveCount: 0 })
+        if (createdModel is { ParallelogramCount: 0, NativePrimitiveCount: 0 })
         {
-            model.Destroy();
+            createdModel.Destroy();
             _model = null;
-            Log.Warn($"[TriangulateNGon] Model '{fileName}' has no valid geometry after async build.");
+            Log.Warn($"[TriangulateNGon] Model '{loadResult.NormalizedFileName}' has no valid geometry after async build.");
             yield break;
         }
 
-        Log.Info($"[TriangulateNGon] Created model '{fileName}': ParallelogramCount={model.ParallelogramCount}, NativePrimitiveCount={model.NativePrimitiveCount}, PrimitiveCount={model.PrimitiveCount}.");
+        Log.Info($"[TriangulateNGon] Created model '{loadResult.NormalizedFileName}': ParallelogramCount={createdModel.ParallelogramCount}, NativePrimitiveCount={createdModel.NativePrimitiveCount}, PrimitiveCount={createdModel.PrimitiveCount}.");
     }
 }

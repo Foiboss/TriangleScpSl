@@ -1,4 +1,5 @@
-using TriangleScpSl.Core.NGons.Detectors;
+using Exiled.API.Features;
+using System.Collections;
 using TriangleScpSl.Core.Paths;
 using TriangleScpSl.Core.Triangulation.Parallelogram;
 using UnityEngine;
@@ -7,42 +8,176 @@ namespace TriangleScpSl.Core.NGons;
 
 public static class NGonModelBuilder
 {
-    public static bool TryLoad
+    /// <summary>
+    ///     Maximum milliseconds per frame before yielding in coroutine mode.
+    /// </summary>
+    public static readonly float MaxMsPerFrame = 8f;
+
+    /// <summary>
+    ///     Loads a model synchronously. Throws on failure.
+    /// </summary>
+    public static NGonModelResult Load(string requestedFile, Color defaultColor, NGonModelConfig? config = null)
+    {
+        config ??= NGonModelConfig.Default;
+
+        (string fileName, string modelPath) = ResolveModelPath(requestedFile);
+
+        List<NGonRaw> ngons = ParseModel(modelPath, defaultColor);
+
+        ngons = NGonDeduplicator.Deduplicate(ngons,
+            config.DeduplicateVertexThreshold, config.DeduplicatePlaneDistThreshold);
+
+        ModelSolidVolume? solid = config.UseHiddenTailOptimization || config.DetectPrimitives
+            ? ModelSolidVolume.Build(ngons)
+            : null;
+
+        List<ModelPrimitive> detectedPrimitives;
+        List<NGonRaw> remainingNgons;
+
+        if (config.DetectPrimitives)
+        {
+            (detectedPrimitives, remainingNgons) = PrimitiveShapeDetector.Detect(
+                ngons, solid, config.SmoothMaxAngle, config.SmoothMinFraction);
+        }
+        else
+        {
+            detectedPrimitives = [];
+            remainingNgons = ngons;
+        }
+
+        List<NGonRaw> planarNgons = PlanarNGonSplitter.SplitAll(remainingNgons, config.PlanarThreshold);
+        List<ConvexNGon> convexNgons = ConvexNGonDecomposer.Decompose(planarNgons);
+
+        List<ModelParallelogram> parallelograms = HiddenTailParallelogramProcessor.Process(
+            convexNgons, solid, config.UseEdgeWalkSampling, config.HiddenTailPullIn);
+
+        if (parallelograms.Count == 0 && detectedPrimitives.Count == 0)
+            throw new InvalidOperationException("No valid geometry produced from model polygons.");
+
+        return new NGonModelResult
+        {
+            Parallelograms = parallelograms,
+            DetectedPrimitives = detectedPrimitives,
+            NormalizedFileName = fileName,
+        };
+    }
+
+    /// <summary>
+    ///     Loads a model as a coroutine, yielding periodically to avoid freezing.
+    ///     Call with CoroutineHost.Run. The result callback fires when done.
+    /// </summary>
+    public static IEnumerator LoadCoroutine
     (
         string requestedFile,
         Color defaultColor,
-        out List<ModelParallelogram> parallelograms,
-        out List<ModelPrimitive> detectedPrimitives,
-        out string normalizedFileName,
-        out string error,
-        float planarThreshold = 0f,
-        bool useHiddenTailOptimization = true,
-        bool detectPrimitives = true,
-        float deduplicateVertexThreshold = 1e-4f,
-        float deduplicatePlaneDistThreshold = 1e-4f,
-        float smoothMaxAngle = SmoothnessCheck.DefaultMaxAngle,
-        float smoothMinFraction = SmoothnessCheck.DefaultMinFraction,
-        bool useEdgeWalkSampling = true,
-        float hiddenTailPullIn = 0.1f)
+        Action<NGonModelResult?> onComplete,
+        NGonModelConfig? config = null)
     {
-        parallelograms = [];
-        detectedPrimitives = [];
-        normalizedFileName = string.Empty;
-        error = string.Empty;
+        config ??= NGonModelConfig.Default;
 
-        if (string.IsNullOrWhiteSpace(requestedFile))
+        string fileName;
+        List<NGonRaw> ngons;
+
+        try
         {
-            error = "Model file name cannot be empty.";
-            return false;
+            (fileName, string modelPath) = ResolveModelPath(requestedFile);
+            ngons = ParseModel(modelPath, defaultColor);
+
+            ngons = NGonDeduplicator.Deduplicate(ngons,
+                config.DeduplicateVertexThreshold, config.DeduplicatePlaneDistThreshold);
         }
+        catch (Exception ex)
+        {
+            Log.Error($"[NGonModelBuilder] {ex.Message}");
+            onComplete(null);
+            yield break;
+        }
+
+        yield return null; // yield after parsing/dedup
+
+        ModelSolidVolume? solid = null;
+
+        if (config.UseHiddenTailOptimization || config.DetectPrimitives)
+        {
+            solid = ModelSolidVolume.Build(ngons);
+            yield return null; // yield after building solid volume
+        }
+
+        // --- Primitive detection (async) ---
+        List<ModelPrimitive> detectedPrimitives = [];
+        List<NGonRaw> remainingNgons = ngons;
+
+        if (config.DetectPrimitives)
+        {
+            var detectDone = false;
+
+            yield return PrimitiveShapeDetector.DetectCoroutine(
+                ngons, solid, config.SmoothMaxAngle, config.SmoothMinFraction, MaxMsPerFrame,
+                (primitives, remaining) =>
+                {
+                    detectedPrimitives = primitives;
+                    remainingNgons = remaining;
+                    detectDone = true;
+                });
+
+            if (!detectDone)
+            {
+                Log.Error("[NGonModelBuilder] Primitive detection coroutine did not complete.");
+                onComplete(null);
+                yield break;
+            }
+        }
+
+        // --- Planar split + convex decompose ---
+        List<NGonRaw> planarNgons = PlanarNGonSplitter.SplitAll(remainingNgons, config.PlanarThreshold);
+        yield return null;
+
+        List<ConvexNGon> convexNgons = ConvexNGonDecomposer.Decompose(planarNgons);
+        yield return null;
+
+        // --- Parallelogram processing (async) ---
+        List<ModelParallelogram> parallelograms = [];
+        var paraDone = false;
+
+        yield return HiddenTailParallelogramProcessor.ProcessCoroutine(
+            convexNgons, solid, config.UseEdgeWalkSampling, config.HiddenTailPullIn, MaxMsPerFrame,
+            result =>
+            {
+                parallelograms = result;
+                paraDone = true;
+            });
+
+        if (!paraDone)
+        {
+            Log.Error("[NGonModelBuilder] Parallelogram processing coroutine did not complete.");
+            onComplete(null);
+            yield break;
+        }
+
+        if (parallelograms.Count == 0 && detectedPrimitives.Count == 0)
+        {
+            Log.Warn("[NGonModelBuilder] No valid geometry produced from model polygons.");
+            onComplete(null);
+            yield break;
+        }
+
+        onComplete(new NGonModelResult
+        {
+            Parallelograms = parallelograms,
+            DetectedPrimitives = detectedPrimitives,
+            NormalizedFileName = fileName,
+        });
+    }
+
+    static (string fileName, string modelPath) ResolveModelPath(string requestedFile)
+    {
+        if (string.IsNullOrWhiteSpace(requestedFile))
+            throw new ArgumentException("Model file name cannot be empty.");
 
         string fileName = Path.GetFileName(requestedFile);
 
         if (!string.Equals(requestedFile, fileName, StringComparison.Ordinal))
-        {
-            error = "Only a file name is allowed (without directories).";
-            return false;
-        }
+            throw new ArgumentException("Only a file name is allowed (without directories).");
 
         string extension = Path.GetExtension(fileName);
 
@@ -54,91 +189,34 @@ public static class NGonModelBuilder
             if (File.Exists(objPath))
                 fileName = objName;
             else
-            {
-                error = $"Model file not found: {objPath}";
-                return false;
-            }
+                throw new FileNotFoundException($"Model file not found: {objPath}");
         }
         else if (!fileName.EndsWith(".obj", StringComparison.OrdinalIgnoreCase))
         {
-            error = "Only .obj files are supported for NGon models.";
-            return false;
+            throw new NotSupportedException("Only .obj files are supported for NGon models.");
         }
 
         string modelPath = TrianglePaths.GetModelPath(fileName);
 
         if (!File.Exists(modelPath))
+            throw new FileNotFoundException($"Model file not found: {modelPath}");
+
+        return (fileName, modelPath);
+    }
+
+    static List<NGonRaw> ParseModel(string modelPath, Color defaultColor)
+    {
+        if (modelPath.EndsWith(".obj", StringComparison.OrdinalIgnoreCase))
         {
-            error = $"Model file not found: {modelPath}";
-            return false;
-        }
-
-        normalizedFileName = fileName;
-
-        try
-        {
-            List<NGonRaw> ngons = [];
-
-            if (modelPath.EndsWith(".obj", StringComparison.OrdinalIgnoreCase))
-            {
-                if (!ObjNGonParser.TryParseFile(modelPath, defaultColor, out ngons,
-                    out string objError))
-                {
-                    error = objError;
-                    return false;
-                }
-            }
+            if (!ObjNGonParser.TryParseFile(modelPath, defaultColor, out List<NGonRaw> ngons, out string objError))
+                throw new InvalidOperationException(objError);
 
             if (ngons.Count == 0)
-            {
-                error = "No valid polygons found in model file.";
-                return false;
-            }
+                throw new InvalidOperationException("No valid polygons found in model file.");
 
-            ngons = NGonDeduplicator.Deduplicate(ngons,
-                deduplicateVertexThreshold, deduplicatePlaneDistThreshold);
-
-            // Build solid volume for winding number calculations (used by primitive
-            // detection and hidden-tail optimization)
-            ModelSolidVolume? solid = useHiddenTailOptimization
-                ? ModelSolidVolume.Build(ngons)
-                : null;
-
-            // Detect primitives before planar merging (to preserve topology)
-            List<NGonRaw> remainingNgons;
-
-            if (detectPrimitives)
-            {
-                (detectedPrimitives, remainingNgons) = PrimitiveShapeDetector.Detect(ngons, solid, smoothMaxAngle, smoothMinFraction);
-            }
-            else
-            {
-                remainingNgons = ngons;
-            }
-
-            List<NGonRaw> planarNgons = PlanarNGonSplitter.SplitAll(remainingNgons, planarThreshold);
-
-            List<ConvexNGon> convexNgons = ConvexNGonDecomposer.Decompose(planarNgons);
-
-            parallelograms = HiddenTailParallelogramProcessor.Process(convexNgons, solid, useEdgeWalkSampling, hiddenTailPullIn);
-
-            if (parallelograms.Count == 0 && detectedPrimitives.Count == 0)
-            {
-                error = "No valid triangles produced from model polygons.";
-                return false;
-            }
-
-            return true;
+            return ngons;
         }
-        catch (NotSupportedException ex)
-        {
-            error = ex.Message;
-            return false;
-        }
-        catch (Exception ex)
-        {
-            error = $"Failed to parse model: {ex.Message}";
-            return false;
-        }
+
+        throw new NotSupportedException($"Unsupported model format: {Path.GetExtension(modelPath)}");
     }
 }
