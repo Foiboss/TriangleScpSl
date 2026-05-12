@@ -73,15 +73,15 @@ public static class ApproximateModelUtils
     // when CreateParallelogram is run with this candidate stretch instead of one
     // that exactly fits (vLeft, vUp). Returns absolute world units, scales linearly
     // with parallelogram size, and equals 0 whenever the candidate would render
-    // (vLeft, vUp) exactly — including non-trivial cases where (candidateTheta, candidatePhi)
+    // (vLeft, vUp) exactly - including non-trivial cases where (candidateTheta, candidatePhi)
     // differs from the "true" solver output but still satisfies |v1C| = |v2C|.
     public static float MaxVertexError
     (
         Vector3 vLeft, Vector3 vUp,
         float candidateTheta, float candidatePhi)
     {
-        // 1. Project the half-diagonals into the candidate stretch's local space —
-        //    these are exactly the v1ForStretch / v2ForStretch CreateParallelogram uses.
+        // Project the half-diagonals into the candidate stretch's local space -
+        // these are exactly the v1ForStretch / v2ForStretch CreateParallelogram uses.
         Vector3 v1C = ForwardTransform(vLeft, candidateTheta, candidatePhi);
         Vector3 v2C = ForwardTransform(vUp, candidateTheta, candidatePhi);
 
@@ -96,24 +96,24 @@ public static class ApproximateModelUtils
         if (normalLocal.sqrMagnitude < 1e-24f) return float.MaxValue;
         normalLocal = normalLocal.normalized;
 
-        // 2. Same orientation CreateParallelogram applies via LookRotation:
-        //    local Y along (v1-v2), local Z along normal, local X = Y × Z.
+        // Same orientation CreateParallelogram applies via LookRotation:
+        // local Y along (v1-v2), local Z along normal, local X = Y × Z.
         Vector3 yAxis = diffLocal / b;
         Vector3 xAxis = Vector3.Cross(yAxis, normalLocal);
 
-        // 3. The unit quad after scale (a, b, 1) and that rotation has 4 corners at
-        //    (±a/2)X + (±b/2)Y in candidate-local. Two of them; their negatives
-        //    give the other two and produce symmetric errors.
+        // The unit quad after scale (a, b, 1) and that rotation has 4 corners at
+        // (±a/2)X + (±b/2)Y in candidate-local. Two of them; their negatives
+        // give the other two and produce symmetric errors.
         Vector3 cornerA = a * 0.5f * xAxis + b * 0.5f * yAxis;
         Vector3 cornerB = a * 0.5f * xAxis - b * 0.5f * yAxis;
 
-        // 4. Apply the candidate stretch's parent transform: candidate-local -> world.
+        // Apply the candidate stretch's parent transform: candidate-local -> world.
         Vector3 worldA = InverseTransform(cornerA, candidateTheta, candidatePhi);
         Vector3 worldB = InverseTransform(cornerB, candidateTheta, candidatePhi);
 
-        // 5. Geometric matching is fixed: cornerA always falls on the ±vUp corner pair,
-        //    cornerB on the ±vLeft pair (this drops out of LookRotation's basis choice).
-        //    Min(±) just picks which side of the pair.
+        // Geometric matching is fixed: cornerA always falls on the ±vUp corner pair,
+        // cornerB on the ±vLeft pair (this drops out of LookRotation's basis choice).
+        // Min(±) just picks which side of the pair.
         float dA = Mathf.Min((worldA - vUp).magnitude, (worldA + vUp).magnitude);
         float dB = Mathf.Min((worldB - vLeft).magnitude, (worldB + vLeft).magnitude);
         return Mathf.Max(dA, dB);

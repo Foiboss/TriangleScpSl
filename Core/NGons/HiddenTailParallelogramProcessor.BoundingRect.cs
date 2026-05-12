@@ -134,9 +134,10 @@ public static partial class HiddenTailParallelogramProcessor
         Vector3 pullDir = normal * hiddenTailPullIn;
 
         var grid = new Vector2[(gridU + 1) * (gridV + 1)];
-        for (int iu = 0; iu <= gridU; iu++)
+
+        for (var iu = 0; iu <= gridU; iu++)
         {
-            for (int iv = 0; iv <= gridV; iv++)
+            for (var iv = 0; iv <= gridV; iv++)
             {
                 Vector2 sample = Vector2.Lerp(
                     Vector2.Lerp(rectCorners2D[0], rectCorners2D[1], iu / (float)gridU),
@@ -153,15 +154,16 @@ public static partial class HiddenTailParallelogramProcessor
             return true;
 
         // Walk edges between adjacent grid nodes to catch gaps
-        for (int iu = 0; iu <= gridU; iu++)
+        for (var iu = 0; iu <= gridU; iu++)
         {
-            for (int iv = 0; iv <= gridV; iv++)
+            for (var iv = 0; iv <= gridV; iv++)
             {
                 Vector2 from = grid[iu * (gridV + 1) + iv];
 
                 if (iu + 1 <= gridU)
                 {
                     Vector2 to = grid[(iu + 1) * (gridV + 1) + iv];
+
                     if (!WalkEdgeInsideSolid(from, to, poly2D, origin, e1, e2, pullDir, solid))
                         return false;
                 }
@@ -169,6 +171,7 @@ public static partial class HiddenTailParallelogramProcessor
                 if (iv + 1 <= gridV)
                 {
                     Vector2 to = grid[iu * (gridV + 1) + iv + 1];
+
                     if (!WalkEdgeInsideSolid(from, to, poly2D, origin, e1, e2, pullDir, solid))
                         return false;
                 }
@@ -192,10 +195,11 @@ public static partial class HiddenTailParallelogramProcessor
         float dist = (to3D - from3D).magnitude;
         int steps = Mathf.Max(2, Mathf.CeilToInt(dist / ModelSolidVolume.MaxEdgeSampleSpacing));
 
-        for (int s = 1; s < steps; s++)
+        for (var s = 1; s < steps; s++)
         {
             float t = s / (float)steps;
             Vector2 sample2D = Vector2.Lerp(from2D, to2D, t);
+
             if (!CheckSampleInsideSolid(sample2D, poly2D, origin, e1, e2, pullDir, solid))
                 return false;
         }

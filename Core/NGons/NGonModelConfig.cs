@@ -51,7 +51,7 @@ public sealed class NGonModelConfig
     public bool UseEdgeWalkSampling { get; set; } = false;
 
     /// <summary>Pull-in distance along normal for hidden-tail solid checks.</summary>
-    public float HiddenTailPullIn { get; set; } = 0.1f;
+    public float HiddenTailPullIn { get; set; } = 0.03f;
 
     /// <summary>Accuracy for approximate model rendering (lower = more precise, more primitives).</summary>
     public float Accuracy { get; set; } = 0.001f;

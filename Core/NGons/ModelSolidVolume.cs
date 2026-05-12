@@ -8,8 +8,6 @@ public sealed class ModelSolidVolume
     // Inside/outside threshold for winding number
     const float InsideThreshold = 0.5f;
 
-    // Tail sample pull-in: lower = stricter, pulls samples away from boundary
-    public static readonly float TailPullIn = 0.2f;
     // Grid density for tail sampling
     public static readonly int TailGridDepth = 5;
     // Maximum distance between consecutive edge-walk samples (world units)
@@ -120,16 +118,32 @@ public sealed class ModelSolidVolume
         return (float)(sum / (4.0 * Math.PI));
     }
 
-    /// <summary>Check if every sampled point inside the tail triangle is solid material.
-    /// When useEdgeWalk is true, also samples along edges between grid nodes to catch gaps.</summary>
-    public bool IsTriangleFullyInsideSolid(Vector3 a, Vector3 b, Vector3 c, bool useEdgeWalk = true)
+    /// <summary>
+    ///     Check if the tail triangle is fully inside solid material.
+    ///     <para>
+    ///         When <paramref name="useEdgeWalk" /> is false (default/fast path): samples discrete points
+    ///         on the triangle, each pulled toward the centroid by <paramref name="pullIn" /> (barycentric fraction,
+    ///         0..0.49), and checks <see cref="IsSolid" /> directly. This is the original proven approach.
+    ///     </para>
+    ///     <para>
+    ///         When <paramref name="useEdgeWalk" /> is true (precise path): builds a full barycentric grid,
+    ///         offsets each sample outward along <paramref name="normal" /> by <paramref name="pullIn" /> (world units),
+    ///         and additionally walks edges between grid nodes to catch pits/gaps. More accurate but slower.
+    ///     </para>
+    /// </summary>
+    public bool IsTriangleFullyInsideSolid
+    (
+        Vector3 a, Vector3 b, Vector3 c,
+        Vector3 normal, float pullIn,
+        bool useEdgeWalk = true)
     {
-        float pull = Mathf.Clamp(TailPullIn, 0.001f, 0.49f);
         Vector3 g = (a + b + c) / 3f;
         int n = Mathf.Clamp(TailGridDepth, 2, 10);
 
         if (!useEdgeWalk)
         {
+            float pull = Mathf.Clamp(pullIn, 0.001f, 0.49f);
+
             if (!IsSolid(g)) return false;
 
             Vector3 mab = Vector3.Lerp(Vector3.Lerp(a, b, 0.5f), g, pull);
@@ -158,63 +172,75 @@ public sealed class ModelSolidVolume
             return true;
         }
 
-        // Build barycentric grid nodes (including boundary)
+        // Edge-walk precise path: offset samples outward along normal
+        Vector3 pullDir = normal * pullIn;
+        const float baryPull = 0.05f;
+
         var gridNodes = new List<Vector3>();
-        for (int i = 0; i <= n; i++)
+
+        for (var i = 0; i <= n; i++)
         {
-            for (int j = 0; j <= n - i; j++)
+            for (var j = 0; j <= n - i; j++)
             {
                 float u = i / (float)n;
                 float v = j / (float)n;
                 float w = 1f - u - v;
                 Vector3 pt = u * a + v * b + w * c;
-                pt = Vector3.Lerp(pt, g, pull);
+                pt = Vector3.Lerp(pt, g, baryPull);
                 gridNodes.Add(pt);
             }
         }
 
-        // Check all grid nodes
         foreach (Vector3 node in gridNodes)
-            if (!IsSolid(node)) return false;
+            if (!IsSolid(node + pullDir))
+                return false;
 
-        // Walk edges between adjacent grid nodes.
         int Idx(int i, int j)
         {
-            int offset = 0;
-            for (int r = 0; r < i; r++)
-                offset += (n - r + 1);
+            var offset = 0;
+
+            for (var r = 0; r < i; r++)
+            {
+                offset += n - r + 1;
+            }
+
             return offset + j;
         }
 
-        for (int i = 0; i <= n; i++)
+        for (var i = 0; i <= n; i++)
         {
-            for (int j = 0; j <= n - i; j++)
+            for (var j = 0; j <= n - i; j++)
             {
                 Vector3 from = gridNodes[Idx(i, j)];
 
                 if (i + 1 <= n && j <= n - (i + 1))
-                    if (!WalkEdgeSolid(from, gridNodes[Idx(i + 1, j)])) return false;
+                    if (!WalkEdgeSolid(from, gridNodes[Idx(i + 1, j)], pullDir))
+                        return false;
 
                 if (j + 1 <= n - i)
-                    if (!WalkEdgeSolid(from, gridNodes[Idx(i, j + 1)])) return false;
+                    if (!WalkEdgeSolid(from, gridNodes[Idx(i, j + 1)], pullDir))
+                        return false;
 
                 if (i + 1 <= n && j - 1 >= 0)
-                    if (!WalkEdgeSolid(from, gridNodes[Idx(i + 1, j - 1)])) return false;
+                    if (!WalkEdgeSolid(from, gridNodes[Idx(i + 1, j - 1)], pullDir))
+                        return false;
             }
         }
 
         return true;
     }
 
-    bool WalkEdgeSolid(Vector3 from, Vector3 to)
+    bool WalkEdgeSolid(Vector3 from, Vector3 to, Vector3 pullDir)
     {
         float dist = (to - from).magnitude;
         int steps = Mathf.Max(2, Mathf.CeilToInt(dist / MaxEdgeSampleSpacing));
-        for (int s = 1; s < steps; s++)
+
+        for (var s = 1; s < steps; s++)
         {
             Vector3 sample = Vector3.Lerp(from, to, s / (float)steps);
-            if (!IsSolid(sample)) return false;
+            if (!IsSolid(sample + pullDir)) return false;
         }
+
         return true;
     }
 }

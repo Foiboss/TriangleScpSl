@@ -74,7 +74,7 @@ public static class CylinderDetector
     {
         result = null!;
 
-        // Step 1: Find cylinder axis via normal-covariance matrix.
+        // Find cylinder axis via normal-covariance matrix.
         // Lateral face normals are perpendicular to the axis, so the axis
         // corresponds to the SMALLEST eigenvalue.
         float nxx = 0, nxy = 0, nxz = 0, nyy = 0, nyz = 0, nzz = 0;
@@ -127,7 +127,7 @@ public static class CylinderDetector
         // At least 60% of faces should have normals perpendicular to the axis (lateral faces)
         if (perpCount < faceNormals.Count * 0.6f) return false;
 
-        // Step 2: Project vertices onto plane perpendicular to axis. Fit circle.
+        // Project vertices onto plane perpendicular to axis. Fit circle.
         Vector3 centroid = Vector3.zero;
         foreach (Vector3 v in uniqueVertices) centroid += v;
         centroid /= uniqueVertices.Count;
@@ -193,7 +193,7 @@ public static class CylinderDetector
 
         if (rMean < 1e-6f) return false;
 
-        // Check fit quality — use mean deviation instead of max to be more robust
+        // Check fit quality - use mean deviation instead of max to be more robust
         var maxDev = 0f;
         var sumDev = 0f;
 
@@ -213,7 +213,7 @@ public static class CylinderDetector
         if (meanDev > tolerance) return false;
         if (maxDev > tolerance * 3f) return false;
 
-        // Step 3: Compute height along axis
+        // Compute height along axis
         float hMin = float.MaxValue, hMax = float.MinValue;
 
         for (var i = 0; i < n; i++)
@@ -225,7 +225,7 @@ public static class CylinderDetector
         float height = hMax - hMin;
         if (height < 1e-6f) return false;
 
-        // Step 4: Validate normals point outward from axis
+        // Validate normals point outward from axis
         var outwardCount = 0;
         Vector3 axisPoint = centroid + cx * e1 + cy * e2;
 
@@ -330,7 +330,7 @@ public static class CylinderDetector
 
                 if (covered) continue;
 
-                // Uncovered surface point — must be inside solid
+                // Uncovered surface point - must be inside solid
                 if (!solid.IsSolid(surfacePoint))
                     return false;
             }

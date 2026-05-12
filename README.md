@@ -53,7 +53,7 @@ The plugin applies several tricks to minimize the number of primitives needed:
 
 ## Best Command to Use
 
-> ### `TriangulateNGonV2` — the recommended display command
+> ### `TriangulateNGonV2` - the recommended display command
 >
 > This command applies the N-gon pipeline with V2 stretch clustering. Enable all optimizations
 > (hidden tails, primitive detection, smoothness) via `NGonConfig` for the lowest primitive count.
@@ -112,33 +112,35 @@ NGonConfig PlanarThreshold 0.01     -- set a value for this session
 
 ### Config Properties
 
-| Property                        | Type  | Default | Effect on Quality and Primitive Count                                                                                                                                                                                              |
-|---------------------------------|-------|---------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `PlanarThreshold`               | float | `0`     | Maximum vertex displacement when merging coplanar faces. `0` = exact only. Higher values merge more aggressively, producing fewer larger polygons and fewer primitives.                                                            |
-| `UseHiddenTailOptimization`     | bool  | `True`  | Hides parallelogram tail triangles inside solid geometry. Saves ~10-30% primitives on complex models.                                                                                                                              |
-| `DetectPrimitives`              | bool  | `True`  | Detects spheres, cylinders, cubes and replaces them with 1 native primitive each.                                                                                                                                                  |
-| `Accuracy`                      | float | `0.001` | Max vertex error (world units) for V2 stretch clustering. Lower = more precise but more primitives. Only affects V2 commands.                                                                                                      |
-| `SmoothMaxAngle`                | float | `0.32`  | Max dihedral angle (radians, ~18 deg) between adjacent faces to consider a surface smooth. Controls how aggressively primitive shapes are detected. Higher = more shape detection.                                                 |
-| `SmoothMinFraction`             | float | `0.7`   | Minimum fraction of smooth edges required for a surface cluster to qualify for primitive detection. Lower = more lenient shape detection.                                                                                          |
-| `UseEdgeWalkSampling`           | bool  | `False` | Enables edge-walk sampling during hidden-tail verification. Catches pits/gaps between discrete sample points, so pits and holes in model will not beaccidentaly covered by HidingParallelogramTail. More accurate but MUCH slower. |
-| `HiddenTailPullIn`              | float | `0.1`   | Pull-in distance along normal for hidden-tail solid checks. Larger values are more conservative (less likely to hide tails near edges).                                                                                            |
-| `DeduplicateVertexThreshold`    | float | `1E-04` | Vertex deduplication distance. Vertices closer than this are merged. Rarely needs changing.                                                                                                                                        |
-| `DeduplicatePlaneDistThreshold` | float | `1E-04` | Plane distance deduplication threshold for coplanar detection. Rarely needs changing.                                                                                                                                              |
-| `MaxMsPerFrame`                 | float | `8`     | Maximum milliseconds per frame before yielding in coroutine mode. Higher = faster loading but more lag. Lower = smoother but slower loading.                                                                                       |
+| Property                        | Type  | Default | Effect on Quality and Primitive Count                                                                                                                                                                                                                                                                                                    |
+|---------------------------------|-------|---------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `UseHiddenTailOptimization`     | bool  | `True`  | Hides parallelogram tail triangles inside solid geometry. Saves ~10-30% primitives on complex models.                                                                                                                                                                                                                                    |
+| `DetectPrimitives`              | bool  | `True`  | Detects spheres, cylinders, cubes and replaces them with 1 native primitive each.                                                                                                                                                                                                                                                        |
+| `Accuracy`                      | float | `0.001` | Max vertex error (world units) for V2 stretch clustering. Lower = more precise but more primitives. Only affects V2 commands.                                                                                                                                                                                                            |
+| `SmoothMaxAngle`                | float | `0.32`  | Max dihedral angle (radians, ~18 deg) between adjacent faces to consider a surface smooth. Controls how aggressively primitive shapes are detected. Higher = more shape detection.                                                                                                                                                       |
+| `SmoothMinFraction`             | float | `0.7`   | Minimum fraction of smooth edges required for a surface cluster to qualify for primitive detection. Lower = more lenient shape detection.                                                                                                                                                                                                |
+| `UseEdgeWalkSampling`           | bool  | `False` | Enables edge-walk sampling during hidden-tail verification. Catches pits/gaps between discrete sample points, so pits and holes in model will not beaccidentaly covered by HidingParallelogramTail. More accurate but MUCH slower.                                                                                                       |
+| `HiddenTailPullIn`              | float | `0.03`  | Pull-in distance along normal for hidden-tail solid checks. Larger values produce lower primitives at the cost of model look getting "spiky".                                                                                                                                                                                            |
+| `PlanarThreshold`               | float | `0`     | Maximum vertex displacement when merging coplanar faces. `0` = exact only. Higher values (e.g. 0.0001 or 0.001) merge more aggressively, producing fewer larger polygons and fewer primitives, but with increasing this parameter too high, it can actually increase the amount of primitives, as it deforms the original model too much |
+| `DeduplicateVertexThreshold`    | float | `1E-04` | Vertex deduplication distance. Vertices closer than this are merged. Rarely needs changing.                                                                                                                                                                                                                                              |
+| `DeduplicatePlaneDistThreshold` | float | `1E-04` | Plane distance deduplication threshold for coplanar detection. Rarely needs changing.                                                                                                                                                                                                                                                    |
+| `MaxMsPerFrame`                 | float | `8`     | Maximum milliseconds per frame before yielding in coroutine mode. Higher = faster loading but more lag. Lower = smoother but slower loading.                                                                                                                                                                                             |
 
 ### Tuning Guide
 
 **To reduce primitive count** (at the cost of accuracy):
 
-- Increase `PlanarThreshold` (e.g. `0.01` - `0.05`) to merge more coplanar faces
-- Increase `Accuracy` (e.g. `0.01`) to allow more stretch reuse
 - Enable `UseHiddenTailOptimization` and `DetectPrimitives` if disabled
+- Increase `Accuracy` (e.g. `0.01`) to allow more stretch reuse
+- Increase `HiddenTailPullIn` (e.g. `0.1`) to get less primitives at the cost of more visible spikes on the model
+- Increase `PlanarThreshold` (e.g. `0.0001` - `0.001`) to merge more coplanar faces (not that much of optimization)
 - Increase `SmoothMaxAngle` (e.g. `0.5`) for more aggressive shape detection
 
 **To increase visual accuracy** (at the cost of more primitives):
 
 - Set `PlanarThreshold` to `0`
-- Decrease `Accuracy` (e.g. `0.0001`)
+- Enable `UseEdgeWalkSampling` for hidden tail optimization to catch small pits and holes in the model (warning: very slow)
+- Decrease `Accuracy` (e.g. `0.0001` - should be enough for any model)
 - Decrease `SmoothMaxAngle` to avoid replacing low-poly geometry with smooth shapes
 
 **To speed up loading** (at the cost of gameplay smoothness):

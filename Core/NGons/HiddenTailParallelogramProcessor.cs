@@ -86,7 +86,7 @@ public static partial class HiddenTailParallelogramProcessor
 
         if (poly.Count == 3)
         {
-            EmitTriangle(poly[0], poly[1], poly[2], normal, color, parallelograms, solid, useEdgeWalkSampling);
+            EmitTriangle(poly[0], poly[1], poly[2], normal, color, parallelograms, solid, useEdgeWalkSampling, hiddenTailPullIn);
             return;
         }
 
@@ -94,7 +94,7 @@ public static partial class HiddenTailParallelogramProcessor
         {
             for (var i = 1; i < poly.Count - 1; i++)
             {
-                EmitTriangle(poly[0], poly[i], poly[i + 1], normal, color, parallelograms, solid, useEdgeWalkSampling);
+                EmitTriangle(poly[0], poly[i], poly[i + 1], normal, color, parallelograms, solid, useEdgeWalkSampling, hiddenTailPullIn);
             }
 
             return;
@@ -123,13 +123,13 @@ public static partial class HiddenTailParallelogramProcessor
 
             for (var i = 1; i < poly.Count - 1; i++)
             {
-                EmitTriangle(poly[0], poly[i], poly[i + 1], normal, color, parallelograms, solid, useEdgeWalkSampling);
+                EmitTriangle(poly[0], poly[i], poly[i + 1], normal, color, parallelograms, solid, useEdgeWalkSampling, hiddenTailPullIn);
             }
 
             return;
         }
 
-        EmitTriangle(poly[0], poly[1], poly[2], normal, color, parallelograms, solid, useEdgeWalkSampling);
+        EmitTriangle(poly[0], poly[1], poly[2], normal, color, parallelograms, solid, useEdgeWalkSampling, hiddenTailPullIn);
     }
 
     static bool TryEmitWholeQuad
@@ -185,11 +185,12 @@ public static partial class HiddenTailParallelogramProcessor
         Vector3 normal, Color color,
         List<ModelParallelogram> parallelograms,
         ModelSolidVolume? solid,
-        bool useEdgeWalkSampling
+        bool useEdgeWalkSampling,
+        float hiddenTailPullIn
     )
     {
         if (solid != null
-            && TryEmitHiddenTail(p1, p2, p3, normal, color, parallelograms, solid, useEdgeWalkSampling))
+            && TryEmitHiddenTail(p1, p2, p3, normal, color, parallelograms, solid, useEdgeWalkSampling, hiddenTailPullIn))
             return;
 
         Vector3[][] triangleParallelograms =
@@ -210,12 +211,13 @@ public static partial class HiddenTailParallelogramProcessor
         Vector3 normal, Color color,
         List<ModelParallelogram> parallelograms,
         ModelSolidVolume solid,
-        bool useEdgeWalkSampling
+        bool useEdgeWalkSampling,
+        float hiddenTailPullIn
     )
     {
-        if (TryHideOne(p1, p2, p3, normal, color, parallelograms, solid, useEdgeWalkSampling)) return true;
-        if (TryHideOne(p2, p1, p3, normal, color, parallelograms, solid, useEdgeWalkSampling)) return true;
-        if (TryHideOne(p3, p1, p2, normal, color, parallelograms, solid, useEdgeWalkSampling)) return true;
+        if (TryHideOne(p1, p2, p3, normal, color, parallelograms, solid, useEdgeWalkSampling, hiddenTailPullIn)) return true;
+        if (TryHideOne(p2, p1, p3, normal, color, parallelograms, solid, useEdgeWalkSampling, hiddenTailPullIn)) return true;
+        if (TryHideOne(p3, p1, p2, normal, color, parallelograms, solid, useEdgeWalkSampling, hiddenTailPullIn)) return true;
         return false;
     }
 
@@ -225,11 +227,12 @@ public static partial class HiddenTailParallelogramProcessor
         Vector3 normal, Color color,
         List<ModelParallelogram> parallelograms,
         ModelSolidVolume solid,
-        bool useEdgeWalkSampling
+        bool useEdgeWalkSampling,
+        float hiddenTailPullIn
     )
     {
         Vector3 p = a + b - v;
-        if (!solid.IsTriangleFullyInsideSolid(a, b, p, useEdgeWalkSampling)) return false;
+        if (!solid.IsTriangleFullyInsideSolid(a, b, p, normal, hiddenTailPullIn, useEdgeWalkSampling)) return false;
 
         Vector3 center = (a + b) * 0.5f;
         Vector3 vUp = v - center;

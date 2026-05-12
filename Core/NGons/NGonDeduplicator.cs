@@ -76,7 +76,7 @@ public static class NGonDeduplicator
                     if ((centroids[a] - centroids[b]).sqrMagnitude > pdSq * 100f + vtSq * 4f)
                         continue;
 
-                    // Check normal alignment (same direction only — keep opposite-winding faces
+                    // Check normal alignment (same direction only - keep opposite-winding faces
                     // so double-sided geometry like plants remains visible from both sides)
                     float normalDot = Vector3.Dot(normals[a], normals[b]);
 
