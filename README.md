@@ -4,7 +4,7 @@
 
 An [EXILED](https://github.com/ExMod-Team/EXILED) plugin for SCP: Secret Laboratory that renders 3D meshes from OBJ files in the game world using Unity primitive toys (Quads, Spheres, Cylinders, Cubes).
 
-- **Plugin:** `TriangleScpSl` v4.0.0
+- **Plugin:** `TriangleScpSl` v5.0.0
 - **Author:** Foibos
 - **Framework:** net48 / EXILED 9.13.3
 - **License:** CC-BY-SA 3.0 (required by EXILED)
@@ -55,8 +55,8 @@ The plugin applies several tricks to minimize the number of primitives needed:
 
 > ### `TriangulateNGonV2` - the recommended display command
 >
-> This command applies the N-gon pipeline with V2 stretch clustering. Enable all optimizations
-> (hidden tails, primitive detection, smoothness) via `NGonConfig` for the lowest primitive count.
+> This command applies the N-gon pipeline with V2 stretch clustering. Adjust optimization parameters
+> (hidden tails, primitive detection, planar threshold, etc.) via `NGonConfig`.
 >
 > ```
 > TriangulateNGonV2 <model.obj> [planar threshold] [accuracy]
