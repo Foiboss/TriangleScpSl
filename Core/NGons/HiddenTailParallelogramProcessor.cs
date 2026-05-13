@@ -21,13 +21,14 @@ public static partial class HiddenTailParallelogramProcessor
         IEnumerable<ConvexNGon> nGons,
         ModelSolidVolume? solid = null,
         bool useEdgeWalkSampling = true,
-        float hiddenTailPullIn = 0.1f
+        float hiddenTailPullIn = 0.1f,
+        bool allowNonPlanar = false
     )
     {
         List<ModelParallelogram> parallelograms = [];
 
         foreach (ConvexNGon ngon in nGons)
-            ProcessOne(ngon, parallelograms, solid, useEdgeWalkSampling, hiddenTailPullIn);
+            ProcessOne(ngon, parallelograms, solid, useEdgeWalkSampling, hiddenTailPullIn, allowNonPlanar);
         return parallelograms;
     }
 
@@ -40,6 +41,7 @@ public static partial class HiddenTailParallelogramProcessor
         ModelSolidVolume? solid,
         bool useEdgeWalkSampling,
         float hiddenTailPullIn,
+        bool allowNonPlanar,
         float maxMsPerFrame,
         Action<List<ModelParallelogram>> onComplete
     )
@@ -49,7 +51,7 @@ public static partial class HiddenTailParallelogramProcessor
 
         foreach (ConvexNGon nGon in nGons)
         {
-            ProcessOne(nGon, parallelograms, solid, useEdgeWalkSampling, hiddenTailPullIn);
+            ProcessOne(nGon, parallelograms, solid, useEdgeWalkSampling, hiddenTailPullIn, allowNonPlanar);
 
             if (sw.Elapsed.TotalMilliseconds >= maxMsPerFrame)
             {
@@ -67,7 +69,8 @@ public static partial class HiddenTailParallelogramProcessor
         List<ModelParallelogram> parallelograms,
         ModelSolidVolume? solid,
         bool useEdgeWalkSampling,
-        float hiddenTailPullIn
+        float hiddenTailPullIn,
+        bool allowNonPlanar
     )
     {
         List<Vector3> verts = nGon.Vertices;
@@ -90,7 +93,7 @@ public static partial class HiddenTailParallelogramProcessor
             return;
         }
 
-        if (!NGonMath.IsPlanar(poly, normal))
+        if (!allowNonPlanar && !NGonMath.IsPlanar(poly, normal))
         {
             for (var i = 1; i < poly.Count - 1; i++)
             {

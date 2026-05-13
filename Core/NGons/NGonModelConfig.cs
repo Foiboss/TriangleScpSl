@@ -53,11 +53,17 @@ public sealed class NGonModelConfig
     /// <summary>Pull-in distance along normal for hidden-tail solid checks.</summary>
     public float HiddenTailPullIn { get; set; } = 0.03f;
 
+    /// <summary>
+    ///     When true, non-planar n-gons are decomposed as-is instead of being fan-triangulated first.
+    ///     Reduces primitive count on models with many non-planar faces at the cost of geometric inaccuracy.
+    /// </summary>
+    public bool AllowNonPlanarNGons { get; set; } = false;
+
     /// <summary>Accuracy for approximate model rendering (lower = more precise, more primitives).</summary>
     public float Accuracy { get; set; } = 0.001f;
 
     /// <summary>Maximum milliseconds per frame before yielding in coroutine mode.</summary>
-    public float MaxMsPerFrame { get; set; } = 8f;
+    public float MaxMsPerFrame { get; set; } = 100f;
 
     /// <summary>
     ///     Session-scoped defaults. Modify at runtime to change defaults for all subsequent operations.

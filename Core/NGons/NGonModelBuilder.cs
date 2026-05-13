@@ -44,7 +44,7 @@ public static class NGonModelBuilder
         List<ConvexNGon> convexNgons = ConvexNGonDecomposer.Decompose(planarNgons);
 
         List<ModelParallelogram> parallelograms = HiddenTailParallelogramProcessor.Process(
-            convexNgons, solid, config.UseEdgeWalkSampling, config.HiddenTailPullIn);
+            convexNgons, solid, config.UseEdgeWalkSampling, config.HiddenTailPullIn, config.AllowNonPlanarNGons);
 
         if (parallelograms.Count == 0 && detectedPrimitives.Count == 0)
             throw new InvalidOperationException("No valid geometry produced from model polygons.");
@@ -132,7 +132,7 @@ public static class NGonModelBuilder
         var paraDone = false;
 
         yield return HiddenTailParallelogramProcessor.ProcessCoroutine(
-            convexNgons, solid, config.UseEdgeWalkSampling, config.HiddenTailPullIn, config.MaxMsPerFrame,
+            convexNgons, solid, config.UseEdgeWalkSampling, config.HiddenTailPullIn, config.AllowNonPlanarNGons, config.MaxMsPerFrame,
             result =>
             {
                 parallelograms = result;
