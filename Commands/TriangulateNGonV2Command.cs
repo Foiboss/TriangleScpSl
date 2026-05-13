@@ -64,8 +64,6 @@ public class TriangulateNGonV2Command : ICommand
         string requestedFile = arguments.Array?[arguments.Offset] ?? string.Empty;
 
         var config = NGonModelConfig.CreateFromSession();
-        config.UseHiddenTailOptimization = true;
-        config.DetectPrimitives = false;
 
         if (arguments.Count >= 2)
         {

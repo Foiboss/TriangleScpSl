@@ -48,8 +48,6 @@ public sealed class ExportSchematicNGonV2Command : ICommand
         }
 
         var config = NGonModelConfig.CreateFromSession();
-        config.UseHiddenTailOptimization = true;
-        config.DetectPrimitives = false;
 
         if (arguments.Count >= 3)
         {

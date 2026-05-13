@@ -214,16 +214,22 @@ public sealed class ModelSolidVolume
                 Vector3 from = gridNodes[Idx(i, j)];
 
                 if (i + 1 <= n && j <= n - (i + 1))
+                {
                     if (!WalkEdgeSolid(from, gridNodes[Idx(i + 1, j)], pullDir))
                         return false;
+                }
 
                 if (j + 1 <= n - i)
+                {
                     if (!WalkEdgeSolid(from, gridNodes[Idx(i, j + 1)], pullDir))
                         return false;
+                }
 
                 if (i + 1 <= n && j - 1 >= 0)
+                {
                     if (!WalkEdgeSolid(from, gridNodes[Idx(i + 1, j - 1)], pullDir))
                         return false;
+                }
             }
         }
 
