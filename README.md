@@ -34,14 +34,15 @@ Any convex polygon can be decomposed into parallelograms. A parallelogram can be
 
 The plugin applies several tricks to minimize the number of primitives needed:
 
-| Optimization                  | What it does                                                                            | Savings                                                        |
-|-------------------------------|-----------------------------------------------------------------------------------------|----------------------------------------------------------------|
-| **N-gon processing**          | Works with original polygon faces instead of triangulating first                        | Use of N parallelograms for one N-gon                          |
-| **Coplanar face merging**     | Merges adjacent same-color faces on the same plane into larger polygons                 | Fewer, bigger faces to decompose                               |
-| **Rectangle detection**       | When a parallelogram has equal-length diagonals, uses 1 Quad instead of 2               | Up to 50% on box-like geometry                                 |
-| **Primitive shape detection** | Detects spheres, cylinders, cubes in the mesh and replaces them with 1 native primitive | Use of 1 primitive instead of parallelogram decomposition      |
-| **Hidden tail optimization**  | Hides parallelogram tails inside solid material, avoiding extra primitives              | ~10-30% on complex models                                      |
-| **Stretch clustering (V2)**   | Groups similarly-oriented parallelograms under shared stretch primitives                | Significant on dense meshes, but works as well on smaller ones |
+| Optimization                    | What it does                                                                             | Savings                                                        |
+|---------------------------------|------------------------------------------------------------------------------------------|----------------------------------------------------------------|
+| **N-gon processing**            | Works with original polygon faces instead of triangulating first                         | Use of N parallelograms for one N-gon                          |
+| **Coplanar face merging**       | Merges adjacent same-color faces on the same plane into larger polygons                  | Fewer, bigger faces to decompose                               |
+| **Rectangle detection**         | When a parallelogram has equal-length diagonals, uses 1 Quad instead of 2                | Up to 50% on box-like geometry                                 |
+| **Primitive shape detection**   | Detects spheres, cylinders, cubes in the mesh and replaces them with 1 native primitive  | Use of 1 primitive instead of parallelogram decomposition      |
+| **Hidden tail optimization**    | Hides parallelogram tails inside solid material, avoiding extra primitives               | ~10-30% on complex models                                      |
+| **Stretch clustering (V2)**     | Groups similarly-oriented parallelograms under shared stretch primitives                 | Significant on dense meshes, but works as well on smaller ones |
+| **Hierarchical parenting (V3)** | Parents visible quads onto other visible quads, eliminating invisible stretch primitives | Further reduction on top of V2, depends on geometry            |
 
 ### Two Rendering Pipelines
 
@@ -49,20 +50,26 @@ The plugin applies several tricks to minimize the number of primitives needed:
 
 **V2 (Approximate):** Groups parallelograms by angular similarity under shared "stretch" primitives. Fewer total primitives at the cost of tiny vertex error (configurable accuracy parameter).
 
+**V3 (Hierarchical):** Extends V2 by parenting visible parallelograms onto other visible parallelograms, creating deeper transform hierarchies. Eliminates invisible stretch primitives when an existing visible quad provides a suitable parent transform. Lowest primitive count of all pipelines.
+
 ---
 
 ## Best Command to Use
 
-> ### `TriangulateNGonV2` - the recommended display command
+> ### `TriangulateNGonV3` - the recommended display command (lowest primitive count)
 >
-> This command applies the N-gon pipeline with V2 stretch clustering. Adjust optimization parameters
-> (hidden tails, primitive detection, planar threshold, etc.) via `NGonConfig`.
+> This command applies the N-gon pipeline with V3 hierarchical parenting for the lowest possible
+> primitive count. Falls back to V2 stretch clustering when no suitable visible parent exists.
+> Adjust optimization parameters via `NGonConfig`.
 >
 > ```
-> TriangulateNGonV2 <model.obj> [planar threshold] [accuracy]
+> TriangulateNGonV3 <model.obj> [planar threshold] [accuracy]
 > ```
 >
-> For export, use `ExportSchematicNGonV2` with the same pipeline.
+> For export, use `ExportSchematicNGonV3` with the same pipeline.
+>
+> **Alternative:** Use `TriangulateNGonV2` / `ExportSchematicNGonV2` for V2 stretch clustering
+> (slightly more primitives but shallower hierarchy).
 
 ---
 
@@ -74,19 +81,23 @@ Every command can be run again while building to cancel, or run again after the 
 
 | Command                                        | Pipeline      | Description                                                              |
 |------------------------------------------------|---------------|--------------------------------------------------------------------------|
-| `TriangulateNGonV2 <file> [planar] [accuracy]` | N-gon + V2    | **Best result.** N-gon decomposition with stretch clustering.            |
+| `TriangulateNGonV3 <file> [planar] [accuracy]` | N-gon + V3    | **Lowest primitive count.** N-gon + hierarchical parenting.              |
+| `TriangulateNGonV2 <file> [planar] [accuracy]` | N-gon + V2    | N-gon decomposition with stretch clustering.                             |
 | `TriangulateNGon <file> [planar]`              | N-gon + V1    | N-gon decomposition with exact parallelograms.                           |
+| `TriangulateV3 <file> [accuracy]`              | Triangle + V3 | Triangle-based with hierarchical parenting.                              |
 | `TriangulateV2 <file> [accuracy]`              | Triangle + V2 | Triangle-based with stretch clustering. Simpler, higher primitive count. |
 | `Triangulate <file>`                           | Triangle + V1 | Simplest pipeline. Triangle-based, exact parallelograms.                 |
 
 ### Export Commands (also works in server console)
 
-| Command                                                     | Pipeline      | Description                                          |
-|-------------------------------------------------------------|---------------|------------------------------------------------------|
-| `ExportSchematicNGonV2 <file> <output> [planar] [accuracy]` | N-gon + V2    | **Best export.** Same pipeline as TriangulateNGonV2. |
-| `ExportSchematicNGon <file> <output> [planar]`              | N-gon + V1    | Export N-gon V1 to ProjectMER schematic JSON.        |
-| `ExportSchematicV2 <file> <output> [accuracy]`              | Triangle + V2 | Export triangle V2 to ProjectMER schematic JSON.     |
-| `ExportSchematic <file> <output>`                           | Triangle + V1 | Export triangle V1 to ProjectMER schematic JSON.     |
+| Command                                                     | Pipeline      | Description                                                |
+|-------------------------------------------------------------|---------------|------------------------------------------------------------|
+| `ExportSchematicNGonV3 <file> <output> [planar] [accuracy]` | N-gon + V3    | **Lowest primitives.** Same pipeline as TriangulateNGonV3. |
+| `ExportSchematicNGonV2 <file> <output> [planar] [accuracy]` | N-gon + V2    | Same pipeline as TriangulateNGonV2.                        |
+| `ExportSchematicNGon <file> <output> [planar]`              | N-gon + V1    | Export N-gon V1 to ProjectMER schematic JSON.              |
+| `ExportSchematicV3 <file> <output> [accuracy]`              | Triangle + V3 | Export triangle V3 to ProjectMER schematic JSON.           |
+| `ExportSchematicV2 <file> <output> [accuracy]`              | Triangle + V2 | Export triangle V2 to ProjectMER schematic JSON.           |
+| `ExportSchematic <file> <output>`                           | Triangle + V1 | Export triangle V1 to ProjectMER schematic JSON.           |
 
 ### Config & Debug Commands
 
@@ -165,6 +176,7 @@ TriangleScpSl/
     Models/
       ModelBase.cs              - Abstract base with shared fields and methods
       ApproximateModel/         - V2 stretch-clustering renderer
+      HierarchicalModel/       - V3 hierarchical parenting renderer
       ExactModel/               - V1 exact parallelogram renderer
     NGons/                      - N-gon decomposition pipeline
       Detectors/                - Primitive shape detection
@@ -193,13 +205,17 @@ yield return NGonModelBuilder.LoadCoroutine("model.obj", Color.white, result =>
 // Or synchronous (blocks the main thread)
 NGonModelResult result = NGonModelBuilder.Load("model.obj", Color.white, config);
 
-// Create models
+// Create models (V1 exact, V2 approximate, V3 hierarchical)
 var exact = ExactModel.Create(result.Parallelograms, result.DetectedPrimitives, position);
 var approx = ApproximateModel.Create(result.Parallelograms, result.DetectedPrimitives, position);
+var hierarchical = HierarchicalModel.Create(result.Parallelograms, result.DetectedPrimitives, position);
 
 // Or deferred (build in coroutine to avoid lag)
-var model = ApproximateModel.CreateDeferred(result.Parallelograms, result.DetectedPrimitives, position);
+var model = HierarchicalModel.CreateDeferred(result.Parallelograms, result.DetectedPrimitives, position);
 yield return model.BuildTrianglesCoroutine(PrimitiveFlags.Visible, batchSize: 64);
+
+// V3 stats
+Log.Info($"Reparented: {model.ReparentedCount}, Stretches saved: {model.StretchesSaved}");
 
 // Control
 model.Position = newPos;
@@ -209,7 +225,7 @@ model.Color = Color.red;
 model.Destroy();
 ```
 
-See `Core/Models/ApproximateModel/README.md` and `Core/Models/ExactModel/README.md` for full API details.
+See `Core/Models/HierarchicalModel/README.md`, `Core/Models/ApproximateModel/README.md`, and `Core/Models/ExactModel/README.md` for full API details.
 
 ---
 
