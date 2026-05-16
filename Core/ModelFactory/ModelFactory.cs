@@ -1,7 +1,4 @@
-using AdminToys;
 using TriangleScpSl.Core.FileToTriangles;
-using TriangleScpSl.Core.Models.ApproximateModel;
-using TriangleScpSl.Core.Models.ExactModel;
 using TriangleScpSl.Core.Paths;
 using TriangleScpSl.Core.Triangulation.Triangle;
 using UnityEngine;
@@ -64,37 +61,6 @@ public static class ModelFactory
         return true;
     }
 
-    public static ExactModel CreateModel
-    (
-        IReadOnlyList<ModelTriangle> triangles,
-        Vector3 worldPosition,
-        PrimitiveFlags flags = PrimitiveFlags.Visible)
-        => ExactModel.Create(triangles, worldPosition, flags);
-
-    public static ApproximateModel CreateModel
-    (
-        IReadOnlyList<ModelTriangle> triangles,
-        Vector3 worldPosition,
-        PrimitiveFlags flags = PrimitiveFlags.Visible,
-        float absoluteToleranceUnits = 0.001f)
-        => ApproximateModel.Create(triangles, worldPosition, flags, absoluteToleranceUnits);
-
-    public static bool TryLoadTriangles
-    (
-        string requestedFile,
-        Color color,
-        bool forceObjColor,
-        out List<ModelTriangle> triangles,
-        out string normalizedFileName,
-        out string error)
-    {
-        if (!TryLoadTrianglesRaw(requestedFile, color, forceObjColor, out triangles, out normalizedFileName, out error))
-            return false;
-
-        FixWinding(triangles);
-        return true;
-    }
-
     internal static bool TryLoadTrianglesRaw
     (
         string requestedFile,
@@ -136,14 +102,5 @@ public static class ModelFactory
         }
 
         return true;
-    }
-
-    static void FixWinding(List<ModelTriangle> triangles)
-    {
-        for (var i = 0; i < triangles.Count; i++)
-        {
-            ModelTriangle t = triangles[i];
-            triangles[i] = new ModelTriangle(t.P1, t.P3, t.P2, t.Color);
-        }
     }
 }

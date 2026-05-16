@@ -12,7 +12,9 @@ namespace TriangleScpSl.Core.Models.HierarchicalModel;
 ///     V3 model that extends ApproximateModel's stretch-clustering with hierarchical
 ///     parenting: visible parallelograms can serve as parents for other visible
 ///     parallelograms, eliminating the need for separate invisible stretch primitives.
-///     This produces deeper transform trees but significantly fewer total primitives.
+///     All parenting decisions are made DURING building — each primitive is created
+///     directly in its final position under its final parent. No post-build reparenting
+///     of already-spawned network objects occurs.
 /// </summary>
 public partial class HierarchicalModel
     : ModelBase
@@ -26,15 +28,24 @@ public partial class HierarchicalModel
     readonly List<ParallelogramPrimitive> _fallbackParallelograms = [];
     readonly List<ParallelogramSnapshot> _parallelogramSnapshots = [];
 
+    // Per-parallelogram build info (1:1 with _parallelograms)
+    readonly List<QuadBuildInfo> _quadBuildInfos = [];
+
     // Hierarchical parenting data: tracks which parallelograms are parented to other parallelograms
     // Key: child parallelogram index in _parallelograms, Value: parent parallelogram index
     readonly Dictionary<int, int> _hierarchicalParents = new();
 
-    // Tracks stretches that became unused after hierarchical reparenting
+    // Depth of each parallelogram in the hierarchy (0 = under stretch/BaseQuad)
+    readonly Dictionary<int, int> _hierarchyDepths = new();
+
+    // Tracks which stretches still have direct children after building
     readonly HashSet<Primitive> _usedStretches = new();
 
-    // Stretch index (same as V2, used for initial solve)
+    // Stretch index (same as V2)
     StretchSpatialIndex _stretches;
+
+    // How many quads were hierarchically parented (each one avoids needing a stretch)
+    int _hierarchicallyParentedCount;
 
     HierarchicalModel
     (
@@ -124,17 +135,20 @@ public partial class HierarchicalModel
 
     public override int ParallelogramCount => _localTriangles.Count + _localParallelograms.Count;
 
-    /// <summary>
-    ///     Total spawned primitives. In V3, unused stretches are destroyed after reparenting,
-    ///     so this count is lower than V2 for the same geometry.
-    /// </summary>
     public override int PrimitiveCount => IsDestroyedValue
         ? 0
-        : _usedStretches.Count + _parallelograms.Count + _fallbackParallelograms.Count * 2 + NativePrimitives.Count + NativePrimitiveBases.Count + 1;
+        : _usedStretches.Count + _parallelograms.Count + _fallbackParallelograms.Count * 2
+        + NativePrimitives.Count + NativePrimitiveBases.Count + 1;
 
-    public int ReparentedCount => _hierarchicalParents.Count;
+    /// <summary>How many quads were parented onto other quads instead of needing a stretch.</summary>
+    public int ReparentedCount => _hierarchicallyParentedCount;
 
-    public int StretchesSaved => _stretches.Count - _usedStretches.Count;
+    /// <summary>
+    ///     Total stretch primitives saved vs what V2 would produce.
+    ///     = quads that bypassed stretches entirely (hierarchical parenting)
+    ///     + stretches that were created but became childless (all their children found parents).
+    /// </summary>
+    public int StretchesSaved => _hierarchicallyParentedCount + (_stretches.Count - _usedStretches.Count);
 
     public override Color Color
     {
@@ -152,7 +166,8 @@ public partial class HierarchicalModel
                 ParallelogramSnapshot snapshot = _parallelogramSnapshots[i];
 
                 _parallelogramSnapshots[i]
-                    = new ParallelogramSnapshot(snapshot.VUp, snapshot.VLeft, snapshot.Center, value, snapshot.Flags, snapshot.IsFallback);
+                    = new ParallelogramSnapshot(snapshot.VUp, snapshot.VLeft, snapshot.Center, value, snapshot.Flags,
+                        snapshot.IsFallback);
             }
         }
     }
@@ -175,7 +190,8 @@ public partial class HierarchicalModel
                 ParallelogramSnapshot snapshot = _parallelogramSnapshots[i];
 
                 _parallelogramSnapshots[i]
-                    = new ParallelogramSnapshot(snapshot.VUp, snapshot.VLeft, snapshot.Center, snapshot.Color, value, snapshot.IsFallback);
+                    = new ParallelogramSnapshot(snapshot.VUp, snapshot.VLeft, snapshot.Center, snapshot.Color, value,
+                        snapshot.IsFallback);
             }
         }
     }
@@ -265,9 +281,11 @@ public partial class HierarchicalModel
         _parallelograms.Clear();
         _fallbackParallelograms.Clear();
         _parallelogramSnapshots.Clear();
+        _quadBuildInfos.Clear();
         _localTriangles.Clear();
         _localParallelograms.Clear();
         _hierarchicalParents.Clear();
+        _hierarchyDepths.Clear();
         _usedStretches.Clear();
         ModelPrimitives.Clear();
         BaseQuad.Destroy();
@@ -285,7 +303,22 @@ public partial class HierarchicalModel
             parallelogram.Destroy();
     }
 
-    public sealed class ParallelogramSnapshot(Vector3 vUp, Vector3 vLeft, Vector3 center, Color color, PrimitiveFlags flags, bool isFallback)
+    readonly struct QuadBuildInfo(Vector3 vLeft, Vector3 vUp, Vector3 center, Primitive? stretch)
+    {
+        public readonly Vector3 VLeft = vLeft;
+        public readonly Vector3 VUp = vUp;
+        public readonly Vector3 Center = center;
+        public readonly Primitive? Stretch = stretch;
+    }
+
+    public sealed class ParallelogramSnapshot
+    (
+        Vector3 vUp,
+        Vector3 vLeft,
+        Vector3 center,
+        Color color,
+        PrimitiveFlags flags,
+        bool isFallback)
     {
         public Vector3 VUp { get; } = vUp;
         public Vector3 VLeft { get; } = vLeft;

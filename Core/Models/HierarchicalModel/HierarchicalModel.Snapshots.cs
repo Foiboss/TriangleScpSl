@@ -59,7 +59,7 @@ public partial class HierarchicalModel
             -1));
         indexByTransform[BaseQuad.Transform] = modelBaseIndex;
 
-        // Only add used stretches
+        // Only add used stretches.
         foreach (StretchSpatialIndex.Entry entry in _stretches.All())
         {
             if (!_usedStretches.Contains(entry.Stretch))
@@ -67,7 +67,10 @@ public partial class HierarchicalModel
 
             int stretchIndex = snapshot.Count;
             Transform stretchTransform = entry.Stretch.Transform;
-            int parentIndex = indexByTransform.TryGetValue(stretchTransform.parent, out int foundParent) ? foundParent : modelBaseIndex;
+
+            int parentIndex = indexByTransform.TryGetValue(stretchTransform.parent, out int foundParent)
+                ? foundParent
+                : modelBaseIndex;
 
             snapshot.Add(new PrimitiveSnapshot(
                 entry.Stretch.Position,
@@ -87,7 +90,10 @@ public partial class HierarchicalModel
         foreach (Primitive parallelogram in _parallelograms)
         {
             Transform parallelogramTransform = parallelogram.Transform;
-            int parentIndex = indexByTransform.TryGetValue(parallelogramTransform.parent, out int foundParent) ? foundParent : modelBaseIndex;
+
+            int parentIndex = indexByTransform.TryGetValue(parallelogramTransform.parent, out int foundParent)
+                ? foundParent
+                : modelBaseIndex;
 
             int pIdx = snapshot.Count;
 
@@ -110,7 +116,10 @@ public partial class HierarchicalModel
         {
             Primitive fallbackBase = fallback.BasePrimitive;
             Transform fallbackBaseTransform = fallbackBase.Transform;
-            int fallbackBaseParent = indexByTransform.TryGetValue(fallbackBaseTransform.parent, out int foundBaseParent) ? foundBaseParent : modelBaseIndex;
+
+            int fallbackBaseParent = indexByTransform.TryGetValue(fallbackBaseTransform.parent, out int foundBaseParent)
+                ? foundBaseParent
+                : modelBaseIndex;
 
             int fallbackBaseIndex = snapshot.Count;
 
@@ -130,7 +139,10 @@ public partial class HierarchicalModel
 
             Primitive fallbackQuad = fallback.QuadPrimitive;
             Transform fallbackQuadTransform = fallbackQuad.Transform;
-            int fallbackQuadParent = indexByTransform.TryGetValue(fallbackQuadTransform.parent, out int foundQuadParent) ? foundQuadParent : fallbackBaseIndex;
+
+            int fallbackQuadParent = indexByTransform.TryGetValue(fallbackQuadTransform.parent, out int foundQuadParent)
+                ? foundQuadParent
+                : fallbackBaseIndex;
 
             snapshot.Add(new PrimitiveSnapshot(
                 fallbackQuad.Position,
@@ -159,7 +171,8 @@ public partial class HierarchicalModel
     {
         if (IsDestroyedValue) return [];
 
-        int parallelogramPrimitiveCount = _usedStretches.Count + _parallelograms.Count + _fallbackParallelograms.Count * 2 + 1;
+        int parallelogramPrimitiveCount =
+            _usedStretches.Count + _parallelograms.Count + _fallbackParallelograms.Count * 2 + 1;
         List<PrimitiveSnapshot> snapshot = new(parallelogramPrimitiveCount);
         Dictionary<Transform, int> indexByTransform = new(parallelogramPrimitiveCount);
 
@@ -178,7 +191,7 @@ public partial class HierarchicalModel
             -1));
         indexByTransform[BaseQuad.Transform] = modelBaseIndex;
 
-        // Only used stretches
+        // Only used stretches.
         foreach (StretchSpatialIndex.Entry entry in _stretches.All())
         {
             if (!_usedStretches.Contains(entry.Stretch))
@@ -186,7 +199,10 @@ public partial class HierarchicalModel
 
             int stretchIndex = snapshot.Count;
             Transform stretchTransform = entry.Stretch.Transform;
-            int parentIndex = indexByTransform.TryGetValue(stretchTransform.parent, out int foundParent) ? foundParent : modelBaseIndex;
+
+            int parentIndex = indexByTransform.TryGetValue(stretchTransform.parent, out int foundParent)
+                ? foundParent
+                : modelBaseIndex;
 
             snapshot.Add(new PrimitiveSnapshot(
                 entry.Stretch.Position,
@@ -206,7 +222,10 @@ public partial class HierarchicalModel
         foreach (Primitive parallelogram in _parallelograms)
         {
             Transform parallelogramTransform = parallelogram.Transform;
-            int parentIndex = indexByTransform.TryGetValue(parallelogramTransform.parent, out int foundParent) ? foundParent : modelBaseIndex;
+
+            int parentIndex = indexByTransform.TryGetValue(parallelogramTransform.parent, out int foundParent)
+                ? foundParent
+                : modelBaseIndex;
 
             int pIdx = snapshot.Count;
 
@@ -229,7 +248,10 @@ public partial class HierarchicalModel
         {
             Primitive fallbackBase = fallback.BasePrimitive;
             Transform fallbackBaseTransform = fallbackBase.Transform;
-            int fallbackBaseParent = indexByTransform.TryGetValue(fallbackBaseTransform.parent, out int foundBaseParent) ? foundBaseParent : modelBaseIndex;
+
+            int fallbackBaseParent = indexByTransform.TryGetValue(fallbackBaseTransform.parent, out int foundBaseParent)
+                ? foundBaseParent
+                : modelBaseIndex;
 
             int fallbackBaseIndex = snapshot.Count;
 
@@ -249,7 +271,10 @@ public partial class HierarchicalModel
 
             Primitive fallbackQuad = fallback.QuadPrimitive;
             Transform fallbackQuadTransform = fallbackQuad.Transform;
-            int fallbackQuadParent = indexByTransform.TryGetValue(fallbackQuadTransform.parent, out int foundQuadParent) ? foundQuadParent : fallbackBaseIndex;
+
+            int fallbackQuadParent = indexByTransform.TryGetValue(fallbackQuadTransform.parent, out int foundQuadParent)
+                ? foundQuadParent
+                : fallbackBaseIndex;
 
             snapshot.Add(new PrimitiveSnapshot(
                 fallbackQuad.Position,
@@ -283,7 +308,10 @@ public partial class HierarchicalModel
             {
                 Primitive basePrim = NativePrimitiveBases[i];
                 Transform baseTransform = basePrim.Transform;
-                int baseParent = indexByTransform.TryGetValue(baseTransform.parent, out int foundBase) ? foundBase : modelBaseIndex;
+
+                int baseParent = indexByTransform.TryGetValue(baseTransform.parent, out int foundBase)
+                    ? foundBase
+                    : modelBaseIndex;
                 int baseIndex = snapshot.Count;
 
                 snapshot.Add(new PrimitiveSnapshot(
@@ -294,7 +322,10 @@ public partial class HierarchicalModel
                 indexByTransform[baseTransform] = baseIndex;
 
                 Transform nativeTransform = native.Transform;
-                int nativeParent = indexByTransform.TryGetValue(nativeTransform.parent, out int foundNative) ? foundNative : baseIndex;
+
+                int nativeParent = indexByTransform.TryGetValue(nativeTransform.parent, out int foundNative)
+                    ? foundNative
+                    : baseIndex;
 
                 snapshot.Add(new PrimitiveSnapshot(
                     native.Position, native.Rotation, native.Scale,
@@ -304,7 +335,10 @@ public partial class HierarchicalModel
             else
             {
                 Transform nativeTransform = native.Transform;
-                int nativeParent = indexByTransform.TryGetValue(nativeTransform.parent, out int foundNative) ? foundNative : modelBaseIndex;
+
+                int nativeParent = indexByTransform.TryGetValue(nativeTransform.parent, out int foundNative)
+                    ? foundNative
+                    : modelBaseIndex;
 
                 snapshot.Add(new PrimitiveSnapshot(
                     native.Position, native.Rotation, native.Scale,

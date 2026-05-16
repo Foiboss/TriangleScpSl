@@ -22,6 +22,25 @@ An [EXILED](https://github.com/ExMod-Team/EXILED) plugin for SCP: Secret Laborat
 
 ---
 
+## Best Command to Use
+
+> ### `TriangulateNGonV3` - the recommended display command (lowest primitive count)
+>
+> This command applies the N-gon pipeline with V3 hierarchical parenting for the lowest possible
+> primitive count. Falls back to V2 stretch clustering when no suitable visible parent exists.
+> Adjust optimization parameters via `NGonConfig`.
+>
+> ```
+> TriangulateNGonV3 <model.obj> [planar threshold] [accuracy]
+> ```
+>
+> For export, use `ExportSchematicNGonV3` with the same pipeline.
+>
+> **Alternative:** Use `TriangulateNGonV2` / `ExportSchematicNGonV2` for V2 stretch clustering
+> (slightly more primitives but shallower hierarchy).
+
+---
+
 ## How It Works
 
 The plugin converts OBJ mesh faces into Unity primitives that can be spawned in SCP:SL.
@@ -51,25 +70,6 @@ The plugin applies several tricks to minimize the number of primitives needed:
 **V2 (Approximate):** Groups parallelograms by angular similarity under shared "stretch" primitives. Fewer total primitives at the cost of tiny vertex error (configurable accuracy parameter).
 
 **V3 (Hierarchical):** Extends V2 by parenting visible parallelograms onto other visible parallelograms, creating deeper transform hierarchies. Eliminates invisible stretch primitives when an existing visible quad provides a suitable parent transform. Lowest primitive count of all pipelines.
-
----
-
-## Best Command to Use
-
-> ### `TriangulateNGonV3` - the recommended display command (lowest primitive count)
->
-> This command applies the N-gon pipeline with V3 hierarchical parenting for the lowest possible
-> primitive count. Falls back to V2 stretch clustering when no suitable visible parent exists.
-> Adjust optimization parameters via `NGonConfig`.
->
-> ```
-> TriangulateNGonV3 <model.obj> [planar threshold] [accuracy]
-> ```
->
-> For export, use `ExportSchematicNGonV3` with the same pipeline.
->
-> **Alternative:** Use `TriangulateNGonV2` / `ExportSchematicNGonV2` for V2 stretch clustering
-> (slightly more primitives but shallower hierarchy).
 
 ---
 
@@ -234,3 +234,11 @@ See `Core/Models/HierarchicalModel/README.md`, `Core/Models/ApproximateModel/REA
 - **[EXILED](https://github.com/ExMod-Team/EXILED)** — Creative Commons Attribution-ShareAlike 3.0 Unported
 - **[Mirror Networking](https://github.com/MirrorNetworking/Mirror)** — MIT
 - **[Unity Engine](https://unity.com/)** — Unity Companion License
+
+---
+
+## Support & Star ⭐
+
+If you find this plugin helpful and enjoy the work, please consider giving it a **star on GitHub**!
+⭐ **Stars are free,** and they really motivate me to keep developing, optimizing, and improving the plugin.
+Your support means a lot!
