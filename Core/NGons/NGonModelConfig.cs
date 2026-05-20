@@ -62,6 +62,9 @@ public sealed class NGonModelConfig
     /// <summary>Accuracy for approximate model rendering (lower = more precise, more primitives).</summary>
     public float Accuracy { get; set; } = 0.001f;
 
+    /// <summary>How many optimization passes to reparent stretch-children under visible quads.</summary>
+    public int HierarchicalOptimizationPasses { get; set; } = 3;
+
     /// <summary>Maximum milliseconds per frame before yielding in coroutine mode.</summary>
     public float MaxMsPerFrame { get; set; } = 100f;
 
