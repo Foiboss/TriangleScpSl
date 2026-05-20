@@ -122,7 +122,10 @@ public class TriangulateNGonV3Command : ICommand
             loadResult.DetectedPrimitives,
             spawnPosition,
             PrimitiveFlags.Visible,
-            config.Accuracy);
+            config.Accuracy,
+            1f,
+            false,
+            config.HierarchicalOptimizationPasses);
 
         _model = createdModel;
 

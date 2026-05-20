@@ -2,8 +2,8 @@
 
 Extends `ApproximateModel` (V2) with **two-phase post-build optimization** that reduces the number of invisible stretch primitives:
 
-1. **Stretch consolidation** — merges small stretches into nearby larger ones with relaxed tolerance
-2. **Hierarchical parenting** — parents visible quads onto other visible quads, eliminating their stretch
+1. **Stretch consolidation** - merges small stretches into nearby larger ones with relaxed tolerance
+2. **Hierarchical parenting** - parents visible quads onto other visible quads, eliminating their stretch
 
 ## How It Works
 

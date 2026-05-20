@@ -13,19 +13,13 @@ public partial class HierarchicalModel
     public IReadOnlyList<(ModelTriangle Triangle, PrimitiveFlags Flags)> GetTriangleSnapshot()
     {
         if (IsDestroyedValue) return [];
+        List<(ModelTriangle, PrimitiveFlags)> snapshot = new(_localTriangles.Count);
 
-        List<(ModelTriangle Triangle, PrimitiveFlags Flags)> snapshot = new(_localTriangles.Count);
-
-        foreach (ModelTriangle localTriangle in _localTriangles)
+        foreach (ModelTriangle lt in _localTriangles)
         {
-            Vector3 p1 = TransformPoint(localTriangle.P1);
-            Vector3 p2 = TransformPoint(localTriangle.P2);
-            Vector3 p3 = TransformPoint(localTriangle.P3);
-
-            if (InvertWinding)
-                (p2, p3) = (p3, p2);
-
-            snapshot.Add((new ModelTriangle(p1, p2, p3, localTriangle.Color), FlagsValue));
+            Vector3 p1 = TransformPoint(lt.P1), p2 = TransformPoint(lt.P2), p3 = TransformPoint(lt.P3);
+            if (InvertWinding) (p2, p3) = (p3, p2);
+            snapshot.Add((new ModelTriangle(p1, p2, p3, lt.Color), FlagsValue));
         }
 
         return snapshot;
@@ -40,310 +34,151 @@ public partial class HierarchicalModel
     public IReadOnlyList<PrimitiveSnapshot> GetPrimitiveSnapshot()
     {
         if (IsDestroyedValue) return [];
+        var snapshot = new List<PrimitiveSnapshot>(PrimitiveCount);
+        var idx = new Dictionary<Transform, int>(PrimitiveCount);
 
-        List<PrimitiveSnapshot> snapshot = new(PrimitiveCount);
-        Dictionary<Transform, int> indexByTransform = new(PrimitiveCount);
+        int baseIdx = snapshot.Count;
 
-        int modelBaseIndex = snapshot.Count;
+        snapshot.Add(new PrimitiveSnapshot(BaseQuad.Position, BaseQuad.Rotation, BaseQuad.Scale,
+            Vector3.zero, Quaternion.identity, Vector3.one, BaseQuad.Color, BaseQuad.Flags, "ModelBase", -1));
+        idx[BaseQuad.Transform] = baseIdx;
 
-        snapshot.Add(new PrimitiveSnapshot(
-            BaseQuad.Position,
-            BaseQuad.Rotation,
-            BaseQuad.Scale,
-            Vector3.zero,
-            Quaternion.identity,
-            Vector3.one,
-            BaseQuad.Color,
-            BaseQuad.Flags,
-            "ModelBase",
-            -1));
-        indexByTransform[BaseQuad.Transform] = modelBaseIndex;
-
-        // Only add used stretches.
-        foreach (StretchSpatialIndex.Entry entry in _stretches.All())
+        foreach (StretchSpatialIndex.Entry e in _stretches.All())
         {
-            if (!_usedStretches.Contains(entry.Stretch))
-                continue;
+            if (!_usedStretches.Contains(e.Stretch)) continue;
+            int si = snapshot.Count;
+            Transform st = e.Stretch.Transform;
+            int pi = idx.TryGetValue(st.parent, out int fp) ? fp : baseIdx;
 
-            int stretchIndex = snapshot.Count;
-            Transform stretchTransform = entry.Stretch.Transform;
-
-            int parentIndex = indexByTransform.TryGetValue(stretchTransform.parent, out int foundParent)
-                ? foundParent
-                : modelBaseIndex;
-
-            snapshot.Add(new PrimitiveSnapshot(
-                entry.Stretch.Position,
-                entry.Stretch.Rotation,
-                entry.Stretch.Scale,
-                stretchTransform.localPosition,
-                stretchTransform.localRotation,
-                stretchTransform.localScale,
-                entry.Stretch.Color,
-                entry.Stretch.Flags,
-                "Stretch",
-                parentIndex));
-
-            indexByTransform[stretchTransform] = stretchIndex;
+            snapshot.Add(new PrimitiveSnapshot(e.Stretch.Position, e.Stretch.Rotation, e.Stretch.Scale,
+                st.localPosition, st.localRotation, st.localScale, e.Stretch.Color, e.Stretch.Flags, "Stretch", pi));
+            idx[st] = si;
         }
 
-        foreach (Primitive parallelogram in _parallelograms)
+        foreach (Primitive p in _parallelograms)
         {
-            Transform parallelogramTransform = parallelogram.Transform;
-
-            int parentIndex = indexByTransform.TryGetValue(parallelogramTransform.parent, out int foundParent)
-                ? foundParent
-                : modelBaseIndex;
-
+            Transform pt = p.Transform;
+            int pi = idx.TryGetValue(pt.parent, out int fp) ? fp : baseIdx;
             int pIdx = snapshot.Count;
 
-            snapshot.Add(new PrimitiveSnapshot(
-                parallelogram.Position,
-                parallelogram.Rotation,
-                parallelogram.Scale,
-                parallelogramTransform.localPosition,
-                parallelogramTransform.localRotation,
-                parallelogramTransform.localScale,
-                parallelogram.Color,
-                parallelogram.Flags,
-                "Parallelogram",
-                parentIndex));
-
-            indexByTransform[parallelogramTransform] = pIdx;
+            snapshot.Add(new PrimitiveSnapshot(p.Position, p.Rotation, p.Scale,
+                pt.localPosition, pt.localRotation, pt.localScale, p.Color, p.Flags, "Parallelogram", pi));
+            idx[pt] = pIdx;
         }
 
-        foreach (ParallelogramPrimitive fallback in _fallbackParallelograms)
+        foreach (ParallelogramPrimitive fb in _fallbackParallelograms)
         {
-            Primitive fallbackBase = fallback.BasePrimitive;
-            Transform fallbackBaseTransform = fallbackBase.Transform;
+            Primitive b = fb.BasePrimitive;
+            Transform bt = b.Transform;
+            int bp = idx.TryGetValue(bt.parent, out int fbp) ? fbp : baseIdx;
+            int bi = snapshot.Count;
 
-            int fallbackBaseParent = indexByTransform.TryGetValue(fallbackBaseTransform.parent, out int foundBaseParent)
-                ? foundBaseParent
-                : modelBaseIndex;
+            snapshot.Add(new PrimitiveSnapshot(b.Position, b.Rotation, b.Scale,
+                bt.localPosition, bt.localRotation, bt.localScale, b.Color, b.Flags, "FallbackBase", bp));
+            idx[bt] = bi;
 
-            int fallbackBaseIndex = snapshot.Count;
+            Primitive q = fb.QuadPrimitive;
+            Transform qt = q.Transform;
+            int qp = idx.TryGetValue(qt.parent, out int fqp) ? fqp : bi;
 
-            snapshot.Add(new PrimitiveSnapshot(
-                fallbackBase.Position,
-                fallbackBase.Rotation,
-                fallbackBase.Scale,
-                fallbackBaseTransform.localPosition,
-                fallbackBaseTransform.localRotation,
-                fallbackBaseTransform.localScale,
-                fallbackBase.Color,
-                fallbackBase.Flags,
-                "FallbackBase",
-                fallbackBaseParent));
-
-            indexByTransform[fallbackBaseTransform] = fallbackBaseIndex;
-
-            Primitive fallbackQuad = fallback.QuadPrimitive;
-            Transform fallbackQuadTransform = fallbackQuad.Transform;
-
-            int fallbackQuadParent = indexByTransform.TryGetValue(fallbackQuadTransform.parent, out int foundQuadParent)
-                ? foundQuadParent
-                : fallbackBaseIndex;
-
-            snapshot.Add(new PrimitiveSnapshot(
-                fallbackQuad.Position,
-                fallbackQuad.Rotation,
-                fallbackQuad.Scale,
-                fallbackQuadTransform.localPosition,
-                fallbackQuadTransform.localRotation,
-                fallbackQuadTransform.localScale,
-                fallbackQuad.Color,
-                fallbackQuad.Flags,
-                "FallbackQuad",
-                fallbackQuadParent));
+            snapshot.Add(new PrimitiveSnapshot(q.Position, q.Rotation, q.Scale,
+                qt.localPosition, qt.localRotation, qt.localScale, q.Color, q.Flags, "FallbackQuad", qp));
         }
 
-        AppendNativePrimitiveSnapshots(snapshot, indexByTransform, modelBaseIndex);
-
+        AppendNativePrimitiveSnapshots(snapshot, idx, baseIdx);
         return snapshot;
     }
 
-    /// <summary>
-    ///     Returns a primitive snapshot without native primitives.
-    ///     Used by export code which computes native primitive blocks
-    ///     directly from <see cref="ModelPrimitive" /> data.
-    /// </summary>
     internal IReadOnlyList<PrimitiveSnapshot> GetPrimitiveSnapshotWithoutNatives()
     {
         if (IsDestroyedValue) return [];
+        int cap = _usedStretches.Count + _parallelograms.Count + _fallbackParallelograms.Count * 2 + 1;
+        var snapshot = new List<PrimitiveSnapshot>(cap);
+        var idx = new Dictionary<Transform, int>(cap);
 
-        int parallelogramPrimitiveCount =
-            _usedStretches.Count + _parallelograms.Count + _fallbackParallelograms.Count * 2 + 1;
-        List<PrimitiveSnapshot> snapshot = new(parallelogramPrimitiveCount);
-        Dictionary<Transform, int> indexByTransform = new(parallelogramPrimitiveCount);
+        int baseIdx = snapshot.Count;
 
-        int modelBaseIndex = snapshot.Count;
+        snapshot.Add(new PrimitiveSnapshot(BaseQuad.Position, BaseQuad.Rotation, BaseQuad.Scale,
+            Vector3.zero, Quaternion.identity, Vector3.one, BaseQuad.Color, BaseQuad.Flags, "ModelBase", -1));
+        idx[BaseQuad.Transform] = baseIdx;
 
-        snapshot.Add(new PrimitiveSnapshot(
-            BaseQuad.Position,
-            BaseQuad.Rotation,
-            BaseQuad.Scale,
-            Vector3.zero,
-            Quaternion.identity,
-            Vector3.one,
-            BaseQuad.Color,
-            BaseQuad.Flags,
-            "ModelBase",
-            -1));
-        indexByTransform[BaseQuad.Transform] = modelBaseIndex;
-
-        // Only used stretches.
-        foreach (StretchSpatialIndex.Entry entry in _stretches.All())
+        foreach (StretchSpatialIndex.Entry e in _stretches.All())
         {
-            if (!_usedStretches.Contains(entry.Stretch))
-                continue;
+            if (!_usedStretches.Contains(e.Stretch)) continue;
+            int si = snapshot.Count;
+            Transform st = e.Stretch.Transform;
+            int pi = idx.TryGetValue(st.parent, out int fp) ? fp : baseIdx;
 
-            int stretchIndex = snapshot.Count;
-            Transform stretchTransform = entry.Stretch.Transform;
-
-            int parentIndex = indexByTransform.TryGetValue(stretchTransform.parent, out int foundParent)
-                ? foundParent
-                : modelBaseIndex;
-
-            snapshot.Add(new PrimitiveSnapshot(
-                entry.Stretch.Position,
-                entry.Stretch.Rotation,
-                entry.Stretch.Scale,
-                stretchTransform.localPosition,
-                stretchTransform.localRotation,
-                stretchTransform.localScale,
-                entry.Stretch.Color,
-                entry.Stretch.Flags,
-                "Stretch",
-                parentIndex));
-
-            indexByTransform[stretchTransform] = stretchIndex;
+            snapshot.Add(new PrimitiveSnapshot(e.Stretch.Position, e.Stretch.Rotation, e.Stretch.Scale,
+                st.localPosition, st.localRotation, st.localScale, e.Stretch.Color, e.Stretch.Flags, "Stretch", pi));
+            idx[st] = si;
         }
 
-        foreach (Primitive parallelogram in _parallelograms)
+        foreach (Primitive p in _parallelograms)
         {
-            Transform parallelogramTransform = parallelogram.Transform;
-
-            int parentIndex = indexByTransform.TryGetValue(parallelogramTransform.parent, out int foundParent)
-                ? foundParent
-                : modelBaseIndex;
-
+            Transform pt = p.Transform;
+            int pi = idx.TryGetValue(pt.parent, out int fp) ? fp : baseIdx;
             int pIdx = snapshot.Count;
 
-            snapshot.Add(new PrimitiveSnapshot(
-                parallelogram.Position,
-                parallelogram.Rotation,
-                parallelogram.Scale,
-                parallelogramTransform.localPosition,
-                parallelogramTransform.localRotation,
-                parallelogramTransform.localScale,
-                parallelogram.Color,
-                parallelogram.Flags,
-                "Parallelogram",
-                parentIndex));
-
-            indexByTransform[parallelogramTransform] = pIdx;
+            snapshot.Add(new PrimitiveSnapshot(p.Position, p.Rotation, p.Scale,
+                pt.localPosition, pt.localRotation, pt.localScale, p.Color, p.Flags, "Parallelogram", pi));
+            idx[pt] = pIdx;
         }
 
-        foreach (ParallelogramPrimitive fallback in _fallbackParallelograms)
+        foreach (ParallelogramPrimitive fb in _fallbackParallelograms)
         {
-            Primitive fallbackBase = fallback.BasePrimitive;
-            Transform fallbackBaseTransform = fallbackBase.Transform;
+            Primitive b = fb.BasePrimitive;
+            Transform bt = b.Transform;
+            int bp = idx.TryGetValue(bt.parent, out int fbp) ? fbp : baseIdx;
+            int bi = snapshot.Count;
 
-            int fallbackBaseParent = indexByTransform.TryGetValue(fallbackBaseTransform.parent, out int foundBaseParent)
-                ? foundBaseParent
-                : modelBaseIndex;
+            snapshot.Add(new PrimitiveSnapshot(b.Position, b.Rotation, b.Scale,
+                bt.localPosition, bt.localRotation, bt.localScale, b.Color, b.Flags, "FallbackBase", bp));
+            idx[bt] = bi;
 
-            int fallbackBaseIndex = snapshot.Count;
+            Primitive q = fb.QuadPrimitive;
+            Transform qt = q.Transform;
+            int qp = idx.TryGetValue(qt.parent, out int fqp) ? fqp : bi;
 
-            snapshot.Add(new PrimitiveSnapshot(
-                fallbackBase.Position,
-                fallbackBase.Rotation,
-                fallbackBase.Scale,
-                fallbackBaseTransform.localPosition,
-                fallbackBaseTransform.localRotation,
-                fallbackBaseTransform.localScale,
-                fallbackBase.Color,
-                fallbackBase.Flags,
-                "FallbackBase",
-                fallbackBaseParent));
-
-            indexByTransform[fallbackBaseTransform] = fallbackBaseIndex;
-
-            Primitive fallbackQuad = fallback.QuadPrimitive;
-            Transform fallbackQuadTransform = fallbackQuad.Transform;
-
-            int fallbackQuadParent = indexByTransform.TryGetValue(fallbackQuadTransform.parent, out int foundQuadParent)
-                ? foundQuadParent
-                : fallbackBaseIndex;
-
-            snapshot.Add(new PrimitiveSnapshot(
-                fallbackQuad.Position,
-                fallbackQuad.Rotation,
-                fallbackQuad.Scale,
-                fallbackQuadTransform.localPosition,
-                fallbackQuadTransform.localRotation,
-                fallbackQuadTransform.localScale,
-                fallbackQuad.Color,
-                fallbackQuad.Flags,
-                "FallbackQuad",
-                fallbackQuadParent));
+            snapshot.Add(new PrimitiveSnapshot(q.Position, q.Rotation, q.Scale,
+                qt.localPosition, qt.localRotation, qt.localScale, q.Color, q.Flags, "FallbackQuad", qp));
         }
 
         return snapshot;
     }
 
-    void AppendNativePrimitiveSnapshots
-    (
-        List<PrimitiveSnapshot> snapshot,
-        Dictionary<Transform, int> indexByTransform,
-        int modelBaseIndex)
+    void AppendNativePrimitiveSnapshots(List<PrimitiveSnapshot> snapshot, Dictionary<Transform, int> idx, int baseIdx)
     {
         for (var i = 0; i < NativePrimitives.Count; i++)
         {
-            Primitive native = NativePrimitives[i];
-            ModelPrimitive model = ModelPrimitives[i];
+            Primitive nat = NativePrimitives[i];
+            ModelPrimitive mod = ModelPrimitives[i];
             bool hasBase = i < NativePrimitiveBases.Count && NativePrimitiveBases[i] != null;
 
             if (hasBase)
             {
-                Primitive basePrim = NativePrimitiveBases[i];
-                Transform baseTransform = basePrim.Transform;
+                Primitive bp = NativePrimitiveBases[i];
+                Transform bt = bp.Transform;
+                int bpi = idx.TryGetValue(bt.parent, out int fb) ? fb : baseIdx;
+                int bi = snapshot.Count;
 
-                int baseParent = indexByTransform.TryGetValue(baseTransform.parent, out int foundBase)
-                    ? foundBase
-                    : modelBaseIndex;
-                int baseIndex = snapshot.Count;
+                snapshot.Add(new PrimitiveSnapshot(bp.Position, bp.Rotation, bp.Scale,
+                    bt.localPosition, bt.localRotation, bt.localScale, bp.Color, bp.Flags, "NativeBase", bpi));
+                idx[bt] = bi;
 
-                snapshot.Add(new PrimitiveSnapshot(
-                    basePrim.Position, basePrim.Rotation, basePrim.Scale,
-                    baseTransform.localPosition, baseTransform.localRotation, baseTransform.localScale,
-                    basePrim.Color, basePrim.Flags, "NativeBase", baseParent));
+                Transform nt = nat.Transform;
+                int npi = idx.TryGetValue(nt.parent, out int fn) ? fn : bi;
 
-                indexByTransform[baseTransform] = baseIndex;
-
-                Transform nativeTransform = native.Transform;
-
-                int nativeParent = indexByTransform.TryGetValue(nativeTransform.parent, out int foundNative)
-                    ? foundNative
-                    : baseIndex;
-
-                snapshot.Add(new PrimitiveSnapshot(
-                    native.Position, native.Rotation, native.Scale,
-                    nativeTransform.localPosition, nativeTransform.localRotation, nativeTransform.localScale,
-                    native.Color, native.Flags, "Native", nativeParent, model.Type));
+                snapshot.Add(new PrimitiveSnapshot(nat.Position, nat.Rotation, nat.Scale,
+                    nt.localPosition, nt.localRotation, nt.localScale, nat.Color, nat.Flags, "Native", npi, mod.Type));
             }
             else
             {
-                Transform nativeTransform = native.Transform;
+                Transform nt = nat.Transform;
+                int npi = idx.TryGetValue(nt.parent, out int fn) ? fn : baseIdx;
 
-                int nativeParent = indexByTransform.TryGetValue(nativeTransform.parent, out int foundNative)
-                    ? foundNative
-                    : modelBaseIndex;
-
-                snapshot.Add(new PrimitiveSnapshot(
-                    native.Position, native.Rotation, native.Scale,
-                    nativeTransform.localPosition, nativeTransform.localRotation, nativeTransform.localScale,
-                    native.Color, native.Flags, "Native", nativeParent, model.Type));
+                snapshot.Add(new PrimitiveSnapshot(nat.Position, nat.Rotation, nat.Scale,
+                    nt.localPosition, nt.localRotation, nt.localScale, nat.Color, nat.Flags, "Native", npi, mod.Type));
             }
         }
     }

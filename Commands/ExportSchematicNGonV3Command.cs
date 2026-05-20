@@ -110,7 +110,10 @@ public sealed class ExportSchematicNGonV3Command : ICommand
                 loadResult.DetectedPrimitives,
                 Vector3.zero,
                 PrimitiveFlags.Visible,
-                config.Accuracy);
+                config.Accuracy,
+                1f,
+                false,
+                config.HierarchicalOptimizationPasses);
 
             yield return _activeModel.BuildTrianglesCoroutine(PrimitiveFlags.Visible, buildBatch);
 

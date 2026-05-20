@@ -9,19 +9,16 @@ public partial class HierarchicalModel
 {
     public override IReadOnlyList<ProjectMerBlock> GetProjectMerBlocks
     (
-        int modelObjectId,
-        int startObjectId,
-        Func<Vector3, Vector3> inverseTransformPoint,
-        Quaternion modelRotation)
+        int modelObjectId, int startObjectId,
+        Func<Vector3, Vector3> inverseTransformPoint, Quaternion modelRotation)
     {
         if (IsDestroyedValue) return [];
 
         IReadOnlyList<PrimitiveSnapshot> primitives = GetPrimitiveSnapshotWithoutNatives();
-
         if (primitives.Count == 0 && ModelPrimitives.Count == 0) return [];
 
-        List<ProjectMerBlock> blocks = new(primitives.Count + ModelPrimitives.Count * 2);
-        List<int> primitiveObjectIds = new(primitives.Count);
+        var blocks = new List<ProjectMerBlock>(primitives.Count + ModelPrimitives.Count * 2);
+        var primitiveObjectIds = new List<int>(primitives.Count);
         int objectId = startObjectId;
 
         for (var i = 0; i < primitives.Count; i++)
@@ -31,69 +28,43 @@ public partial class HierarchicalModel
 
         for (var i = 0; i < primitives.Count; i++)
         {
-            PrimitiveSnapshot primitive = primitives[i];
+            PrimitiveSnapshot p = primitives[i];
 
-            int parentId = primitive.ParentIndex >= 0 && primitive.ParentIndex < primitiveObjectIds.Count
-                ? primitiveObjectIds[primitive.ParentIndex]
-                : modelObjectId;
+            int parentId = p.ParentIndex >= 0 && p.ParentIndex < primitiveObjectIds.Count
+                ? primitiveObjectIds[p.ParentIndex] : modelObjectId;
+            Vector3 pos = p.ParentIndex >= 0 ? p.LocalPosition : inverseTransformPoint(p.Position);
 
-            Vector3 position = primitive.ParentIndex >= 0
-                ? primitive.LocalPosition
-                : inverseTransformPoint(primitive.Position);
-
-            Vector3 rotation = primitive.ParentIndex >= 0
-                ? primitive.LocalRotation.eulerAngles
-                : (Quaternion.Inverse(modelRotation) * primitive.Rotation).eulerAngles;
-
-            Vector3 scale = primitive.ParentIndex >= 0
-                ? primitive.LocalScale
-                : primitive.Scale;
+            Vector3 rot = p.ParentIndex >= 0 ? p.LocalRotation.eulerAngles
+                : (Quaternion.Inverse(modelRotation) * p.Rotation).eulerAngles;
+            Vector3 scl = p.ParentIndex >= 0 ? p.LocalScale : p.Scale;
 
             blocks.Add(new ProjectMerBlock
             {
-                Name = $"(H.{i + 1}){primitive.Kind}",
-                ObjectId = primitiveObjectIds[i],
-                ParentId = parentId,
-                Position = position,
-                Rotation = rotation,
-                Scale = scale,
-                BlockType = 1,
-                IsPrimitive = true,
-                PrimitiveType = (int)primitive.PrimitiveType,
-                PrimitiveColor = primitive.Color,
-                PrimitiveFlags = primitive.Flags,
-                Static = false,
+                Name = $"(H.{i + 1}){p.Kind}", ObjectId = primitiveObjectIds[i], ParentId = parentId,
+                Position = pos, Rotation = rot, Scale = scl, BlockType = 1, IsPrimitive = true,
+                PrimitiveType = (int)p.PrimitiveType, PrimitiveColor = p.Color,
+                PrimitiveFlags = p.Flags, Static = false,
             });
         }
 
-        Quaternion inverseRotation = Quaternion.Inverse(modelRotation);
-        PrimitiveFlags currentFlags = Flags;
+        Quaternion invRot = Quaternion.Inverse(modelRotation);
+        PrimitiveFlags curFlags = Flags;
 
         for (var i = 0; i < ModelPrimitives.Count; i++)
         {
             ModelPrimitive mp = ModelPrimitives[i];
-
-            Vector3 worldCenter = TransformPoint(mp.Center);
-            Quaternion worldRot = Rotation * mp.Rotation;
+            Vector3 wc = TransformPoint(mp.Center);
+            Quaternion wr = Rotation * mp.Rotation;
 
             if (IsUniformScale(mp.Scale))
             {
-                int shapeId = objectId++;
-
                 blocks.Add(new ProjectMerBlock
                 {
-                    Name = $"(Native.{i + 1})",
-                    ObjectId = shapeId,
-                    ParentId = modelObjectId,
-                    Position = inverseTransformPoint(worldCenter),
-                    Rotation = (inverseRotation * worldRot).eulerAngles,
-                    Scale = mp.Scale,
-                    BlockType = 1,
-                    IsPrimitive = true,
-                    PrimitiveType = (int)mp.Type,
-                    PrimitiveColor = mp.Color,
-                    PrimitiveFlags = currentFlags,
-                    Static = false,
+                    Name = $"(Native.{i + 1})", ObjectId = objectId++, ParentId = modelObjectId,
+                    Position = inverseTransformPoint(wc), Rotation = (invRot * wr).eulerAngles,
+                    Scale = mp.Scale, BlockType = 1, IsPrimitive = true,
+                    PrimitiveType = (int)mp.Type, PrimitiveColor = mp.Color,
+                    PrimitiveFlags = curFlags, Static = false,
                 });
             }
             else
@@ -103,31 +74,17 @@ public partial class HierarchicalModel
 
                 blocks.Add(new ProjectMerBlock
                 {
-                    Name = $"(Native.{i + 1}).Base",
-                    ObjectId = baseId,
-                    ParentId = modelObjectId,
-                    Position = inverseTransformPoint(worldCenter),
-                    Rotation = (inverseRotation * worldRot).eulerAngles,
-                    Scale = mp.Scale,
-                    BlockType = 0,
-                    IsPrimitive = false,
-                    Static = false,
+                    Name = $"(Native.{i + 1}).Base", ObjectId = baseId, ParentId = modelObjectId,
+                    Position = inverseTransformPoint(wc), Rotation = (invRot * wr).eulerAngles,
+                    Scale = mp.Scale, BlockType = 0, IsPrimitive = false, Static = false,
                 });
 
                 blocks.Add(new ProjectMerBlock
                 {
-                    Name = $"(Native.{i + 1})",
-                    ObjectId = shapeId,
-                    ParentId = baseId,
-                    Position = Vector3.zero,
-                    Rotation = Vector3.zero,
-                    Scale = Vector3.one,
-                    BlockType = 1,
-                    IsPrimitive = true,
-                    PrimitiveType = (int)mp.Type,
-                    PrimitiveColor = mp.Color,
-                    PrimitiveFlags = currentFlags,
-                    Static = false,
+                    Name = $"(Native.{i + 1})", ObjectId = shapeId, ParentId = baseId,
+                    Position = Vector3.zero, Rotation = Vector3.zero, Scale = Vector3.one,
+                    BlockType = 1, IsPrimitive = true, PrimitiveType = (int)mp.Type,
+                    PrimitiveColor = mp.Color, PrimitiveFlags = curFlags, Static = false,
                 });
             }
         }

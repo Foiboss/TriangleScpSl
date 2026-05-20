@@ -84,6 +84,9 @@ public abstract class ModelBase
     public Vector3 TransformPoint(Vector3 localPoint)
         => PositionValue + RotationValue * Vector3.Scale(localPoint, ScaleValue);
 
+    protected Vector3 TransformVector(Vector3 localVector)
+        => RotationValue * Vector3.Scale(localVector, ScaleValue);
+
     public Vector3 InverseTransformPoint(Vector3 worldPoint)
     {
         Vector3 local = Quaternion.Inverse(RotationValue) * (worldPoint - PositionValue);

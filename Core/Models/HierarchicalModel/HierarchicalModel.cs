@@ -9,17 +9,20 @@ using UnityEngine;
 namespace TriangleScpSl.Core.Models.HierarchicalModel;
 
 /// <summary>
-///     V3 model that extends ApproximateModel's stretch-clustering with hierarchical
-///     parenting: visible parallelograms can serve as parents for other visible
-///     parallelograms, eliminating the need for separate invisible stretch primitives.
-///     All parenting decisions are made DURING building — each primitive is created
-///     directly in its final position under its final parent. No post-build reparenting
-///     of already-spawned network objects occurs.
+///     V3 model renderer. Two-phase approach:
+///     Phase 1 (during build):
+///     For each new parallelogram, try to parent it under an already-built visible quad.
+///     If none works, fall back to V2 stretch clustering.
+///     Phase 2 (post-build sweeps):
+///     Iteratively scan stretch-children and try to move them under visible quads.
+///     Each sweep only tests quads that became newly available in the previous sweep. Controlled by optimizationPasses parameter.
+///     No primitives are ever destroyed+recreated - only created once in final position.
 /// </summary>
 public partial class HierarchicalModel
     : ModelBase
 {
     readonly float _absoluteToleranceUnits;
+    readonly int _optimizationPasses;
     readonly List<ModelTriangle> _localTriangles = [];
     readonly List<ModelParallelogram> _localParallelograms = [];
 
@@ -31,20 +34,14 @@ public partial class HierarchicalModel
     // Per-parallelogram build info (1:1 with _parallelograms)
     readonly List<QuadBuildInfo> _quadBuildInfos = [];
 
-    // Hierarchical parenting data: tracks which parallelograms are parented to other parallelograms
-    // Key: child parallelogram index in _parallelograms, Value: parent parallelogram index
+    // Key: child index, Value: parent index
     readonly Dictionary<int, int> _hierarchicalParents = new();
-
-    // Depth of each parallelogram in the hierarchy (0 = under stretch/BaseQuad)
     readonly Dictionary<int, int> _hierarchyDepths = new();
 
-    // Tracks which stretches still have direct children after building
-    readonly HashSet<Primitive> _usedStretches = new();
+    readonly HashSet<Primitive> _usedStretches = [];
 
-    // Stretch index (same as V2)
     StretchSpatialIndex _stretches;
 
-    // How many quads were hierarchically parented (each one avoids needing a stretch)
     int _hierarchicallyParentedCount;
 
     HierarchicalModel
@@ -53,10 +50,12 @@ public partial class HierarchicalModel
         PrimitiveFlags flags,
         float absoluteToleranceUnits,
         float scale,
-        bool invertWinding)
+        bool invertWinding,
+        int optimizationPasses)
         : base(worldPosition, flags, scale, invertWinding)
     {
         _absoluteToleranceUnits = absoluteToleranceUnits;
+        _optimizationPasses = optimizationPasses;
         _stretches = new StretchSpatialIndex(0.05f, 0.1f);
     }
 
@@ -68,11 +67,11 @@ public partial class HierarchicalModel
         float absoluteToleranceUnits = 0.001f,
         float scale = 1f,
         bool invertWinding = false,
-        bool buildImmediately = true)
-        : this(worldPosition, flags, absoluteToleranceUnits, scale, invertWinding)
+        bool buildImmediately = true,
+        int optimizationPasses = 3)
+        : this(worldPosition, flags, absoluteToleranceUnits, scale, invertWinding, optimizationPasses)
     {
-        if (triangles.Count == 0)
-            return;
+        if (triangles.Count == 0) return;
 
         foreach (ModelTriangle tri in triangles)
             _localTriangles.Add(new ModelTriangle(tri.P1, tri.P2, tri.P3, tri.Color));
@@ -91,11 +90,11 @@ public partial class HierarchicalModel
         float absoluteToleranceUnits = 0.001f,
         float scale = 1f,
         bool invertWinding = false,
-        bool buildImmediately = true)
-        : this(worldPosition, flags, absoluteToleranceUnits, scale, invertWinding)
+        bool buildImmediately = true,
+        int optimizationPasses = 3)
+        : this(worldPosition, flags, absoluteToleranceUnits, scale, invertWinding, optimizationPasses)
     {
-        if (parallelograms.Count == 0)
-            return;
+        if (parallelograms.Count == 0) return;
 
         foreach (ModelParallelogram p in parallelograms)
             _localParallelograms.Add(p);
@@ -115,8 +114,9 @@ public partial class HierarchicalModel
         float absoluteToleranceUnits = 0.001f,
         float scale = 1f,
         bool invertWinding = false,
-        bool buildImmediately = true)
-        : this(worldPosition, flags, absoluteToleranceUnits, scale, invertWinding)
+        bool buildImmediately = true,
+        int optimizationPasses = 3)
+        : this(worldPosition, flags, absoluteToleranceUnits, scale, invertWinding, optimizationPasses)
     {
         foreach (ModelParallelogram p in parallelograms)
             _localParallelograms.Add(p);
@@ -124,8 +124,7 @@ public partial class HierarchicalModel
         foreach (ModelPrimitive primitive in primitives)
             ModelPrimitives.Add(primitive);
 
-        if (parallelograms.Count == 0 && primitives.Count == 0)
-            return;
+        if (parallelograms.Count == 0 && primitives.Count == 0) return;
 
         InitStretchIndex();
 
@@ -140,14 +139,8 @@ public partial class HierarchicalModel
         : _usedStretches.Count + _parallelograms.Count + _fallbackParallelograms.Count * 2
         + NativePrimitives.Count + NativePrimitiveBases.Count + 1;
 
-    /// <summary>How many quads were parented onto other quads instead of needing a stretch.</summary>
     public int ReparentedCount => _hierarchicallyParentedCount;
 
-    /// <summary>
-    ///     Total stretch primitives saved vs what V2 would produce.
-    ///     = quads that bypassed stretches entirely (hierarchical parenting)
-    ///     + stretches that were created but became childless (all their children found parents).
-    /// </summary>
     public int StretchesSaved => _hierarchicallyParentedCount + (_stretches.Count - _usedStretches.Count);
 
     public override Color Color
@@ -156,18 +149,17 @@ public partial class HierarchicalModel
         {
             if (IsDestroyedValue) return;
 
-            foreach (Primitive parallelogram in _parallelograms) parallelogram.Color = value;
-            foreach (ParallelogramPrimitive parallelogram in _fallbackParallelograms) parallelogram.Color = value;
+            foreach (Primitive p in _parallelograms) p.Color = value;
+            foreach (ParallelogramPrimitive p in _fallbackParallelograms) p.Color = value;
             foreach (ModelParallelogram p in _localParallelograms) p.Color = value;
-            foreach (Primitive native in NativePrimitives) native.Color = value;
+            foreach (Primitive n in NativePrimitives) n.Color = value;
 
             for (var i = 0; i < _parallelogramSnapshots.Count; i++)
             {
-                ParallelogramSnapshot snapshot = _parallelogramSnapshots[i];
+                ParallelogramSnapshot s = _parallelogramSnapshots[i];
 
-                _parallelogramSnapshots[i]
-                    = new ParallelogramSnapshot(snapshot.VUp, snapshot.VLeft, snapshot.Center, value, snapshot.Flags,
-                        snapshot.IsFallback);
+                _parallelogramSnapshots[i] = new ParallelogramSnapshot(
+                    s.VUp, s.VLeft, s.Center, value, s.Flags, s.IsFallback);
             }
         }
     }
@@ -178,20 +170,18 @@ public partial class HierarchicalModel
         set
         {
             if (IsDestroyedValue) return;
-
             FlagsValue = value;
 
-            foreach (Primitive parallelogram in _parallelograms) parallelogram.Flags = value;
-            foreach (ParallelogramPrimitive parallelogram in _fallbackParallelograms) parallelogram.Flags = value;
-            foreach (Primitive native in NativePrimitives) native.Flags = value;
+            foreach (Primitive p in _parallelograms) p.Flags = value;
+            foreach (ParallelogramPrimitive p in _fallbackParallelograms) p.Flags = value;
+            foreach (Primitive n in NativePrimitives) n.Flags = value;
 
             for (var i = 0; i < _parallelogramSnapshots.Count; i++)
             {
-                ParallelogramSnapshot snapshot = _parallelogramSnapshots[i];
+                ParallelogramSnapshot s = _parallelogramSnapshots[i];
 
-                _parallelogramSnapshots[i]
-                    = new ParallelogramSnapshot(snapshot.VUp, snapshot.VLeft, snapshot.Center, snapshot.Color, value,
-                        snapshot.IsFallback);
+                _parallelogramSnapshots[i] = new ParallelogramSnapshot(
+                    s.VUp, s.VLeft, s.Center, s.Color, value, s.IsFallback);
             }
         }
     }
@@ -201,78 +191,50 @@ public partial class HierarchicalModel
     void InitStretchIndex()
     {
         float maxSize = ComputeMaxParallelogramSize();
-
-        _stretches = new StretchSpatialIndex(
-            0.05f,
-            _absoluteToleranceUnits / maxSize * 2f);
+        _stretches = new StretchSpatialIndex(0.05f, _absoluteToleranceUnits / maxSize * 2f);
     }
 
     public static HierarchicalModel Create
-    (
-        IReadOnlyList<ModelTriangle> triangles,
-        Vector3 worldPosition,
-        PrimitiveFlags flags = PrimitiveFlags.Visible,
-        float absoluteToleranceUnits = 0.001f,
-        float scale = 1f,
-        bool invertWinding = false)
-        => new(triangles, worldPosition, flags, absoluteToleranceUnits, scale, invertWinding);
+    (IReadOnlyList<ModelTriangle> triangles, Vector3 worldPosition,
+        PrimitiveFlags flags = PrimitiveFlags.Visible, float absoluteToleranceUnits = 0.001f,
+        float scale = 1f, bool invertWinding = false, int optimizationPasses = 3)
+        => new(triangles, worldPosition, flags, absoluteToleranceUnits, scale, invertWinding, true, optimizationPasses);
 
     public static HierarchicalModel CreateDeferred
-    (
-        IReadOnlyList<ModelTriangle> triangles,
-        Vector3 worldPosition,
-        PrimitiveFlags flags = PrimitiveFlags.Visible,
-        float absoluteToleranceUnits = 0.001f,
-        float scale = 1f,
-        bool invertWinding = false)
-        => new(triangles, worldPosition, flags, absoluteToleranceUnits, scale, invertWinding, false);
+    (IReadOnlyList<ModelTriangle> triangles, Vector3 worldPosition,
+        PrimitiveFlags flags = PrimitiveFlags.Visible, float absoluteToleranceUnits = 0.001f,
+        float scale = 1f, bool invertWinding = false, int optimizationPasses = 3)
+        => new(triangles, worldPosition, flags, absoluteToleranceUnits, scale, invertWinding, false, optimizationPasses);
 
     public static HierarchicalModel Create
-    (
-        IReadOnlyList<ModelParallelogram> parallelograms,
-        Vector3 worldPosition,
-        PrimitiveFlags flags = PrimitiveFlags.Visible,
-        float absoluteToleranceUnits = 0.001f,
-        float scale = 1f,
-        bool invertWinding = false)
-        => new(parallelograms, worldPosition, flags, absoluteToleranceUnits, scale, invertWinding);
+    (IReadOnlyList<ModelParallelogram> parallelograms, Vector3 worldPosition,
+        PrimitiveFlags flags = PrimitiveFlags.Visible, float absoluteToleranceUnits = 0.001f,
+        float scale = 1f, bool invertWinding = false, int optimizationPasses = 3)
+        => new(parallelograms, worldPosition, flags, absoluteToleranceUnits, scale, invertWinding, true, optimizationPasses);
 
     public static HierarchicalModel CreateDeferred
-    (
-        IReadOnlyList<ModelParallelogram> parallelograms,
-        Vector3 worldPosition,
-        PrimitiveFlags flags = PrimitiveFlags.Visible,
-        float absoluteToleranceUnits = 0.001f,
-        float scale = 1f,
-        bool invertWinding = false)
-        => new(parallelograms, worldPosition, flags, absoluteToleranceUnits, scale, invertWinding, false);
+    (IReadOnlyList<ModelParallelogram> parallelograms, Vector3 worldPosition,
+        PrimitiveFlags flags = PrimitiveFlags.Visible, float absoluteToleranceUnits = 0.001f,
+        float scale = 1f, bool invertWinding = false, int optimizationPasses = 3)
+        => new(parallelograms, worldPosition, flags, absoluteToleranceUnits, scale, invertWinding, false, optimizationPasses);
 
     public static HierarchicalModel Create
-    (
-        IReadOnlyList<ModelParallelogram> parallelograms,
-        IReadOnlyList<ModelPrimitive> primitives,
-        Vector3 worldPosition,
-        PrimitiveFlags flags = PrimitiveFlags.Visible,
-        float absoluteToleranceUnits = 0.001f,
-        float scale = 1f,
-        bool invertWinding = false)
-        => new(parallelograms, primitives, worldPosition, flags, absoluteToleranceUnits, scale, invertWinding);
+    (IReadOnlyList<ModelParallelogram> parallelograms,
+        IReadOnlyList<ModelPrimitive> primitives, Vector3 worldPosition,
+        PrimitiveFlags flags = PrimitiveFlags.Visible, float absoluteToleranceUnits = 0.001f,
+        float scale = 1f, bool invertWinding = false, int optimizationPasses = 3)
+        => new(parallelograms, primitives, worldPosition, flags, absoluteToleranceUnits, scale, invertWinding, true, optimizationPasses);
 
     public static HierarchicalModel CreateDeferred
-    (
-        IReadOnlyList<ModelParallelogram> parallelograms,
-        IReadOnlyList<ModelPrimitive> primitives,
-        Vector3 worldPosition,
-        PrimitiveFlags flags = PrimitiveFlags.Visible,
-        float absoluteToleranceUnits = 0.001f,
-        float scale = 1f,
-        bool invertWinding = false)
-        => new(parallelograms, primitives, worldPosition, flags, absoluteToleranceUnits, scale, invertWinding, false);
+    (IReadOnlyList<ModelParallelogram> parallelograms,
+        IReadOnlyList<ModelPrimitive> primitives, Vector3 worldPosition,
+        PrimitiveFlags flags = PrimitiveFlags.Visible, float absoluteToleranceUnits = 0.001f,
+        float scale = 1f, bool invertWinding = false, int optimizationPasses = 3)
+        => new(parallelograms, primitives, worldPosition, flags, absoluteToleranceUnits, scale, invertWinding, false, optimizationPasses);
 
     public override void Destroy()
     {
         if (IsDestroyedValue) return;
-
         IsDestroyedValue = true;
 
         ClearAllPrimitives();
@@ -294,13 +256,30 @@ public partial class HierarchicalModel
     void ClearAllPrimitives()
     {
         foreach (StretchSpatialIndex.Entry entry in _stretches.All())
-            entry.Stretch.Destroy();
+            SafeDestroy(entry.Stretch);
 
         foreach (Primitive parallelogram in _parallelograms)
-            parallelogram.Destroy();
+            SafeDestroy(parallelogram);
 
         foreach (ParallelogramPrimitive parallelogram in _fallbackParallelograms)
             parallelogram.Destroy();
+    }
+
+    static void SafeDestroy(Primitive? primitive)
+    {
+        if (primitive == null) return;
+
+        try
+        {
+            Transform t = primitive.Transform;
+            if (t == null) return;
+        }
+        catch (NullReferenceException)
+        {
+            return;
+        }
+
+        primitive.Destroy();
     }
 
     readonly struct QuadBuildInfo(Vector3 vLeft, Vector3 vUp, Vector3 center, Primitive? stretch)
