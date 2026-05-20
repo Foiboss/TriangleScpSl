@@ -4,17 +4,18 @@ namespace TriangleScpSl.Core.NGons.Detectors;
 
 public static partial class CubeDetector
 {
-    const float NormalTolerance = 0.087f; // ~5 degrees
-    const float OrthogonalityTolerance = 0.05f;
-    const float VertexTolerance = 0.01f;
-    const float RelaxedVertexTolerance = 0.03f;
-    const int MinFaces = 6;
+    const float NormalTolerance = 0.12f;
+    const float OrthogonalityTolerance = 0.07f;
+    const float VertexTolerance = 0.02f;
+    const float RelaxedVertexTolerance = 0.05f;
+    const int MinFaces = 4;
 
     public static bool TryDetect
     (
         List<NGonRaw> faces,
         List<Vector3> uniqueVertices,
-        out ModelPrimitive result)
+        out ModelPrimitive result,
+        ModelSolidVolume? solid = null)
     {
         result = null!;
 
@@ -130,6 +131,94 @@ public static partial class CubeDetector
             }
 
             if (!onSurface) return false;
+        }
+
+        // Validate face normals point outward from box center.
+        // Rejects boxes viewed from inside (all normals pointing inward).
+        {
+            int outward = 0, total = 0;
+
+            foreach (NGonRaw face in faces)
+            {
+                if (face.Vertices.Count < 3) continue;
+                Vector3 fn = NGonMath.NewellNormal(face.Vertices);
+                float mag = fn.magnitude;
+                if (mag < 1e-10f) continue;
+                fn /= mag;
+                total++;
+
+                Vector3 fc = Vector3.zero;
+                foreach (Vector3 v in face.Vertices) fc += v;
+                fc /= face.Vertices.Count;
+
+                if (Vector3.Dot(fn, fc - boxCenter) > 0)
+                    outward++;
+            }
+
+            if (total > 0 && outward * 4 < total * 3)
+                return false;
+        }
+
+        // Check which of the 6 face directions are covered by actual faces.
+        // Any missing direction represents a hidden face that must be inside solid.
+        {
+            var hasFace = new bool[6];
+
+            foreach (Vector3 n in normals)
+            {
+                for (var axis = 0; axis < 3; axis++)
+                {
+                    float dot = Vector3.Dot(n, directions[axis]);
+                    if (dot > 1f - NormalTolerance) hasFace[axis * 2] = true;
+                    if (dot < -(1f - NormalTolerance)) hasFace[axis * 2 + 1] = true;
+                }
+            }
+
+            for (var i = 0; i < 6; i++)
+            {
+                if (hasFace[i]) continue;
+
+                // Missing face direction — need solid volume to verify it's embedded
+                if (solid == null) return false;
+
+                int axis = i / 2;
+                float sign = i % 2 == 0 ? 1f : -1f;
+                Vector3 faceCenter = boxCenter + sign * (extents[axis] * 0.5f) * directions[axis];
+
+                int ax1 = (axis + 1) % 3;
+                int ax2 = (axis + 2) % 3;
+
+                for (var u = 0; u <= 2; u++)
+                for (var v = 0; v <= 2; v++)
+                {
+                    float tu = (u / 2f - 0.5f) * extents[ax1] * 0.8f;
+                    float tv = (v / 2f - 0.5f) * extents[ax2] * 0.8f;
+                    Vector3 sample = faceCenter + tu * directions[ax1] + tv * directions[ax2];
+
+                    if (!solid.IsSolid(sample))
+                        return false;
+                }
+            }
+
+            // Verify visible faces have empty space on their exterior side.
+            // Rejects cubes viewed from inside or extending outside the model.
+            if (solid != null)
+            {
+                float offset = maxExtent * 0.03f;
+
+                for (var i = 0; i < 6; i++)
+                {
+                    if (!hasFace[i]) continue;
+
+                    int axis = i / 2;
+                    float sign = i % 2 == 0 ? 1f : -1f;
+                    Vector3 faceCenter = boxCenter + sign * (extents[axis] * 0.5f) * directions[axis];
+                    Vector3 exteriorPoint = faceCenter + sign * offset * directions[axis];
+
+                    if (solid.IsSolid(exteriorPoint))
+                        return false;
+                }
+            }
         }
 
         Quaternion rotation = Quaternion.LookRotation(directions[2], directions[1]);

@@ -217,6 +217,31 @@ public static partial class CubeDetector
             if (!onSurface) return false;
         }
 
+        // Validate face normals point outward from box center
+        {
+            int outward = 0, total = 0;
+
+            foreach (NGonRaw face in faces)
+            {
+                if (face.Vertices.Count < 3) continue;
+                Vector3 fn = NGonMath.NewellNormal(face.Vertices);
+                float mag = fn.magnitude;
+                if (mag < 1e-10f) continue;
+                fn /= mag;
+                total++;
+
+                Vector3 fc = Vector3.zero;
+                foreach (Vector3 v in face.Vertices) fc += v;
+                fc /= face.Vertices.Count;
+
+                if (Vector3.Dot(fn, fc - boxCenter) > 0)
+                    outward++;
+            }
+
+            if (total > 0 && outward * 4 < total * 3)
+                return false;
+        }
+
         var hasFace = new bool[6];
 
         foreach (Vector3 n in normals)
@@ -261,6 +286,24 @@ public static partial class CubeDetector
                     if (!solid.IsSolid(sample))
                         return false;
                 }
+            }
+        }
+
+        // Verify visible faces have empty space on their exterior side
+        {
+            float offset = maxExtent * 0.03f;
+
+            for (var i = 0; i < 6; i++)
+            {
+                if (!hasFace[i]) continue;
+
+                int axis = i / 2;
+                float sign = i % 2 == 0 ? 1f : -1f;
+                Vector3 faceCenter = boxCenter + sign * (extents[axis] * 0.5f) * dirs[axis];
+                Vector3 exteriorPoint = faceCenter + sign * offset * dirs[axis];
+
+                if (solid.IsSolid(exteriorPoint))
+                    return false;
             }
         }
 

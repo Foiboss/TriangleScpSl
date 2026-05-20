@@ -19,13 +19,13 @@ public static class PrimitiveShapeDetector
     {
         var detected = new List<ModelPrimitive>();
 
-        if (faces.Count < 6)
+        if (faces.Count < 3)
             return (detected, faces);
 
         int faceCount = faces.Count;
 
         // Deduplicate vertices into a shared table (remove near-duplicates)
-        var table = new List<Vector3>();
+        var intern = new VertexInternTable(VertexMergeEps);
         var faceIdx = new int[faceCount][];
 
         for (var f = 0; f < faceCount; f++)
@@ -35,9 +35,11 @@ public static class PrimitiveShapeDetector
 
             for (var v = 0; v < verts.Count; v++)
             {
-                faceIdx[f][v] = Intern(table, verts[v]);
+                faceIdx[f][v] = intern.Intern(verts[v]);
             }
         }
+
+        List<Vector3> table = intern.Table;
 
         // Build edge-to-faces adjacency map
         var edgeMap = new Dictionary<long, List<int>>();
@@ -146,7 +148,7 @@ public static class PrimitiveShapeDetector
                 primitive = sphereResult;
             else if (CylinderDetector.TryDetect(clusterFaces, uniqueVerts, out ModelPrimitive cylResult, smoothMaxAngle, smoothMinFraction))
                 primitive = cylResult;
-            else if (CubeDetector.TryDetect(clusterFaces, uniqueVerts, out ModelPrimitive cubeResult))
+            else if (CubeDetector.TryDetect(clusterFaces, uniqueVerts, out ModelPrimitive cubeResult, solid))
                 primitive = cubeResult;
 
             if (primitive == null) continue;
@@ -160,6 +162,73 @@ public static class PrimitiveShapeDetector
                 $"({clusterFaceIndices.Count} faces → 1 primitive)");
         }
 
+        // Pass 1b: Sub-cluster splitting - retry failed clusters by splitting on normal similarity
+        {
+            var subClustersToTry = new List<List<int>>();
+
+            foreach (KeyValuePair<int, List<int>> kv in sortedClusters)
+            {
+                List<int> clusterFaceIndices = kv.Value;
+                if (clusterFaceIndices.Any(i => consumed[i])) continue;
+                if (clusterFaceIndices.Count < 4) continue; // Need enough faces to split meaningfully
+
+                List<List<int>> subs = ExtractSmoothSubClusters(
+                    clusterFaceIndices, faces, faceIdx, table, edgeMap);
+
+                // Only useful if the split produced multiple sub-clusters
+                if (subs.Count <= 1) continue;
+
+                foreach (List<int> sub in subs)
+                {
+                    if (sub.Count >= 3)
+                        subClustersToTry.Add(sub);
+                }
+            }
+
+            // Sort sub-clusters largest first
+            subClustersToTry.Sort((a, b) => b.Count.CompareTo(a.Count));
+
+            foreach (List<int> subCluster in subClustersToTry)
+            {
+                if (subCluster.Any(i => consumed[i])) continue;
+
+                var clusterFaces = new List<NGonRaw>(subCluster.Count);
+                var vertexSet = new HashSet<int>();
+
+                foreach (int fi in subCluster)
+                {
+                    clusterFaces.Add(faces[fi]);
+
+                    foreach (int vi in faceIdx[fi])
+                        vertexSet.Add(vi);
+                }
+
+                var uniqueVerts = new List<Vector3>(vertexSet.Count);
+
+                foreach (int vi in vertexSet)
+                    uniqueVerts.Add(table[vi]);
+
+                ModelPrimitive? primitive = null;
+
+                if (SphereDetector.TryDetect(clusterFaces, uniqueVerts, out ModelPrimitive sphereResult2, solid, smoothMaxAngle, smoothMinFraction))
+                    primitive = sphereResult2;
+                else if (CylinderDetector.TryDetect(clusterFaces, uniqueVerts, out ModelPrimitive cylResult2, smoothMaxAngle, smoothMinFraction))
+                    primitive = cylResult2;
+                else if (CubeDetector.TryDetect(clusterFaces, uniqueVerts, out ModelPrimitive cubeResult2, solid))
+                    primitive = cubeResult2;
+
+                if (primitive == null) continue;
+
+                detected.Add(primitive);
+
+                foreach (int fi in subCluster)
+                    consumed[fi] = true;
+
+                Log.Info($"PrimitiveShapeDetector: Detected {primitive.Type} via sub-cluster split " +
+                    $"({subCluster.Count} faces → 1 primitive)");
+            }
+        }
+
         // Pass 2: Approximate sphere/cylinder fit with relaxed tolerance
         if (solid != null)
         {
@@ -167,7 +236,7 @@ public static class PrimitiveShapeDetector
             {
                 List<int> clusterFaceIndices = kv.Value;
                 if (clusterFaceIndices.Any(i => consumed[i])) continue;
-                if (clusterFaceIndices.Count < 8) continue;
+                if (clusterFaceIndices.Count < 6) continue;
 
                 var clusterFaces = new List<NGonRaw>(clusterFaceIndices.Count);
                 var vertexSet = new HashSet<int>();
@@ -276,7 +345,7 @@ public static class PrimitiveShapeDetector
         float maxMsPerFrame,
         Action<List<ModelPrimitive>, List<NGonRaw>> onComplete)
     {
-        if (faces.Count < 6)
+        if (faces.Count < 3)
         {
             onComplete([], faces);
             yield break;
@@ -286,7 +355,7 @@ public static class PrimitiveShapeDetector
 
         int faceCount = faces.Count;
 
-        var table = new List<Vector3>();
+        var intern = new VertexInternTable(VertexMergeEps);
         var faceIdx = new int[faceCount][];
 
         for (var f = 0; f < faceCount; f++)
@@ -296,9 +365,11 @@ public static class PrimitiveShapeDetector
 
             for (var v = 0; v < verts.Count; v++)
             {
-                faceIdx[f][v] = Intern(table, verts[v]);
+                faceIdx[f][v] = intern.Intern(verts[v]);
             }
         }
+
+        List<Vector3> table = intern.Table;
 
         var edgeMap = new Dictionary<long, List<int>>();
 
@@ -405,7 +476,7 @@ public static class PrimitiveShapeDetector
                 primitive = sphereResult;
             else if (CylinderDetector.TryDetect(clusterFaces, uniqueVerts, out ModelPrimitive cylResult, smoothMaxAngle, smoothMinFraction))
                 primitive = cylResult;
-            else if (CubeDetector.TryDetect(clusterFaces, uniqueVerts, out ModelPrimitive cubeResult))
+            else if (CubeDetector.TryDetect(clusterFaces, uniqueVerts, out ModelPrimitive cubeResult, solid))
                 primitive = cubeResult;
 
             if (primitive != null)
@@ -426,6 +497,78 @@ public static class PrimitiveShapeDetector
             }
         }
 
+        // Pass 1b: Sub-cluster splitting
+        {
+            var subClustersToTry = new List<List<int>>();
+
+            foreach (KeyValuePair<int, List<int>> kv in sortedClusters)
+            {
+                List<int> clusterFaceIndices = kv.Value;
+                if (clusterFaceIndices.Any(i => consumed[i])) continue;
+                if (clusterFaceIndices.Count < 4) continue;
+
+                List<List<int>> subs = ExtractSmoothSubClusters(
+                    clusterFaceIndices, faces, faceIdx, table, edgeMap);
+
+                if (subs.Count <= 1) continue;
+
+                foreach (List<int> sub in subs)
+                {
+                    if (sub.Count >= 3)
+                        subClustersToTry.Add(sub);
+                }
+            }
+
+            subClustersToTry.Sort((a, b) => b.Count.CompareTo(a.Count));
+
+            foreach (List<int> subCluster in subClustersToTry)
+            {
+                if (subCluster.Any(i => consumed[i])) continue;
+
+                var clusterFaces = new List<NGonRaw>(subCluster.Count);
+                var vertexSet = new HashSet<int>();
+
+                foreach (int fi in subCluster)
+                {
+                    clusterFaces.Add(faces[fi]);
+
+                    foreach (int vi in faceIdx[fi])
+                        vertexSet.Add(vi);
+                }
+
+                var uniqueVerts = new List<Vector3>(vertexSet.Count);
+
+                foreach (int vi in vertexSet)
+                    uniqueVerts.Add(table[vi]);
+
+                ModelPrimitive? primitive = null;
+
+                if (SphereDetector.TryDetect(clusterFaces, uniqueVerts, out ModelPrimitive sphereResult2, solid, smoothMaxAngle, smoothMinFraction))
+                    primitive = sphereResult2;
+                else if (CylinderDetector.TryDetect(clusterFaces, uniqueVerts, out ModelPrimitive cylResult2, smoothMaxAngle, smoothMinFraction))
+                    primitive = cylResult2;
+                else if (CubeDetector.TryDetect(clusterFaces, uniqueVerts, out ModelPrimitive cubeResult2, solid))
+                    primitive = cubeResult2;
+
+                if (primitive != null)
+                {
+                    detected.Add(primitive);
+
+                    foreach (int fi in subCluster)
+                        consumed[fi] = true;
+
+                    Log.Info($"PrimitiveShapeDetector: Detected {primitive.Type} via sub-cluster split " +
+                        $"({subCluster.Count} faces -> 1 primitive)");
+                }
+
+                if (sw.Elapsed.TotalMilliseconds >= maxMsPerFrame)
+                {
+                    yield return null;
+                    sw.Restart();
+                }
+            }
+        }
+
         // Pass 2: Approximate sphere/cylinder fit
         if (solid != null)
         {
@@ -433,7 +576,7 @@ public static class PrimitiveShapeDetector
             {
                 List<int> clusterFaceIndices = kv.Value;
                 if (clusterFaceIndices.Any(i => consumed[i])) continue;
-                if (clusterFaceIndices.Count < 8) continue;
+                if (clusterFaceIndices.Count < 6) continue;
 
                 var clusterFaces = new List<NGonRaw>(clusterFaceIndices.Count);
                 var vertexSet = new HashSet<int>();
@@ -541,17 +684,189 @@ public static class PrimitiveShapeDetector
         onComplete(detected, remaining);
     }
 
-    static int Intern(List<Vector3> table, Vector3 v)
+    /// <summary>
+    ///     Splits a cluster into smooth connected sub-clusters based on normal similarity.
+    ///     Faces that are edge-adjacent AND have similar normals stay in the same sub-cluster.
+    ///     This separates e.g. a sphere that shares edges with a flat wall of the same color.
+    /// </summary>
+    static List<List<int>> ExtractSmoothSubClusters
+    (
+        List<int> clusterFaceIndices,
+        List<NGonRaw> allFaces,
+        int[][] faceIdx,
+        List<Vector3> vertexTable,
+        Dictionary<long, List<int>> edgeMap)
     {
-        float eps2 = VertexMergeEps * VertexMergeEps;
+        int count = clusterFaceIndices.Count;
 
-        for (var i = 0; i < table.Count; i++)
+        // Compute normals for faces in this cluster
+        var normals = new Vector3[count];
+        var clusterSet = new HashSet<int>(clusterFaceIndices);
+
+        for (var i = 0; i < count; i++)
         {
-            if ((table[i] - v).sqrMagnitude <= eps2)
-                return i;
+            int fi = clusterFaceIndices[i];
+            List<Vector3> verts = allFaces[fi].Vertices;
+
+            if (verts.Count >= 3)
+            {
+                Vector3 n = NGonMath.NewellNormal(verts);
+                float mag = n.magnitude;
+                normals[i] = mag > 1e-10f ? n / mag : Vector3.up;
+            }
+            else
+            {
+                normals[i] = Vector3.up;
+            }
         }
 
-        table.Add(v);
-        return table.Count - 1;
+        // Map face index → local index
+        var faceToLocal = new Dictionary<int, int>(count);
+
+        for (var i = 0; i < count; i++)
+        {
+            faceToLocal[clusterFaceIndices[i]] = i;
+        }
+
+        // Adaptive normal threshold: for clusters with many faces, use a stricter
+        // threshold to separate curved from flat. For small clusters, be more lenient.
+        float normalThreshold = count >= 24 ? 0.25f : 0.40f;
+        float cosThreshold = Mathf.Cos(normalThreshold);
+
+        // Union-Find within this cluster, only joining smooth-adjacent pairs
+        var subParent = new int[count];
+        var subSize = new int[count];
+
+        for (var i = 0; i < count; i++)
+        {
+            subParent[i] = i;
+            subSize[i] = 1;
+        }
+
+        // Check adjacency via the existing edge map
+        for (var i = 0; i < count; i++)
+        {
+            int fi = clusterFaceIndices[i];
+            int[] idx = faceIdx[fi];
+            int n = idx.Length;
+
+            for (var e = 0; e < n; e++)
+            {
+                int a = idx[e];
+                int b = idx[(e + 1) % n];
+                long key = NGonMath.EdgeKey(a, b);
+
+                if (!edgeMap.TryGetValue(key, out List<int>? facesOnEdge))
+                    continue;
+
+                foreach (int fj in facesOnEdge)
+                {
+                    if (fj == fi) continue;
+                    if (!clusterSet.Contains(fj)) continue;
+
+                    if (!faceToLocal.TryGetValue(fj, out int j))
+                        continue;
+
+                    // Only join if normals are similar
+                    float dot = Vector3.Dot(normals[i], normals[j]);
+
+                    if (dot >= cosThreshold)
+                        NGonMath.Union(subParent, subSize, i, j);
+                }
+            }
+        }
+
+        // Extract connected components
+        var components = new Dictionary<int, List<int>>();
+
+        for (var i = 0; i < count; i++)
+        {
+            int root = NGonMath.Find(subParent, i);
+
+            if (!components.TryGetValue(root, out List<int>? list))
+            {
+                list = new List<int>();
+                components[root] = list;
+            }
+
+            list.Add(clusterFaceIndices[i]); // Store original face indices
+        }
+
+        var result = new List<List<int>>(components.Count);
+
+        foreach (KeyValuePair<int, List<int>> kv in components)
+            result.Add(kv.Value);
+
+        return result;
+    }
+
+    /// <summary>
+    ///     Spatial-hash accelerated vertex interning.
+    ///     Uses grid cells of size VertexMergeEps to avoid O(n²) linear search.
+    /// </summary>
+    sealed class VertexInternTable
+    {
+        readonly List<Vector3> _table = [];
+        readonly Dictionary<long, List<int>> _grid = new();
+        readonly float _cellSize;
+        readonly float _eps2;
+
+        public VertexInternTable(float eps)
+        {
+            _cellSize = Mathf.Max(eps * 2f, 1e-6f);
+            _eps2 = eps * eps;
+        }
+
+        public List<Vector3> Table => _table;
+
+        public int Intern(Vector3 v)
+        {
+            int gx = Mathf.FloorToInt(v.x / _cellSize);
+            int gy = Mathf.FloorToInt(v.y / _cellSize);
+            int gz = Mathf.FloorToInt(v.z / _cellSize);
+
+            // Check the 3x3x3 neighborhood to handle vertices near cell boundaries
+            for (int dx = -1; dx <= 1; dx++)
+            for (int dy = -1; dy <= 1; dy++)
+            for (int dz = -1; dz <= 1; dz++)
+            {
+                long key = CellKey(gx + dx, gy + dy, gz + dz);
+
+                if (!_grid.TryGetValue(key, out List<int>? cell))
+                    continue;
+
+                foreach (int idx in cell)
+                {
+                    if ((_table[idx] - v).sqrMagnitude <= _eps2)
+                        return idx;
+                }
+            }
+
+            int newIdx = _table.Count;
+            _table.Add(v);
+
+            long homeKey = CellKey(gx, gy, gz);
+
+            if (!_grid.TryGetValue(homeKey, out List<int>? homeCell))
+            {
+                homeCell = new List<int>(4);
+                _grid[homeKey] = homeCell;
+            }
+
+            homeCell.Add(newIdx);
+            return newIdx;
+        }
+
+        static long CellKey(int x, int y, int z)
+        {
+            // Pack three ints into a long using hash combination
+            unchecked
+            {
+                long h = x * 73856093L;
+                h ^= y * 19349663L;
+                h ^= z * 83492791L;
+                return h;
+            }
+        }
     }
 }

@@ -7,8 +7,8 @@ public static class CylinderDetector
     const float Tolerance = 0.05f;
     const float ApproxTolerance = 0.12f;
     const int MinFaces = 6;
-    const float MinEigenRatio = 0.5f;
-    const float MinNormalsOutwardFraction = 0.7f;
+    const float MinEigenRatio = 0.6f;
+    const float MinNormalsOutwardFraction = 0.5f;
 
     public static bool TryDetect
     (
@@ -20,13 +20,10 @@ public static class CylinderDetector
     {
         result = null!;
 
-        if (faces.Count < MinFaces || uniqueVertices.Count < 6)
+        if (faces.Count < MinFaces || uniqueVertices.Count < 4)
             return false;
 
-        if (!SmoothnessCheck.IsSurfaceSmooth(faces, smoothMaxAngle, smoothMinFraction))
-            return false;
-
-        if (!TryFitCylinder(faces, uniqueVertices, Tolerance, out result))
+        if (!TryFitCylinder(faces, uniqueVertices, Tolerance, smoothMaxAngle, smoothMinFraction, out result))
             return false;
 
         return true;
@@ -46,13 +43,10 @@ public static class CylinderDetector
     {
         result = null!;
 
-        if (faces.Count < MinFaces || uniqueVertices.Count < 6)
+        if (faces.Count < MinFaces || uniqueVertices.Count < 4)
             return false;
 
-        if (!SmoothnessCheck.IsSurfaceSmooth(faces, smoothMaxAngle, smoothMinFraction))
-            return false;
-
-        if (!TryFitCylinder(faces, uniqueVertices, ApproxTolerance, out result))
+        if (!TryFitCylinder(faces, uniqueVertices, ApproxTolerance, smoothMaxAngle, smoothMinFraction, out result))
             return false;
 
         // Verify that hidden parts of the cylinder are inside solid material
@@ -70,6 +64,8 @@ public static class CylinderDetector
         List<NGonRaw> faces,
         List<Vector3> uniqueVertices,
         float tolerance,
+        float smoothMaxAngle,
+        float smoothMinFraction,
         out ModelPrimitive result)
     {
         result = null!;
@@ -79,10 +75,11 @@ public static class CylinderDetector
         // corresponds to the SMALLEST eigenvalue.
         float nxx = 0, nxy = 0, nxz = 0, nyy = 0, nyz = 0, nzz = 0;
         var faceNormals = new List<Vector3>(faces.Count);
+        var faceNormalIndices = new List<int>(faces.Count);
 
-        foreach (NGonRaw face in faces)
+        for (var fi = 0; fi < faces.Count; fi++)
         {
-            List<Vector3> v = face.Vertices;
+            List<Vector3> v = faces[fi].Vertices;
             if (v.Count < 3) continue;
 
             Vector3 normal = NGonMath.NewellNormal(v);
@@ -91,6 +88,7 @@ public static class CylinderDetector
             normal /= area;
 
             faceNormals.Add(normal);
+            faceNormalIndices.Add(fi);
 
             nxx += area * normal.x * normal.x;
             nxy += area * normal.x * normal.y;
@@ -111,23 +109,42 @@ public static class CylinderDetector
         axis = axis.normalized;
 
         // Check that the smallest eigenvalue is significantly smaller than the others.
-        // Relaxed: for low-poly cylinders, the ratio can be higher.
         if (eval.z > MinEigenRatio * eval.x) return false;
 
-        // Additional check: normals should be roughly perpendicular to the detected axis.
-        // Count how many face normals are ~perpendicular to the axis (dot product near 0).
-        var perpCount = 0;
+        // Reject near-coplanar faces: if both middle and smallest eigenvalues are small,
+        // normals only span one direction (flat surface, not a cylinder).
+        if (eval.y < 0.3f * eval.x) return false;
 
-        foreach (Vector3 fn in faceNormals)
+        // Classify faces as lateral (perpendicular to axis) or cap (parallel to axis).
+        var lateralFaceIndices = new List<int>();
+        var capFaceIndices = new List<int>();
+
+        for (var ni = 0; ni < faceNormals.Count; ni++)
         {
-            if (Mathf.Abs(Vector3.Dot(fn, axis)) < 0.5f)
-                perpCount++;
+            float axisDot = Mathf.Abs(Vector3.Dot(faceNormals[ni], axis));
+
+            if (axisDot < 0.5f)
+                lateralFaceIndices.Add(ni);
+            else
+                capFaceIndices.Add(ni);
         }
 
-        // At least 60% of faces should have normals perpendicular to the axis (lateral faces)
-        if (perpCount < faceNormals.Count * 0.6f) return false;
+        // At least 50% of faces should be lateral
+        if (lateralFaceIndices.Count < faceNormals.Count * 0.5f) return false;
 
-        // Project vertices onto plane perpendicular to axis. Fit circle.
+        // Smoothness check on lateral faces only (cap-lateral edges have ~90° angles by design)
+        if (lateralFaceIndices.Count >= 3)
+        {
+            var lateralFaces = new List<NGonRaw>(lateralFaceIndices.Count);
+
+            foreach (int ni in lateralFaceIndices)
+                lateralFaces.Add(faces[faceNormalIndices[ni]]);
+
+            if (!SmoothnessCheck.IsSurfaceSmooth(lateralFaces, smoothMaxAngle, smoothMinFraction))
+                return false;
+        }
+
+        // Collect lateral vertices for circle fitting (excluding cap-only vertices)
         Vector3 centroid = Vector3.zero;
         foreach (Vector3 v in uniqueVertices) centroid += v;
         centroid /= uniqueVertices.Count;
@@ -148,7 +165,7 @@ public static class CylinderDetector
             h[i] = Vector3.Dot(d, axis);
         }
 
-        // Kasa circle fit
+        // Kasa circle fit on all vertices
         int n = uniqueVertices.Count;
         float sU = 0, sW = 0, sU2 = 0, sW2 = 0, sUw = 0;
         float sU3 = 0, sW3 = 0, sU2W = 0, sUw2 = 0;
@@ -179,35 +196,106 @@ public static class CylinderDetector
         float cx = (b1 * a22 - b2 * a12) / det;
         float cy = (a11 * b2 - a12 * b1) / det;
 
-        // Compute radius
+        // Compute radius from lateral vertices only for better accuracy
         var rSum = 0f;
+        var rCount = 0;
 
-        for (var i = 0; i < n; i++)
+        // Collect which vertices belong to lateral faces
+        var isLateralVertex = new HashSet<int>();
+
+        foreach (int ni in lateralFaceIndices)
         {
-            float dx = u[i] - cx;
-            float dy = w[i] - cy;
-            rSum += Mathf.Sqrt(dx * dx + dy * dy);
+            int fi = faceNormalIndices[ni];
+
+            foreach (Vector3 v in faces[fi].Vertices)
+            {
+                // Find closest vertex in uniqueVertices
+                for (var vi = 0; vi < uniqueVertices.Count; vi++)
+                {
+                    if ((uniqueVertices[vi] - v).sqrMagnitude < 1e-8f)
+                    {
+                        isLateralVertex.Add(vi);
+                        break;
+                    }
+                }
+            }
         }
 
-        float rMean = rSum / n;
+        // If we have enough lateral vertices, use them for radius; otherwise use all
+        if (isLateralVertex.Count >= 4)
+        {
+            foreach (int vi in isLateralVertex)
+            {
+                float dx = u[vi] - cx;
+                float dy = w[vi] - cy;
+                rSum += Mathf.Sqrt(dx * dx + dy * dy);
+                rCount++;
+            }
+        }
+        else
+        {
+            for (var i = 0; i < n; i++)
+            {
+                float dx = u[i] - cx;
+                float dy = w[i] - cy;
+                rSum += Mathf.Sqrt(dx * dx + dy * dy);
+            }
+
+            rCount = n;
+        }
+
+        float rMean = rSum / rCount;
 
         if (rMean < 1e-6f) return false;
 
-        // Check fit quality - use mean deviation instead of max to be more robust
+        // Verify lateral face centroids are approximately at the cylinder radius.
+        // Boxes have face centroids at ~71% of vertex radius (cos(45°) for square
+        // cross-section). Real cylinders with ≥6 sides have centroids at ≥87%.
+        {
+            Vector3 circleCtr = centroid + cx * e1 + cy * e2;
+            float latCentroidSum = 0;
+            var latCentroidCount = 0;
+
+            foreach (int ni in lateralFaceIndices)
+            {
+                int fi = faceNormalIndices[ni];
+                List<Vector3> fverts = faces[fi].Vertices;
+                Vector3 fc = Vector3.zero;
+                foreach (Vector3 fv in fverts) fc += fv;
+                fc /= fverts.Count;
+                Vector3 toFc = fc - circleCtr;
+                toFc -= Vector3.Dot(toFc, axis) * axis;
+                latCentroidSum += toFc.magnitude;
+                latCentroidCount++;
+            }
+
+            if (latCentroidCount >= 3 && latCentroidSum / latCentroidCount < rMean * 0.80f)
+                return false;
+        }
+
+        // Check fit quality on lateral vertices (cap vertices can be at center)
         var maxDev = 0f;
         var sumDev = 0f;
+        var devCount = 0;
 
         for (var i = 0; i < n; i++)
         {
             float dx = u[i] - cx;
             float dy = w[i] - cy;
             float r = Mathf.Sqrt(dx * dx + dy * dy);
+
+            // Skip vertices clearly on caps (near center, small radial distance)
+            if (r < rMean * 0.3f && !isLateralVertex.Contains(i))
+                continue;
+
             float dev = Mathf.Abs(r - rMean) / rMean;
             sumDev += dev;
+            devCount++;
             if (dev > maxDev) maxDev = dev;
         }
 
-        float meanDev = sumDev / n;
+        if (devCount == 0) return false;
+        float meanDev = sumDev / devCount;
 
         // Reject if mean deviation too high or max deviation way too high
         if (meanDev > tolerance) return false;
@@ -225,13 +313,14 @@ public static class CylinderDetector
         float height = hMax - hMin;
         if (height < 1e-6f) return false;
 
-        // Validate normals point outward from axis
+        // Validate normals point outward from axis (using correct face index mapping)
         var outwardCount = 0;
         Vector3 axisPoint = centroid + cx * e1 + cy * e2;
 
-        for (var i = 0; i < faceNormals.Count; i++)
+        for (var ni = 0; ni < faceNormals.Count; ni++)
         {
-            Vector3 fn = faceNormals[i];
+            Vector3 fn = faceNormals[ni];
+            int fi = faceNormalIndices[ni];
 
             // Skip cap normals (parallel to axis)
             if (Mathf.Abs(Vector3.Dot(fn, axis)) > 0.5f)
@@ -242,7 +331,7 @@ public static class CylinderDetector
 
             // For lateral faces, the normal projected onto the perpendicular plane
             // should point away from the axis
-            List<Vector3> verts = faces[i].Vertices;
+            List<Vector3> verts = faces[fi].Vertices;
             Vector3 faceCentroid = Vector3.zero;
             foreach (Vector3 v in verts) faceCentroid += v;
             faceCentroid /= verts.Count;

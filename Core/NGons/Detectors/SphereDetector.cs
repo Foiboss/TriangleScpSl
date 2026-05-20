@@ -4,12 +4,12 @@ namespace TriangleScpSl.Core.NGons.Detectors;
 
 public static partial class SphereDetector
 {
-    const float Tolerance = 0.02f;
-    const float ApproxTolerance = 0.10f;
-    const int MinFaces = 12;
-    const int MinApproxFaces = 8;
-    const float MinCoverageAngle = 2f * Mathf.PI;
-    const float MinApproxCoverageAngle = 1.5f * Mathf.PI;
+    const float Tolerance = 0.05f;
+    const float ApproxTolerance = 0.12f;
+    const int MinFaces = 6;
+    const int MinApproxFaces = 6;
+    const float MinCoverageAngle = 1.0f * Mathf.PI;
+    const float MinApproxCoverageAngle = 0.8f * Mathf.PI;
     const float FullCoverageAngle = 3.8f * Mathf.PI; // ~95% of 4pi
     const int HiddenSurfaceSamples = 64;
 
@@ -24,20 +24,37 @@ public static partial class SphereDetector
     {
         result = null!;
 
-        if (faces.Count < MinFaces || uniqueVertices.Count < 6)
+        if (faces.Count < MinFaces || uniqueVertices.Count < 4)
             return false;
 
-        if (!SmoothnessCheck.IsSurfaceSmooth(faces, smoothMaxAngle, smoothMinFraction))
+        // Adaptive smoothness: low-poly spheres have larger inter-face angles
+        float adaptiveAngle = AdaptiveSmoothAngle(faces.Count, smoothMaxAngle);
+
+        if (!SmoothnessCheck.IsSurfaceSmooth(faces, adaptiveAngle, smoothMinFraction))
             return false;
+
+        // Try multiple center estimation strategies (partial spheres bias simple methods)
+        Vector3 algebraicCenter = AlgebraicSphereFit(uniqueVertices, out _);
+
+        if (TryFitSphere(faces, uniqueVertices, algebraicCenter, out result, solid))
+            return true;
+
+        // Normal-line intersection: best for partial spheres where vertex centroid is biased
+        if (NormalLineCenter(faces, out Vector3 nlCenter))
+        {
+            if (TryFitSphere(faces, uniqueVertices, nlCenter, out result, solid))
+                return true;
+        }
 
         Vector3 centroid = Vector3.zero;
-
-        foreach (Vector3 v in uniqueVertices)
-            centroid += v;
+        foreach (Vector3 v in uniqueVertices) centroid += v;
         centroid /= uniqueVertices.Count;
 
-        if (TryFitSphere(faces, uniqueVertices, centroid, out result, solid))
-            return true;
+        if ((centroid - algebraicCenter).magnitude > 1e-4f)
+        {
+            if (TryFitSphere(faces, uniqueVertices, centroid, out result, solid))
+                return true;
+        }
 
         if (TryFitEllipsoid(faces, uniqueVertices, centroid, out result, solid))
             return true;
@@ -46,7 +63,7 @@ public static partial class SphereDetector
     }
 
     // Relaxed sphere fitting for surface approximation. Accepts higher
-    // radial deviation (10%) and lower coverage.
+    // radial deviation and lower coverage.
     public static bool TryDetectApproximate
     (
         List<NGonRaw> faces,
@@ -61,57 +78,195 @@ public static partial class SphereDetector
         if (faces.Count < MinApproxFaces || uniqueVertices.Count < 4)
             return false;
 
-        if (!SmoothnessCheck.IsSurfaceSmooth(faces, smoothMaxAngle, smoothMinFraction))
+        float adaptiveAngle = AdaptiveSmoothAngle(faces.Count, smoothMaxAngle);
+
+        if (!SmoothnessCheck.IsSurfaceSmooth(faces, adaptiveAngle, smoothMinFraction))
             return false;
 
-        Vector3 centroid = Vector3.zero;
+        // Try multiple center strategies for partial spheres
+        Vector3 algebraicCenter = AlgebraicSphereFit(uniqueVertices, out _);
 
-        foreach (Vector3 v in uniqueVertices)
-            centroid += v;
-        centroid /= uniqueVertices.Count;
+        if (TryFitApproxSphere(faces, uniqueVertices, algebraicCenter, solid, out result))
+            return true;
 
-        var rSum = 0f;
-
-        foreach (Vector3 v in uniqueVertices)
-            rSum += (v - centroid).magnitude;
-        float rMean = rSum / uniqueVertices.Count;
-
-        if (rMean < 1e-6f) return false;
-
-        var maxDev = 0f;
-
-        foreach (Vector3 v in uniqueVertices)
+        if (NormalLineCenter(faces, out Vector3 nlCenter))
         {
-            float dev = Mathf.Abs((v - centroid).magnitude - rMean) / rMean;
-            if (dev > maxDev) maxDev = dev;
+            if (TryFitApproxSphere(faces, uniqueVertices, nlCenter, solid, out result))
+                return true;
         }
 
-        if (maxDev > ApproxTolerance) return false;
+        return false;
+    }
 
-        if (!ValidateNormalsOutward(faces, centroid)) return false;
+    /// <summary>
+    ///     Computes an adaptive smoothness angle threshold based on face count.
+    ///     Low-poly spheres/ellipsoids have large inter-face angles that
+    ///     would fail a strict threshold.
+    /// </summary>
+    static float AdaptiveSmoothAngle(int faceCount, float baseAngle)
+    {
+        if (faceCount >= 48) return baseAngle;
 
-        float coverage = ComputeCoverage(faces, centroid);
-        if (coverage < MinApproxCoverageAngle) return false;
+        // For a sphere with f faces, expected angle ≈ 2 * sqrt(π / f)
+        float expectedAngle = 2f * Mathf.Sqrt(Mathf.PI / Mathf.Max(4f, faceCount));
 
-        if (!VerifyHiddenSurfaceInsideSolid(centroid, rMean, faces, solid))
-            return false;
+        // Allow up to 1.2x the expected angle, but cap to prevent low-poly polyhedra
+        // (cubes 90°, octahedra 109°, dodecahedra 117°) from passing as smooth spheres.
+        return Mathf.Min(Mathf.Max(baseAngle, expectedAngle * 1.2f), 1.05f);
+    }
 
-        var totalVerts = 0;
+    /// <summary>
+    ///     Algebraic least-squares sphere fit.
+    ///     Solves: minimize Σ (x² + y² + z² + ax + by + cz + d)²
+    ///     Center = (-a/2, -b/2, -c/2), r² = center² - d
+    ///     Falls back to centroid if the system is degenerate.
+    /// </summary>
+    static Vector3 AlgebraicSphereFit(List<Vector3> verts, out float radius)
+    {
+        int n = verts.Count;
+        radius = 0f;
 
-        foreach (NGonRaw face in faces)
-            totalVerts += face.Vertices.Count;
-        if (totalVerts < 12) return false;
-
-        float diameter = rMean * 2f;
-
-        result = new ModelPrimitive
+        if (n < 4)
         {
-            Type = PrimitiveType.Sphere,
-            Center = centroid,
-            Rotation = Quaternion.identity,
-            Scale = new Vector3(diameter, diameter, diameter),
-            Color = faces[0].Color,
-        };
+            Vector3 c = Vector3.zero;
+            foreach (Vector3 v in verts) c += v;
+            return c / n;
+        }
+
+        // Build normal equations for: [x y z 1] * [a b c d]^T = -(x² + y² + z²)
+        // Using double precision for numerical stability
+        double sX = 0, sY = 0, sZ = 0;
+        double sXX = 0, sYY = 0, sZZ = 0;
+        double sXY = 0, sXZ = 0, sYZ = 0;
+        double sR2 = 0; // Σ (x² + y² + z²)
+        double sXR2 = 0, sYR2 = 0, sZR2 = 0;
+
+        foreach (Vector3 v in verts)
+        {
+            double x = v.x, y = v.y, z = v.z;
+            double r2 = x * x + y * y + z * z;
+            sX += x;
+            sY += y;
+            sZ += z;
+            sXX += x * x;
+            sYY += y * y;
+            sZZ += z * z;
+            sXY += x * y;
+            sXZ += x * z;
+            sYZ += y * z;
+            sR2 += r2;
+            sXR2 += x * r2;
+            sYR2 += y * r2;
+            sZR2 += z * r2;
+        }
+
+        // 4x4 system: A * [a,b,c,d]^T = -rhs
+        // Row 0: [Σxx  Σxy  Σxz  Σx ] * [a,b,c,d] = -Σ(x·r²)
+        // Row 1: [Σxy  Σyy  Σyz  Σy ] * [a,b,c,d] = -Σ(y·r²)
+        // Row 2: [Σxz  Σyz  Σzz  Σz ] * [a,b,c,d] = -Σ(z·r²)
+        // Row 3: [Σx   Σy   Σz   n  ] * [a,b,c,d] = -Σ(r²)
+        var A = new double[4, 4];
+        var rhs = new double[4];
+
+        A[0, 0] = sXX;
+        A[0, 1] = sXY;
+        A[0, 2] = sXZ;
+        A[0, 3] = sX;
+        A[1, 0] = sXY;
+        A[1, 1] = sYY;
+        A[1, 2] = sYZ;
+        A[1, 3] = sY;
+        A[2, 0] = sXZ;
+        A[2, 1] = sYZ;
+        A[2, 2] = sZZ;
+        A[2, 3] = sZ;
+        A[3, 0] = sX;
+        A[3, 1] = sY;
+        A[3, 2] = sZ;
+        A[3, 3] = n;
+
+        rhs[0] = -sXR2;
+        rhs[1] = -sYR2;
+        rhs[2] = -sZR2;
+        rhs[3] = -sR2;
+
+        // Solve via Gaussian elimination with partial pivoting
+        if (!SolveLinear4X4(A, rhs, out double[] sol))
+        {
+            // Degenerate - fall back to centroid
+            Vector3 c = Vector3.zero;
+            foreach (Vector3 v in verts) c += v;
+            c /= n;
+            foreach (Vector3 v in verts) radius += (v - c).magnitude;
+            radius /= n;
+            return c;
+        }
+
+        var center = new Vector3((float)(-sol[0] * 0.5), (float)(-sol[1] * 0.5), (float)(-sol[2] * 0.5));
+        double r2Val = center.x * (double)center.x + center.y * (double)center.y + center.z * (double)center.z - sol[3];
+        radius = r2Val > 0 ? (float)Math.Sqrt(r2Val) : 0f;
+
+        return center;
+    }
+
+    static bool SolveLinear4X4(double[,] A, double[] b, out double[] x)
+    {
+        x = new double[4];
+        var piv = new int[] { 0, 1, 2, 3 };
+
+        for (var col = 0; col < 4; col++)
+        {
+            // Partial pivoting
+            double maxVal = Math.Abs(A[piv[col], col]);
+            int maxRow = col;
+
+            for (int row = col + 1; row < 4; row++)
+            {
+                double val = Math.Abs(A[piv[row], col]);
+
+                if (val > maxVal)
+                {
+                    maxVal = val;
+                    maxRow = row;
+                }
+            }
+
+            if (maxVal < 1e-14) return false;
+
+            (piv[col], piv[maxRow]) = (piv[maxRow], piv[col]);
+
+            int pivRow = piv[col];
+
+            for (int row = col + 1; row < 4; row++)
+            {
+                int r = piv[row];
+                double factor = A[r, col] / A[pivRow, col];
+                A[r, col] = 0;
+
+                for (int c = col + 1; c < 4; c++)
+                {
+                    A[r, c] -= factor * A[pivRow, c];
+                }
+
+                b[r] -= factor * b[pivRow];
+            }
+        }
+
+        // Back substitution
+        for (var row = 3; row >= 0; row--)
+        {
+            int r = piv[row];
+            double sum = b[r];
+
+            for (int c = row + 1; c < 4; c++)
+            {
+                sum -= A[r, c] * x[c];
+            }
+
+            if (Math.Abs(A[r, row]) < 1e-14) return false;
+            x[row] = sum / A[r, row];
+        }
+
         return true;
     }
 
@@ -119,7 +274,7 @@ public static partial class SphereDetector
     (
         List<NGonRaw> faces,
         List<Vector3> verts,
-        Vector3 centroid,
+        Vector3 center,
         out ModelPrimitive result,
         ModelSolidVolume? solid)
     {
@@ -128,7 +283,7 @@ public static partial class SphereDetector
         var rSum = 0f;
 
         foreach (Vector3 v in verts)
-            rSum += (v - centroid).magnitude;
+            rSum += (v - center).magnitude;
         float rMean = rSum / verts.Count;
 
         if (rMean < 1e-6f) return false;
@@ -137,15 +292,19 @@ public static partial class SphereDetector
 
         foreach (Vector3 v in verts)
         {
-            float dev = Mathf.Abs((v - centroid).magnitude - rMean) / rMean;
+            float dev = Mathf.Abs((v - center).magnitude - rMean) / rMean;
             if (dev > maxDev) maxDev = dev;
         }
 
         if (maxDev > Tolerance) return false;
 
-        if (!ValidateNormalsOutward(faces, centroid)) return false;
+        // Reject boxes masquerading as spheres: cube face centroids are only ~58%
+        // of vertex radius, real sphere face centroids are ~95%+.
+        if (!ValidateCentroidRadius(faces, center, rMean, 0.80f)) return false;
 
-        float coverage = ComputeCoverage(faces, centroid);
+        if (!ValidateNormalsOutward(faces, center)) return false;
+
+        float coverage = ComputeCoverage(faces, center);
         bool isPartial = coverage < FullCoverageAngle;
 
         if (isPartial)
@@ -153,7 +312,7 @@ public static partial class SphereDetector
             if (coverage < MinCoverageAngle) return false;
             if (solid == null) return false;
 
-            if (!VerifyHiddenSurfaceInsideSolid(centroid, rMean, faces, solid))
+            if (!VerifyHiddenSurfaceInsideSolid(center, rMean, faces, solid))
                 return false;
         }
 
@@ -162,7 +321,7 @@ public static partial class SphereDetector
         result = new ModelPrimitive
         {
             Type = PrimitiveType.Sphere,
-            Center = centroid,
+            Center = center,
             Rotation = Quaternion.identity,
             Scale = new Vector3(diameter, diameter, diameter),
             Color = faces[0].Color,
@@ -234,6 +393,10 @@ public static partial class SphereDetector
 
         if (maxDev > Tolerance) return false;
 
+        // Reject boxes: use average ellipsoid radius for centroid check
+        float rAvg = (a0 + a1 + a2) / 3f;
+        if (!ValidateCentroidRadius(faces, centroid, rAvg, 0.75f)) return false;
+
         if (!ValidateNormalsOutward(faces, centroid)) return false;
 
         float coverage = ComputeCoverage(faces, centroid);
@@ -265,6 +428,121 @@ public static partial class SphereDetector
             Scale = new Vector3(2f * a0, 2f * a1, 2f * a2),
             Color = faces[0].Color,
         };
+        return true;
+    }
+
+    static bool TryFitApproxSphere
+    (
+        List<NGonRaw> faces,
+        List<Vector3> uniqueVertices,
+        Vector3 center,
+        ModelSolidVolume solid,
+        out ModelPrimitive result)
+    {
+        result = null!;
+
+        var rSum = 0f;
+
+        foreach (Vector3 v in uniqueVertices)
+            rSum += (v - center).magnitude;
+        float rMean = rSum / uniqueVertices.Count;
+
+        if (rMean < 1e-6f) return false;
+
+        var maxDev = 0f;
+
+        foreach (Vector3 v in uniqueVertices)
+        {
+            float dev = Mathf.Abs((v - center).magnitude - rMean) / rMean;
+            if (dev > maxDev) maxDev = dev;
+        }
+
+        if (maxDev > ApproxTolerance) return false;
+
+        if (!ValidateCentroidRadius(faces, center, rMean, 0.75f)) return false;
+
+        if (!ValidateNormalsOutward(faces, center)) return false;
+
+        float coverage = ComputeCoverage(faces, center);
+        if (coverage < MinApproxCoverageAngle) return false;
+
+        if (!VerifyHiddenSurfaceInsideSolid(center, rMean, faces, solid))
+            return false;
+
+        var totalVerts = 0;
+
+        foreach (NGonRaw face in faces)
+            totalVerts += face.Vertices.Count;
+        if (totalVerts < 8) return false;
+
+        float diameter = rMean * 2f;
+
+        result = new ModelPrimitive
+        {
+            Type = PrimitiveType.Sphere,
+            Center = center,
+            Rotation = Quaternion.identity,
+            Scale = new Vector3(diameter, diameter, diameter),
+            Color = faces[0].Color,
+        };
+        return true;
+    }
+
+    /// <summary>
+    ///     Estimates sphere center by finding the point closest to all face normal lines.
+    ///     Each face centroid + normal defines a ray toward the center.
+    ///     Solves: minimize Σ ||(I - n_i·n_i^T)(center - c_i)||²
+    /// </summary>
+    static bool NormalLineCenter(List<NGonRaw> faces, out Vector3 center)
+    {
+        center = Vector3.zero;
+
+        float m00 = 0, m01 = 0, m02 = 0, m11 = 0, m12 = 0, m22 = 0;
+        float b0 = 0, b1 = 0, b2 = 0;
+        var count = 0;
+
+        foreach (NGonRaw face in faces)
+        {
+            if (face.Vertices.Count < 3) continue;
+
+            Vector3 n = NGonMath.NewellNormal(face.Vertices);
+            float mag = n.magnitude;
+            if (mag < 1e-10f) continue;
+            n /= mag;
+
+            Vector3 c = FaceCentroid(face.Vertices);
+
+            float p00 = 1 - n.x * n.x, p01 = -n.x * n.y, p02 = -n.x * n.z;
+            float p11 = 1 - n.y * n.y, p12 = -n.y * n.z;
+            float p22 = 1 - n.z * n.z;
+
+            m00 += p00; m01 += p01; m02 += p02;
+            m11 += p11; m12 += p12;
+            m22 += p22;
+
+            b0 += p00 * c.x + p01 * c.y + p02 * c.z;
+            b1 += p01 * c.x + p11 * c.y + p12 * c.z;
+            b2 += p02 * c.x + p12 * c.y + p22 * c.z;
+
+            count++;
+        }
+
+        if (count < 3) return false;
+
+        float det = m00 * (m11 * m22 - m12 * m12)
+                  - m01 * (m01 * m22 - m12 * m02)
+                  + m02 * (m01 * m12 - m11 * m02);
+
+        if (Mathf.Abs(det) < 1e-10f) return false;
+
+        float invDet = 1f / det;
+
+        center = new Vector3(
+            (b0 * (m11 * m22 - m12 * m12) - m01 * (b1 * m22 - m12 * b2) + m02 * (b1 * m12 - m11 * b2)) * invDet,
+            (m00 * (b1 * m22 - m12 * b2) - b0 * (m01 * m22 - m12 * m02) + m02 * (m01 * b2 - b1 * m02)) * invDet,
+            (m00 * (m11 * b2 - b1 * m12) - m01 * (m01 * b2 - b1 * m02) + b0 * (m01 * m12 - m11 * m02)) * invDet
+        );
+
         return true;
     }
 

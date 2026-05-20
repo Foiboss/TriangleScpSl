@@ -62,7 +62,12 @@ public static partial class SphereDetector
             samples.Add(surfacePoint);
         }
 
-        float coverDistSq = radius * radius * 0.04f; // ~10% of radius tolerance
+        // Adaptive coverage distance: scale by face density so coarse meshes aren't penalized.
+        // For N faces covering a sphere, each face spans roughly sqrt(4π/N) radians,
+        // giving a linear extent of radius * 2 * sqrt(π/N).
+        float faceExtent = radius * 2f * Mathf.Sqrt(Mathf.PI / Mathf.Max(4f, coveredFaces.Count));
+        float coverDist = Mathf.Max(faceExtent, radius * 0.2f);
+        float coverDistSq = coverDist * coverDist;
 
         foreach (Vector3 sample in samples)
         {
@@ -118,5 +123,29 @@ public static partial class SphereDetector
         Vector3 sum = Vector3.zero;
         foreach (Vector3 v in verts) sum += v;
         return sum / verts.Count;
+    }
+
+    /// <summary>
+    ///     Checks that face centroids are approximately at the expected radius from center.
+    ///     For a real sphere, face centroids ≈ radius. For a cube, face centroids are only
+    ///     ~58% of vertex radius. This rejects boxes masquerading as spheres.
+    /// </summary>
+    static bool ValidateCentroidRadius(List<NGonRaw> faces, Vector3 center, float expectedRadius, float minRatio)
+    {
+        if (expectedRadius < 1e-6f) return false;
+
+        float centroidDistSum = 0;
+        var count = 0;
+
+        foreach (NGonRaw face in faces)
+        {
+            if (face.Vertices.Count < 3) continue;
+            centroidDistSum += (FaceCentroid(face.Vertices) - center).magnitude;
+            count++;
+        }
+
+        if (count == 0) return false;
+
+        return centroidDistSum / count >= expectedRadius * minRatio;
     }
 }

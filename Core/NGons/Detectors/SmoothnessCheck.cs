@@ -13,7 +13,7 @@ public static class SmoothnessCheck
         float maxAngle = DefaultMaxAngle,
         float minFraction = DefaultMinFraction)
     {
-        if (faces.Count < 4)
+        if (faces.Count < 3)
             return false;
 
         var normals = new List<Vector3>(faces.Count);
