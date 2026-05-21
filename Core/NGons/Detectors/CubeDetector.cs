@@ -200,15 +200,19 @@ public static partial class CubeDetector
                 }
             }
 
-            // Verify visible faces have empty space on their exterior side.
-            // Rejects cubes viewed from inside or extending outside the model.
+            // Verify at least one visible face has empty space on its exterior side.
+            // Rejects cubes fully enclosed in solid (e.g. viewed from inside a room).
+            // Allows partially embedded cubes where some faces are exposed.
             if (solid != null)
             {
                 float offset = maxExtent * 0.03f;
+                var visibleCount = 0;
+                var solidExteriorCount = 0;
 
                 for (var i = 0; i < 6; i++)
                 {
                     if (!hasFace[i]) continue;
+                    visibleCount++;
 
                     int axis = i / 2;
                     float sign = i % 2 == 0 ? 1f : -1f;
@@ -216,8 +220,11 @@ public static partial class CubeDetector
                     Vector3 exteriorPoint = faceCenter + sign * offset * directions[axis];
 
                     if (solid.IsSolid(exteriorPoint))
-                        return false;
+                        solidExteriorCount++;
                 }
+
+                if (visibleCount > 0 && solidExteriorCount >= visibleCount)
+                    return false;
             }
         }
 

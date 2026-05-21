@@ -289,13 +289,17 @@ public static partial class CubeDetector
             }
         }
 
-        // Verify visible faces have empty space on their exterior side
+        // Verify at least one visible face has empty space on its exterior side.
+        // Rejects cubes fully enclosed in solid but allows partially embedded cubes.
         {
             float offset = maxExtent * 0.03f;
+            var visibleCount = 0;
+            var solidExteriorCount = 0;
 
             for (var i = 0; i < 6; i++)
             {
                 if (!hasFace[i]) continue;
+                visibleCount++;
 
                 int axis = i / 2;
                 float sign = i % 2 == 0 ? 1f : -1f;
@@ -303,8 +307,11 @@ public static partial class CubeDetector
                 Vector3 exteriorPoint = faceCenter + sign * offset * dirs[axis];
 
                 if (solid.IsSolid(exteriorPoint))
-                    return false;
+                    solidExteriorCount++;
             }
+
+            if (visibleCount > 0 && solidExteriorCount >= visibleCount)
+                return false;
         }
 
         Quaternion rotation = Quaternion.LookRotation(dirs[2], dirs[1]);

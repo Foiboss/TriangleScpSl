@@ -21,6 +21,7 @@ public static class ObjNGonParser
             List<Vector3> vertices = [];
             Dictionary<string, Color> materials = [];
             Color? activeMaterialColor = null;
+            int currentObjectGroup = -1;
 
             string? baseDir = Path.GetDirectoryName(objPath);
             string mtlPath = Path.ChangeExtension(objPath, ".mtl");
@@ -50,6 +51,13 @@ public static class ObjNGonParser
                 {
                     string materialName = line.Substring(7).Trim();
                     activeMaterialColor = materials.TryGetValue(materialName, out Color materialColor) ? materialColor : null;
+                    continue;
+                }
+
+                if (line.StartsWith("o ", StringComparison.OrdinalIgnoreCase) ||
+                    line.StartsWith("g ", StringComparison.OrdinalIgnoreCase))
+                {
+                    currentObjectGroup++;
                     continue;
                 }
 
@@ -109,6 +117,7 @@ public static class ObjNGonParser
                     {
                         Vertices = faceVerts,
                         Color = activeMaterialColor ?? defaultColor,
+                        ObjectGroup = currentObjectGroup,
                     });
                 }
             }

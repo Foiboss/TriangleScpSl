@@ -91,6 +91,10 @@ public static class PrimitiveShapeDetector
                     if (!NGonMath.ColorsClose(faces[fa].Color, faces[fb].Color))
                         continue;
 
+                    if (faces[fa].ObjectGroup >= 0 && faces[fb].ObjectGroup >= 0 &&
+                        faces[fa].ObjectGroup != faces[fb].ObjectGroup)
+                        continue;
+
                     NGonMath.Union(parent, clusterSize, fa, fb);
                 }
             }
@@ -173,7 +177,7 @@ public static class PrimitiveShapeDetector
                 if (clusterFaceIndices.Count < 4) continue; // Need enough faces to split meaningfully
 
                 List<List<int>> subs = ExtractSmoothSubClusters(
-                    clusterFaceIndices, faces, faceIdx, table, edgeMap);
+                    clusterFaceIndices, faces, faceIdx, edgeMap);
 
                 // Only useful if the split produced multiple sub-clusters
                 if (subs.Count <= 1) continue;
@@ -283,7 +287,7 @@ public static class PrimitiveShapeDetector
             {
                 List<int> clusterFaceIndices = kv.Value;
                 if (clusterFaceIndices.Any(i => consumed[i])) continue;
-                if (clusterFaceIndices.Count < 3 || clusterFaceIndices.Count > 20) continue;
+                if (clusterFaceIndices.Count is < 3 or > 20) continue;
 
                 var clusterFaces = new List<NGonRaw>(clusterFaceIndices.Count);
                 var vertexSet = new HashSet<int>();
@@ -416,8 +420,14 @@ public static class PrimitiveShapeDetector
                 {
                     int fb = facesOnEdge[j];
 
-                    if (NGonMath.ColorsClose(faces[fa].Color, faces[fb].Color))
-                        NGonMath.Union(parent, clusterSize, fa, fb);
+                    if (!NGonMath.ColorsClose(faces[fa].Color, faces[fb].Color))
+                        continue;
+
+                    if (faces[fa].ObjectGroup >= 0 && faces[fb].ObjectGroup >= 0 &&
+                        faces[fa].ObjectGroup != faces[fb].ObjectGroup)
+                        continue;
+
+                    NGonMath.Union(parent, clusterSize, fa, fb);
                 }
             }
         }
@@ -508,7 +518,7 @@ public static class PrimitiveShapeDetector
                 if (clusterFaceIndices.Count < 4) continue;
 
                 List<List<int>> subs = ExtractSmoothSubClusters(
-                    clusterFaceIndices, faces, faceIdx, table, edgeMap);
+                    clusterFaceIndices, faces, faceIdx, edgeMap);
 
                 if (subs.Count <= 1) continue;
 
@@ -694,7 +704,6 @@ public static class PrimitiveShapeDetector
         List<int> clusterFaceIndices,
         List<NGonRaw> allFaces,
         int[][] faceIdx,
-        List<Vector3> vertexTable,
         Dictionary<long, List<int>> edgeMap)
     {
         int count = clusterFaceIndices.Count;
@@ -804,20 +813,13 @@ public static class PrimitiveShapeDetector
     ///     Spatial-hash accelerated vertex interning.
     ///     Uses grid cells of size VertexMergeEps to avoid O(n²) linear search.
     /// </summary>
-    sealed class VertexInternTable
+    sealed class VertexInternTable(float eps)
     {
-        readonly List<Vector3> _table = [];
         readonly Dictionary<long, List<int>> _grid = new();
-        readonly float _cellSize;
-        readonly float _eps2;
+        readonly float _cellSize = Mathf.Max(eps * 2f, 1e-6f);
+        readonly float _eps2 = eps * eps;
 
-        public VertexInternTable(float eps)
-        {
-            _cellSize = Mathf.Max(eps * 2f, 1e-6f);
-            _eps2 = eps * eps;
-        }
-
-        public List<Vector3> Table => _table;
+        public List<Vector3> Table { get; } = [];
 
         public int Intern(Vector3 v)
         {
@@ -837,13 +839,13 @@ public static class PrimitiveShapeDetector
 
                 foreach (int idx in cell)
                 {
-                    if ((_table[idx] - v).sqrMagnitude <= _eps2)
+                    if ((Table[idx] - v).sqrMagnitude <= _eps2)
                         return idx;
                 }
             }
 
-            int newIdx = _table.Count;
-            _table.Add(v);
+            int newIdx = Table.Count;
+            Table.Add(v);
 
             long homeKey = CellKey(gx, gy, gz);
 
