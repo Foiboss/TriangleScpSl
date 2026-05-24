@@ -1,8 +1,8 @@
 using AdminToys;
 using Exiled.API.Features.Toys;
 using TriangleScpSl.Core.Models.ApproximateModel;
-using TriangleScpSl.Core.Triangulation.Parallelogram;
-using TriangleScpSl.Core.Triangulation.Triangle;
+using TriangleScpSl.Core.Primitives.Parallelogram;
+using TriangleScpSl.Core.Primitives.Triangle;
 using UnityEngine;
 
 namespace TriangleScpSl.Core.Models.HierarchicalModel;
@@ -156,7 +156,7 @@ public partial class HierarchicalModel
         _parallelogramSnapshots.Add(new ParallelogramSnapshot(vUp, vLeft, center, color, flags, false));
         _quadBuildInfos.Add(new QuadBuildInfo(vLeft, vUp, center, null));
         _hierarchicalParents[childIdx] = bestIdx;
-        _hierarchicallyParentedCount++;
+        ReparentedCount++;
         _hierarchyDepths[childIdx] = (_hierarchyDepths.TryGetValue(bestIdx, out int pd) ? pd : 0) + 1;
         return true;
     }

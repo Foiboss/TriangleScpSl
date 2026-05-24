@@ -1,5 +1,5 @@
 using CommandSystem;
-using TriangleScpSl.Core.NGons;
+using TriangleScpSl.Core.Decomposition.NGonDecomposition;
 
 namespace TriangleScpSl.Commands;
 

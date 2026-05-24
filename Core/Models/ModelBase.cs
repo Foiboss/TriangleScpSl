@@ -1,7 +1,7 @@
 using System.Collections;
 using AdminToys;
 using Exiled.API.Features.Toys;
-using TriangleScpSl.Core.NGons;
+using TriangleScpSl.Core.Decomposition.NGonDecomposition;
 using TriangleScpSl.Core.ProjectMerExport;
 using UnityEngine;
 

@@ -1,8 +1,8 @@
 using AdminToys;
 using Exiled.API.Features.Toys;
-using TriangleScpSl.Core.NGons;
+using TriangleScpSl.Core.Decomposition.NGonDecomposition;
+using TriangleScpSl.Core.Primitives.Parallelogram;
 using TriangleScpSl.Core.ProjectMerExport;
-using TriangleScpSl.Core.Triangulation.Parallelogram;
 using UnityEngine;
 
 namespace TriangleScpSl.Core.Models.ExactModel;

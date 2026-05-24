@@ -1,9 +1,9 @@
 using AdminToys;
 using Exiled.API.Features.Toys;
+using TriangleScpSl.Core.Decomposition.NGonDecomposition;
 using TriangleScpSl.Core.Models.ApproximateModel;
-using TriangleScpSl.Core.NGons;
-using TriangleScpSl.Core.Triangulation.Parallelogram;
-using TriangleScpSl.Core.Triangulation.Triangle;
+using TriangleScpSl.Core.Primitives.Parallelogram;
+using TriangleScpSl.Core.Primitives.Triangle;
 using UnityEngine;
 
 namespace TriangleScpSl.Core.Models.HierarchicalModel;
@@ -41,8 +41,6 @@ public partial class HierarchicalModel
     readonly HashSet<Primitive> _usedStretches = [];
 
     StretchSpatialIndex _stretches;
-
-    int _hierarchicallyParentedCount;
 
     HierarchicalModel
     (
@@ -139,9 +137,9 @@ public partial class HierarchicalModel
         : _usedStretches.Count + _parallelograms.Count + _fallbackParallelograms.Count * 2
         + NativePrimitives.Count + NativePrimitiveBases.Count + 1;
 
-    public int ReparentedCount => _hierarchicallyParentedCount;
+    public int ReparentedCount { get; private set; }
 
-    public int StretchesSaved => _hierarchicallyParentedCount + (_stretches.Count - _usedStretches.Count);
+    public int StretchesSaved => ReparentedCount + (_stretches.Count - _usedStretches.Count);
 
     public override Color Color
     {

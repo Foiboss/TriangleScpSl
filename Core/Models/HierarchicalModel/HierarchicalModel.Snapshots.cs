@@ -1,9 +1,9 @@
 using AdminToys;
 using Exiled.API.Features.Toys;
+using TriangleScpSl.Core.Decomposition.NGonDecomposition;
 using TriangleScpSl.Core.Models.ApproximateModel;
-using TriangleScpSl.Core.NGons;
-using TriangleScpSl.Core.Triangulation.Parallelogram;
-using TriangleScpSl.Core.Triangulation.Triangle;
+using TriangleScpSl.Core.Primitives.Parallelogram;
+using TriangleScpSl.Core.Primitives.Triangle;
 using UnityEngine;
 
 namespace TriangleScpSl.Core.Models.HierarchicalModel;

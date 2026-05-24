@@ -8,9 +8,6 @@ namespace TriangleScpSl.Core.ProjectMerExport;
 
 public static class ProjectMerSchematicExporter
 {
-    public static bool TryExport(ModelBase model, string outputPath, string modelName, out string error)
-        => TryExportInternal(model, outputPath, modelName, out error);
-
     public static IEnumerator ExportCoroutine
     (
         ModelBase model,
@@ -102,74 +99,6 @@ public static class ProjectMerSchematicExporter
         catch (Exception ex)
         {
             onCompleted(false, ex.Message);
-        }
-    }
-
-    static bool TryExportInternal(ModelBase model, string outputPath, string modelName, out string error)
-    {
-        error = string.Empty;
-
-        if (string.IsNullOrWhiteSpace(outputPath))
-        {
-            error = "Output path is empty.";
-            return false;
-        }
-
-        try
-        {
-            string? outputDirectory = Path.GetDirectoryName(outputPath);
-
-            if (!string.IsNullOrWhiteSpace(outputDirectory))
-                Directory.CreateDirectory(outputDirectory);
-
-            int objectIdSeed = GeneratePositiveId() % 500000 + 1000;
-            int rootObjectId = objectIdSeed++;
-            int modelObjectId = objectIdSeed++;
-            int objectId = objectIdSeed;
-
-            string resolvedName = string.IsNullOrWhiteSpace(modelName)
-                ? model.ProjectMerDefaultName
-                : modelName;
-
-            List<ProjectMerBlock> blocks =
-            [
-                new()
-                {
-                    Name = resolvedName,
-                    ObjectId = modelObjectId,
-                    ParentId = rootObjectId,
-                    // MER schematics should be stored in local coordinates.
-                    Position = Vector3.zero,
-                    Rotation = Vector3.zero,
-                    Scale = Vector3.one,
-                    BlockType = 0,
-                    IsPrimitive = false,
-                    Static = false,
-                },
-            ];
-
-            IReadOnlyList<ProjectMerBlock> modelBlocks = model.GetProjectMerBlocks(
-                modelObjectId,
-                objectId,
-                model.InverseTransformPoint,
-                model.Rotation);
-
-            if (modelBlocks.Count == 0)
-            {
-                error = "Model contains no exportable primitives.";
-                return false;
-            }
-
-            blocks.AddRange(modelBlocks);
-
-            string json = BuildJson(rootObjectId, blocks);
-            File.WriteAllText(outputPath, json, Encoding.UTF8);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            error = ex.Message;
-            return false;
         }
     }
 

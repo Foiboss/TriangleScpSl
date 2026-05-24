@@ -1,5 +1,5 @@
 using AdminToys;
-using TriangleScpSl.Core.NGons;
+using TriangleScpSl.Core.Decomposition.NGonDecomposition;
 using TriangleScpSl.Core.ProjectMerExport;
 using UnityEngine;
 

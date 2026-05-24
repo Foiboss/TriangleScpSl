@@ -78,7 +78,7 @@ public partial class HierarchicalModel
                 quad.Transform.localScale = bestLs;
 
                 _hierarchicalParents[ci] = bestIdx;
-                _hierarchicallyParentedCount++;
+                ReparentedCount++;
                 _hierarchyDepths[ci] = (_hierarchyDepths.TryGetValue(bestIdx, out int pd) ? pd : 0) + 1;
                 _quadBuildInfos[ci] = new QuadBuildInfo(info.VLeft, info.VUp, info.Center, null);
 

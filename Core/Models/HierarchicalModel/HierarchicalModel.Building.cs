@@ -1,8 +1,8 @@
 using System.Collections;
 using AdminToys;
 using Exiled.API.Features;
-using TriangleScpSl.Core.Triangulation.Parallelogram;
-using TriangleScpSl.Core.Triangulation.Triangle;
+using TriangleScpSl.Core.Primitives.Parallelogram;
+using TriangleScpSl.Core.Primitives.Triangle;
 using UnityEngine;
 
 namespace TriangleScpSl.Core.Models.HierarchicalModel;
@@ -25,7 +25,7 @@ public partial class HierarchicalModel
         _hierarchicalParents.Clear();
         _hierarchyDepths.Clear();
         _usedStretches.Clear();
-        _hierarchicallyParentedCount = 0;
+        ReparentedCount = 0;
 
         // Phase 1: Build all parallelograms with inline hierarchical parenting.
         foreach (ModelTriangle localTriangle in _localTriangles)
@@ -48,7 +48,7 @@ public partial class HierarchicalModel
         BuildNativePrimitives(flags);
 
         Log.Debug($"[HierarchicalModel] Built: {_parallelograms.Count} quads, " +
-            $"{_hierarchicallyParentedCount} hierarchically parented, " +
+            $"{ReparentedCount} hierarchically parented, " +
             $"{_usedStretches.Count} stretches used / {_stretches.Count} total " +
             $"(saved {StretchesSaved}).");
     }
@@ -70,7 +70,7 @@ public partial class HierarchicalModel
         _hierarchicalParents.Clear();
         _hierarchyDepths.Clear();
         _usedStretches.Clear();
-        _hierarchicallyParentedCount = 0;
+        ReparentedCount = 0;
 
         var processed = 0;
 

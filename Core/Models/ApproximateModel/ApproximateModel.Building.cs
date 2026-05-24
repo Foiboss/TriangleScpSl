@@ -1,8 +1,8 @@
 using System.Collections;
 using AdminToys;
 using Exiled.API.Features.Toys;
-using TriangleScpSl.Core.Triangulation.Parallelogram;
-using TriangleScpSl.Core.Triangulation.Triangle;
+using TriangleScpSl.Core.Primitives.Parallelogram;
+using TriangleScpSl.Core.Primitives.Triangle;
 using UnityEngine;
 
 namespace TriangleScpSl.Core.Models.ApproximateModel;
