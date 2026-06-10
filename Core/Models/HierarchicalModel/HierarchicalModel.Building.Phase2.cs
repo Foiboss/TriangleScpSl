@@ -1,5 +1,6 @@
 using Exiled.API.Features;
 using Exiled.API.Features.Toys;
+using TriangleScpSl.Core.Models.ApproximateModel;
 using UnityEngine;
 
 namespace TriangleScpSl.Core.Models.HierarchicalModel;
@@ -101,5 +102,30 @@ public partial class HierarchicalModel
                 if (IsStretchFreeInHierarchy(ri))
                     newCandidates.Add(ri);
         }
+    }
+
+    /// <summary>
+    ///     Drains sparsely-used stretches by rehoming their remaining quads onto other
+    ///     stretches within tolerance. Emptied stretches end up with no children, so
+    ///     MarkUsedStretches/DestroyUnusedStretches removes them — one primitive each.
+    /// </summary>
+    void ConsolidateStretches()
+    {
+        ApproximateModelUtils.ConsolidateStretches(
+            _stretches,
+            _parallelograms.Count,
+            i => _quadBuildInfos[i].Stretch,
+            i => (_quadBuildInfos[i].VLeft, _quadBuildInfos[i].VUp),
+            RehomeQuad,
+            _absoluteToleranceUnits);
+    }
+
+    void RehomeQuad(int index, StretchSpatialIndex.Entry target)
+    {
+        QuadBuildInfo info = _quadBuildInfos[index];
+        Vector3 v1 = ApproximateModelUtils.ForwardTransform(info.VLeft, target.Theta, target.Phi);
+        Vector3 v2 = ApproximateModelUtils.ForwardTransform(info.VUp, target.Theta, target.Phi);
+        ApproximateModelUtils.ReparentToStretch(_parallelograms[index], target.Stretch, v1, v2);
+        _quadBuildInfos[index] = new QuadBuildInfo(info.VLeft, info.VUp, info.Center, target.Stretch);
     }
 }

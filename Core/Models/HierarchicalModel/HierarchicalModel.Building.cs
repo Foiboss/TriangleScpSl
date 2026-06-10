@@ -43,6 +43,9 @@ public partial class HierarchicalModel
         // Phase 2: Iterative optimization sweeps.
         RunOptimizationSweeps();
 
+        // Phase 3: drain sparsely-used stretches onto other stretches.
+        ConsolidateStretches();
+
         MarkUsedStretches();
         DestroyUnusedStretches();
         BuildNativePrimitives(flags);
@@ -106,6 +109,10 @@ public partial class HierarchicalModel
 
         if (IsDestroyedValue) yield break;
         RunOptimizationSweeps();
+        yield return null;
+
+        if (IsDestroyedValue) yield break;
+        ConsolidateStretches();
         yield return null;
 
         MarkUsedStretches();

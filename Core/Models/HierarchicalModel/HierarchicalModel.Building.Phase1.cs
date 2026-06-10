@@ -62,53 +62,31 @@ public partial class HierarchicalModel
             return;
 
         // V2 stretch clustering fallback.
-        Primitive? bestStretch = null;
-        float bestTheta = 0f, bestPhi = 0f;
-        var bestErr = float.MaxValue;
+        StretchSpatialIndex.Entry? best = ApproximateModelUtils.FindBestStretch(
+            _stretches, vLeft, vUp, theta, phi, _absoluteToleranceUnits);
 
-        foreach (StretchSpatialIndex.Entry entry in _stretches.QueryNearby(theta, phi))
-        {
-            float err = ApproximateModelUtils.MaxVertexError(vLeft, vUp, entry.Theta, entry.Phi);
-
-            if (err <= _absoluteToleranceUnits && err < bestErr)
-            {
-                bestErr = err;
-                bestStretch = entry.Stretch;
-                bestTheta = entry.Theta;
-                bestPhi = entry.Phi;
-            }
-        }
-
+        Primitive stretch;
         float sT, sP;
 
-        if (bestStretch != null)
+        if (best is { } match)
         {
-            sT = bestTheta;
-            sP = bestPhi;
+            stretch = match.Stretch;
+            sT = match.Theta;
+            sP = match.Phi;
         }
         else
         {
             sT = theta;
             sP = phi;
-        }
-
-        Vector3 v1 = ApproximateModelUtils.ForwardTransform(vLeft, sT, sP);
-        Vector3 v2 = ApproximateModelUtils.ForwardTransform(vUp, sT, sP);
-
-        Primitive stretch;
-
-        if (bestStretch != null)
-        {
-            stretch = bestStretch;
-        }
-        else
-        {
             stretch = ApproximateModelUtils.CreateStretch(sT, sP);
             _stretches.Add(sT, sP, stretch);
 
             if (stretch.Transform.parent != BaseQuad.Transform)
                 stretch.Transform.SetParent(BaseQuad.Transform);
         }
+
+        Vector3 v1 = ApproximateModelUtils.ForwardTransform(vLeft, sT, sP);
+        Vector3 v2 = ApproximateModelUtils.ForwardTransform(vUp, sT, sP);
 
         int idx = _parallelograms.Count;
         _parallelograms.Add(ApproximateModelUtils.CreateParallelogram(center, v1, v2, stretch, flags, color));

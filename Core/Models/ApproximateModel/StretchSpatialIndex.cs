@@ -65,6 +65,24 @@ public class StretchSpatialIndex
         return _cells.Values.SelectMany(list => list);
     }
 
+    /// <summary>Removes a stretch entry by its primitive. Returns true when found.</summary>
+    public bool Remove(Primitive stretch)
+    {
+        foreach (List<Entry> list in _cells.Values)
+        {
+            for (var i = 0; i < list.Count; i++)
+            {
+                if (!ReferenceEquals(list[i].Stretch, stretch)) continue;
+
+                list.RemoveAt(i);
+                Count--;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public void Clear()
     {
         _cells.Clear();

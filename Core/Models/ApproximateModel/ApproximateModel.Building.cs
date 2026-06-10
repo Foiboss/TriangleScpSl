@@ -21,6 +21,7 @@ public partial class ApproximateModel
         _parallelograms.Clear();
         _fallbackParallelograms.Clear();
         _parallelogramSnapshots.Clear();
+        _quadInfos.Clear();
 
         foreach (ModelTriangle localTriangle in _localTriangles)
             CreateTriangle(localTriangle, flags);
@@ -36,6 +37,7 @@ public partial class ApproximateModel
                 CreateParallelogram(vLeft, vUp, TransformPoint(p.Center), flags, p.Color);
         }
 
+        ConsolidateStretches();
         BuildNativePrimitives(flags);
     }
 
@@ -52,6 +54,7 @@ public partial class ApproximateModel
         _parallelograms.Clear();
         _fallbackParallelograms.Clear();
         _parallelogramSnapshots.Clear();
+        _quadInfos.Clear();
 
         var processed = 0;
 
@@ -89,6 +92,10 @@ public partial class ApproximateModel
                 yield return null;
             }
         }
+
+        if (IsDestroyedValue) yield break;
+        ConsolidateStretches();
+        yield return null;
 
         BuildNativePrimitives(flags);
     }
@@ -129,6 +136,7 @@ public partial class ApproximateModel
             new Vector3(width, height, 1f), true, color);
         quad.Transform.SetParent(BaseQuad.Transform);
         _parallelograms.Add(quad);
+        _quadInfos.Add((vLeft, vUp, null));
         _parallelogramSnapshots.Add(new ParallelogramSnapshot(vUp, vLeft, center, color, flags, false));
     }
 
@@ -140,48 +148,22 @@ public partial class ApproximateModel
             return;
         }
 
-        Primitive? bestStretch = null;
-        float bestTheta = 0f, bestPhi = 0f;
-        var bestErr = float.MaxValue;
+        StretchSpatialIndex.Entry? best = ApproximateModelUtils.FindBestStretch(
+            _stretches, vLeft, vUp, theta, phi, _absoluteToleranceUnits);
 
-        foreach (StretchSpatialIndex.Entry entry in _stretches.QueryNearby(theta, phi))
-        {
-            float err = ApproximateModelUtils.MaxVertexError(
-                vLeft, vUp, entry.Theta, entry.Phi);
-
-            if (err <= _absoluteToleranceUnits && err < bestErr)
-            {
-                bestErr = err;
-                bestStretch = entry.Stretch;
-                bestTheta = entry.Theta;
-                bestPhi = entry.Phi;
-            }
-        }
-
+        Primitive stretch;
         float stretchTheta, stretchPhi;
 
-        if (bestStretch != null)
+        if (best is { } match)
         {
-            stretchTheta = bestTheta;
-            stretchPhi = bestPhi;
+            stretch = match.Stretch;
+            stretchTheta = match.Theta;
+            stretchPhi = match.Phi;
         }
         else
         {
             stretchTheta = theta;
             stretchPhi = phi;
-        }
-
-        Vector3 v1ForStretch = ApproximateModelUtils.ForwardTransform(vLeft, stretchTheta, stretchPhi);
-        Vector3 v2ForStretch = ApproximateModelUtils.ForwardTransform(vUp, stretchTheta, stretchPhi);
-
-        Primitive stretch;
-
-        if (bestStretch != null)
-        {
-            stretch = bestStretch;
-        }
-        else
-        {
             stretch = ApproximateModelUtils.CreateStretch(stretchTheta, stretchPhi);
             _stretches.Add(stretchTheta, stretchPhi, stretch);
 
@@ -189,9 +171,43 @@ public partial class ApproximateModel
                 stretch.Transform.SetParent(BaseQuad.Transform);
         }
 
+        Vector3 v1ForStretch = ApproximateModelUtils.ForwardTransform(vLeft, stretchTheta, stretchPhi);
+        Vector3 v2ForStretch = ApproximateModelUtils.ForwardTransform(vUp, stretchTheta, stretchPhi);
+
         _parallelograms.Add(
             ApproximateModelUtils.CreateParallelogram(center, v1ForStretch, v2ForStretch, stretch, flags, color));
+        _quadInfos.Add((vLeft, vUp, stretch));
         _parallelogramSnapshots.Add(new ParallelogramSnapshot(vUp, vLeft, center, color, flags, false));
+    }
+
+    /// <summary>
+    ///     Drains sparsely-used stretches by rehoming their quads onto other stretches
+    ///     within tolerance, then destroys the emptied stretches. Each one saves a primitive.
+    /// </summary>
+    void ConsolidateStretches()
+    {
+        HashSet<Primitive> emptied = ApproximateModelUtils.ConsolidateStretches(
+            _stretches,
+            _parallelograms.Count,
+            i => _quadInfos[i].Stretch,
+            i => (_quadInfos[i].VLeft, _quadInfos[i].VUp),
+            RehomeQuad,
+            _absoluteToleranceUnits);
+
+        foreach (Primitive stretch in emptied)
+        {
+            _stretches.Remove(stretch);
+            stretch.Destroy();
+        }
+    }
+
+    void RehomeQuad(int index, StretchSpatialIndex.Entry target)
+    {
+        (Vector3 vLeft, Vector3 vUp, _) = _quadInfos[index];
+        Vector3 v1 = ApproximateModelUtils.ForwardTransform(vLeft, target.Theta, target.Phi);
+        Vector3 v2 = ApproximateModelUtils.ForwardTransform(vUp, target.Theta, target.Phi);
+        ApproximateModelUtils.ReparentToStretch(_parallelograms[index], target.Stretch, v1, v2);
+        _quadInfos[index] = (vLeft, vUp, target.Stretch);
     }
 
     void CreateFallbackParallelogram(Vector3 vLeft, Vector3 vUp, Vector3 center, PrimitiveFlags flags, Color color)

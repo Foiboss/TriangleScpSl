@@ -23,6 +23,10 @@ When a visible child Quad is placed under a stretch via `SetParent`, it inherits
 
 `StretchSpatialIndex` maintains a 2D spatial hash over `(theta, phi)` space. Before creating a new stretch, the model queries nearby cells and measures the worst-case vertex error from reusing each candidate. If the error is within `absoluteToleranceUnits`, the existing stretch is reused.
 
+**Exhaustive fallback:** a parallelogram doesn't have one `(theta, phi)` decomposition — it has a whole curve of valid ones, so a stretch far from this particular solution point can still render it within tolerance. When the nearby query misses, ALL existing stretches are scanned before a new one is created. Same tolerance contract, measurably fewer stretches.
+
+**Stretch consolidation:** after building, sparsely-used stretches are drained — each of their quads is rehomed onto another stretch within tolerance — and the emptied stretches are destroyed. This cleans up the orphans that build order creates (an early parallelogram spawns its own stretch before the popular stretch that would have fit it exists).
+
 Lower accuracy values = more stretches but higher fidelity. Higher values = fewer primitives but visible vertex displacement.
 
 ### Rectangle Optimization
