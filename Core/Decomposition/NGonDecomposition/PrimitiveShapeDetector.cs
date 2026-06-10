@@ -12,6 +12,15 @@ public static class PrimitiveShapeDetector
 {
     const float VertexMergeEps = 1e-5f;
 
+    // Re-cluster and retry after each round of consumption; composite clusters
+    // usually resolve fully within 2-3 rounds.
+    const int MaxDetectionIterations = 3;
+
+    // Relative concavity tolerance for convex-piece splitting: faces stay in the
+    // same piece when each face's centroid is at most this fraction of the centroid
+    // distance in front of the other face's plane (tolerates mild mesh noise).
+    const float ConvexSplitTolerance = 0.01f;
+
     public static (List<ModelPrimitive> detected, List<NGonRaw> remaining) Detect
     (
         List<NGonRaw> faces,
@@ -54,45 +63,27 @@ public static class PrimitiveShapeDetector
             yield break;
         }
 
-        var ctx = new DetectionContext(faces, config, solid);
         var sw = Stopwatch.StartNew();
+        var detected = new List<ModelPrimitive>();
+        List<NGonRaw> remaining = faces;
 
-        if (sw.Elapsed.TotalMilliseconds >= maxMsPerFrame)
+        // Detection is iterative: consuming a primitive shrinks its cluster, and the
+        // remaining faces re-clustered often form clean shapes (e.g. a sphere welded
+        // to a box: pass 1b extracts the sphere, the next iteration detects the box).
+        for (var iteration = 0; iteration < MaxDetectionIterations; iteration++)
         {
-            yield return null;
-            sw.Restart();
-        }
-
-        // Pass 1: Exact primitive detection on whole clusters
-        foreach (List<int> cluster in ctx.SortedClusters)
-        {
-            ctx.TryDetectExact(cluster, null);
+            var ctx = new DetectionContext(remaining, config, solid);
 
             if (sw.Elapsed.TotalMilliseconds >= maxMsPerFrame)
             {
                 yield return null;
                 sw.Restart();
             }
-        }
 
-        // Pass 1b: Sub-cluster splitting - retry failed clusters by splitting on normal similarity
-        foreach (List<int> subCluster in ctx.CollectSmoothSubClusters())
-        {
-            ctx.TryDetectExact(subCluster, "via sub-cluster split");
-
-            if (sw.Elapsed.TotalMilliseconds >= maxMsPerFrame)
-            {
-                yield return null;
-                sw.Restart();
-            }
-        }
-
-        // Pass 2: Approximate sphere/cylinder fit with relaxed tolerance
-        if (solid != null)
-        {
+            // Pass 1: Exact primitive detection on whole clusters
             foreach (List<int> cluster in ctx.SortedClusters)
             {
-                ctx.TryDetectApproximate(cluster);
+                ctx.TryDetectExact(cluster, null);
 
                 if (sw.Elapsed.TotalMilliseconds >= maxMsPerFrame)
                 {
@@ -100,14 +91,11 @@ public static class PrimitiveShapeDetector
                     sw.Restart();
                 }
             }
-        }
 
-        // Pass 3: Partial box detection (3-5 visible faces with hidden faces inside solid)
-        if (solid != null)
-        {
-            foreach (List<int> cluster in ctx.SortedClusters)
+            // Pass 1b: Sub-cluster splitting - retry failed clusters by splitting on normal similarity
+            foreach (List<int> subCluster in ctx.CollectSmoothSubClusters())
             {
-                ctx.TryDetectPartialBox(cluster);
+                ctx.TryDetectExact(subCluster, "via sub-cluster split");
 
                 if (sw.Elapsed.TotalMilliseconds >= maxMsPerFrame)
                 {
@@ -115,17 +103,73 @@ public static class PrimitiveShapeDetector
                     sw.Restart();
                 }
             }
+
+            // Pass 1c: Convex-piece splitting - composite blocky clusters (e.g. two
+            // stacked boxes) never split on smoothness, but they do split at concave
+            // edges into convex pieces that the detectors can fit.
+            foreach (List<int> piece in ctx.CollectConvexSubClusters())
+            {
+                ctx.TryDetectExact(piece, "via convex split");
+                ctx.TryDetectPartialBox(piece, "via convex split");
+
+                if (sw.Elapsed.TotalMilliseconds >= maxMsPerFrame)
+                {
+                    yield return null;
+                    sw.Restart();
+                }
+            }
+
+            // Pass 2: Approximate sphere/cylinder fit with relaxed tolerance
+            if (solid != null)
+            {
+                foreach (List<int> cluster in ctx.SortedClusters)
+                {
+                    ctx.TryDetectApproximate(cluster);
+
+                    if (sw.Elapsed.TotalMilliseconds >= maxMsPerFrame)
+                    {
+                        yield return null;
+                        sw.Restart();
+                    }
+                }
+            }
+
+            // Pass 3: Partial box detection (visible box faces with hidden faces inside solid)
+            if (solid != null)
+            {
+                foreach (List<int> cluster in ctx.SortedClusters)
+                {
+                    ctx.TryDetectPartialBox(cluster, null);
+
+                    if (sw.Elapsed.TotalMilliseconds >= maxMsPerFrame)
+                    {
+                        yield return null;
+                        sw.Restart();
+                    }
+                }
+            }
+
+            detected.AddRange(ctx.Detected);
+            remaining = ctx.BuildRemaining();
+
+            if (ctx.Detected.Count == 0 || remaining.Count < 2)
+                break;
         }
 
-        List<NGonRaw> remaining = ctx.BuildRemaining();
+        // Faces fully embedded inside a detected primitive are covered by its opaque
+        // convex volume and can never be seen - drop them instead of rendering them.
+        int culled = CullFacesHiddenInsidePrimitives(remaining, detected, config.SurfaceDepthThreshold);
 
-        if (ctx.Detected.Count > 0)
+        if (culled > 0)
+            Log.Info($"PrimitiveShapeDetector: Culled {culled} faces hidden inside detected primitives");
+
+        if (detected.Count > 0)
         {
-            Log.Info($"PrimitiveShapeDetector: {ctx.Detected.Count} primitives detected, " +
+            Log.Info($"PrimitiveShapeDetector: {detected.Count} primitives detected, " +
                 $"{remaining.Count}/{faces.Count} faces remaining");
         }
 
-        onComplete(ctx.Detected, remaining);
+        onComplete(detected, remaining);
     }
 
     /// <summary>
@@ -204,6 +248,140 @@ public static class PrimitiveShapeDetector
             return subClusters;
         }
 
+        /// <summary>
+        ///     Splits unconsumed clusters at concave edges into convex pieces worth
+        ///     retrying, largest first. Smoothness-splitting shatters blocky geometry
+        ///     into single faces, but concave seams are exactly where two welded
+        ///     convex solids (e.g. stacked boxes) meet.
+        /// </summary>
+        public List<List<int>> CollectConvexSubClusters()
+        {
+            var result = new List<List<int>>();
+
+            foreach (List<int> cluster in SortedClusters)
+            {
+                if (cluster.Any(i => _consumed[i])) continue;
+                if (cluster.Count < 4) continue; // Nothing meaningful to split
+
+                List<List<int>> pieces = ExtractConvexPieces(cluster);
+
+                // Only useful if the split produced multiple pieces
+                if (pieces.Count <= 1) continue;
+
+                foreach (List<int> piece in pieces)
+                {
+                    if (piece.Count >= 2) // Partial box detection works from 2 faces
+                        result.Add(piece);
+                }
+            }
+
+            result.Sort((a, b) => b.Count.CompareTo(a.Count));
+            return result;
+        }
+
+        /// <summary>
+        ///     Union-find over the cluster joining faces only across non-concave
+        ///     (convex or flat) shared edges. A junction is concave when either
+        ///     face's centroid lies in front of the other face's plane.
+        /// </summary>
+        List<List<int>> ExtractConvexPieces(List<int> clusterFaceIndices)
+        {
+            int count = clusterFaceIndices.Count;
+            var clusterSet = new HashSet<int>(clusterFaceIndices);
+
+            var normals = new Vector3[count];
+            var centroids = new Vector3[count];
+
+            for (var i = 0; i < count; i++)
+            {
+                List<Vector3> verts = _faces[clusterFaceIndices[i]].Vertices;
+
+                Vector3 c = Vector3.zero;
+                foreach (Vector3 v in verts) c += v;
+                centroids[i] = verts.Count > 0 ? c / verts.Count : Vector3.zero;
+
+                if (verts.Count >= 3)
+                {
+                    Vector3 n = NGonMath.NewellNormal(verts);
+                    float mag = n.magnitude;
+                    normals[i] = mag > 1e-10f ? n / mag : Vector3.up;
+                }
+                else
+                {
+                    normals[i] = Vector3.up;
+                }
+            }
+
+            var faceToLocal = new Dictionary<int, int>(count);
+
+            for (var i = 0; i < count; i++)
+                faceToLocal[clusterFaceIndices[i]] = i;
+
+            var pieceParent = new int[count];
+            var pieceSize = new int[count];
+
+            for (var i = 0; i < count; i++)
+            {
+                pieceParent[i] = i;
+                pieceSize[i] = 1;
+            }
+
+            for (var i = 0; i < count; i++)
+            {
+                int fi = clusterFaceIndices[i];
+                int[] idx = _faceIdx[fi];
+                int n = idx.Length;
+
+                for (var e = 0; e < n; e++)
+                {
+                    long key = NGonMath.EdgeKey(idx[e], idx[(e + 1) % n]);
+
+                    if (!_edgeMap.TryGetValue(key, out List<int>? facesOnEdge))
+                        continue;
+
+                    foreach (int fj in facesOnEdge)
+                    {
+                        if (fj == fi) continue;
+                        if (!clusterSet.Contains(fj)) continue;
+                        if (!faceToLocal.TryGetValue(fj, out int j)) continue;
+
+                        Vector3 between = centroids[j] - centroids[i];
+                        float eps = ConvexSplitTolerance * between.magnitude + 1e-6f;
+
+                        // Concave junction: the other face's centroid is in front
+                        // of this face's plane (assumes outward normals).
+                        bool concave = Vector3.Dot(normals[i], between) > eps ||
+                            Vector3.Dot(normals[j], -between) > eps;
+
+                        if (!concave)
+                            NGonMath.Union(pieceParent, pieceSize, i, j);
+                    }
+                }
+            }
+
+            var components = new Dictionary<int, List<int>>();
+
+            for (var i = 0; i < count; i++)
+            {
+                int root = NGonMath.Find(pieceParent, i);
+
+                if (!components.TryGetValue(root, out List<int>? list))
+                {
+                    list = new List<int>();
+                    components[root] = list;
+                }
+
+                list.Add(clusterFaceIndices[i]);
+            }
+
+            var result = new List<List<int>>(components.Count);
+
+            foreach (KeyValuePair<int, List<int>> kv in components)
+                result.Add(kv.Value);
+
+            return result;
+        }
+
         public void TryDetectExact(List<int> cluster, string? note)
         {
             if (cluster.Any(i => _consumed[i])) return;
@@ -259,10 +437,10 @@ public static class PrimitiveShapeDetector
                 $"({cluster.Count} faces -> 1 primitive, approx)");
         }
 
-        public void TryDetectPartialBox(List<int> cluster)
+        public void TryDetectPartialBox(List<int> cluster, string? note)
         {
             if (_solid == null) return;
-            if (cluster.Count is < 3 or > 20) return;
+            if (cluster.Count is < 2 or > 48) return;
             if (cluster.Any(i => _consumed[i])) return;
 
             (List<NGonRaw> clusterFaces, List<Vector3> uniqueVerts) = Gather(cluster);
@@ -271,8 +449,13 @@ public static class PrimitiveShapeDetector
                 out ModelPrimitive boxResult))
                 return;
 
+            if (HasForeignVerticesInsidePrimitive(boxResult, cluster, _faces, _consumed, _faces.Count, _config.SurfaceDepthThreshold))
+                return;
+
+            string suffix = note == null ? "" : $" {note}";
+
             Consume(cluster, boxResult,
-                $"PrimitiveShapeDetector: Detected partial {boxResult.Type} " +
+                $"PrimitiveShapeDetector: Detected partial {boxResult.Type}{suffix} " +
                 $"({cluster.Count} faces -> 1 primitive)");
         }
 
@@ -565,12 +748,76 @@ public static class PrimitiveShapeDetector
     ///     "Near surface" means the normalized depth (0 = surface, 1 = center) is
     ///     below the given threshold.
     ///     Points outside or deep inside return false.
-    ///     For cylinders, only the lateral (radial) surface is checked — the primitive
-    ///     adds solid caps that the original mesh didn't have, so vertices near caps
-    ///     were already inside before approximation.
     /// </summary>
     static bool IsPointNearSurfaceInside(Vector3 point, ModelPrimitive prim, Quaternion invRot, float threshold)
+        => TryGetInsideDepth(point, prim, invRot, cylinderLateralOnly: true, out float depth) && depth < threshold;
+
+    /// <summary>
+    ///     Removes remaining faces that lie entirely inside one of the detected
+    ///     primitives. The primitives are opaque convex solids, so a face whose
+    ///     vertices are all inside the same primitive is fully contained (convexity)
+    ///     and can never be seen — rendering it would only waste primitives.
+    ///     The depth threshold keeps faces lying exactly ON a primitive's surface
+    ///     (decals, touching geometry) alive.
+    /// </summary>
+    static int CullFacesHiddenInsidePrimitives
+    (
+        List<NGonRaw> remaining,
+        List<ModelPrimitive> detected,
+        float surfaceDepthThreshold)
     {
+        if (detected.Count == 0 || remaining.Count == 0)
+            return 0;
+
+        // Never cull at depth 0 even when foreign-vertex rejection is disabled —
+        // surface decals must survive.
+        float threshold = Mathf.Max(surfaceDepthThreshold, 0.02f);
+
+        var invRots = new Quaternion[detected.Count];
+
+        for (var p = 0; p < detected.Count; p++)
+            invRots[p] = Quaternion.Inverse(detected[p].Rotation);
+
+        return remaining.RemoveAll(face =>
+        {
+            List<Vector3> verts = face.Vertices;
+            if (verts.Count < 3) return false;
+
+            for (var p = 0; p < detected.Count; p++)
+            {
+                var allInside = true;
+
+                foreach (Vector3 v in verts)
+                {
+                    // Cap depth included so decals on cylinder caps survive too.
+                    if (!TryGetInsideDepth(v, detected[p], invRots[p], cylinderLateralOnly: false, out float depth) ||
+                        depth < threshold)
+                    {
+                        allInside = false;
+                        break;
+                    }
+                }
+
+                if (allInside)
+                    return true;
+            }
+
+            return false;
+        });
+    }
+
+    /// <summary>
+    ///     Computes the normalized depth (0 = surface, 1 = center/axis) of a point
+    ///     inside the primitive. Returns false when the point is outside.
+    ///     With <paramref name="cylinderLateralOnly" /> the cylinder depth is measured
+    ///     from the lateral (radial) surface only — the primitive adds solid caps that
+    ///     the original mesh didn't have, so vertices near caps were already inside
+    ///     before approximation. Without it, cap distance is included.
+    /// </summary>
+    static bool TryGetInsideDepth(Vector3 point, ModelPrimitive prim, Quaternion invRot, bool cylinderLateralOnly, out float depth)
+    {
+        depth = 0f;
+
         // Transform point into primitive's local space
         Vector3 local = invRot * (point - prim.Center);
 
@@ -593,8 +840,8 @@ public static class PrimitiveShapeDetector
                 if (normDistSq >= 1f) return false;
 
                 // Normalized depth: 0 at surface, 1 at center
-                float depth = 1f - Mathf.Sqrt(normDistSq);
-                return depth < threshold;
+                depth = 1f - Mathf.Sqrt(normDistSq);
+                return true;
             }
 
             case PrimitiveType.Cylinder:
@@ -612,11 +859,12 @@ public static class PrimitiveShapeDetector
                 // Outside radial bounds
                 if (radialDist >= radius) return false;
 
-                // Only check depth from the lateral (radial) surface.
-                // Caps are synthetic (the original mesh typically has open ends),
-                // so vertices near caps were already inside before approximation.
-                float radialDepth = (radius - radialDist) / radius;
-                return radialDepth < threshold;
+                depth = (radius - radialDist) / radius;
+
+                if (!cylinderLateralOnly)
+                    depth = Mathf.Min(depth, (halfHeight - Mathf.Abs(local.y)) / halfHeight);
+
+                return true;
             }
 
             case PrimitiveType.Cube:
@@ -638,9 +886,8 @@ public static class PrimitiveShapeDetector
                 float depthX = dx / hx;
                 float depthY = dy / hy;
                 float depthZ = dz / hz;
-                float minDepth = Mathf.Min(depthX, Mathf.Min(depthY, depthZ));
-
-                return minDepth < threshold;
+                depth = Mathf.Min(depthX, Mathf.Min(depthY, depthZ));
+                return true;
             }
 
             default:

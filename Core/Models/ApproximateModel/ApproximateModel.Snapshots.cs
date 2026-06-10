@@ -260,40 +260,14 @@ public partial class ApproximateModel
         {
             Primitive native = NativePrimitives[i];
             ModelPrimitive model = ModelPrimitives[i];
-            bool hasBase = i < NativePrimitiveBases.Count && NativePrimitiveBases[i] != null;
 
-            if (hasBase)
-            {
-                Primitive basePrim = NativePrimitiveBases[i]!;
-                Transform baseTransform = basePrim.Transform;
-                int baseParent = indexByTransform.TryGetValue(baseTransform.parent, out int foundBase) ? foundBase : modelBaseIndex;
-                int baseIndex = snapshot.Count;
+            Transform nativeTransform = native.Transform;
+            int nativeParent = indexByTransform.TryGetValue(nativeTransform.parent, out int foundNative) ? foundNative : modelBaseIndex;
 
-                snapshot.Add(new PrimitiveSnapshot(
-                    basePrim.Position, basePrim.Rotation, basePrim.Scale,
-                    baseTransform.localPosition, baseTransform.localRotation, baseTransform.localScale,
-                    basePrim.Color, basePrim.Flags, "NativeBase", baseParent));
-
-                indexByTransform[baseTransform] = baseIndex;
-
-                Transform nativeTransform = native.Transform;
-                int nativeParent = indexByTransform.TryGetValue(nativeTransform.parent, out int foundNative) ? foundNative : baseIndex;
-
-                snapshot.Add(new PrimitiveSnapshot(
-                    native.Position, native.Rotation, native.Scale,
-                    nativeTransform.localPosition, nativeTransform.localRotation, nativeTransform.localScale,
-                    native.Color, native.Flags, "Native", nativeParent, model.Type));
-            }
-            else
-            {
-                Transform nativeTransform = native.Transform;
-                int nativeParent = indexByTransform.TryGetValue(nativeTransform.parent, out int foundNative) ? foundNative : modelBaseIndex;
-
-                snapshot.Add(new PrimitiveSnapshot(
-                    native.Position, native.Rotation, native.Scale,
-                    nativeTransform.localPosition, nativeTransform.localRotation, nativeTransform.localScale,
-                    native.Color, native.Flags, "Native", nativeParent, model.Type));
-            }
+            snapshot.Add(new PrimitiveSnapshot(
+                native.Position, native.Rotation, native.Scale,
+                nativeTransform.localPosition, nativeTransform.localRotation, nativeTransform.localScale,
+                native.Color, native.Flags, "Native", nativeParent, model.Type));
         }
     }
 }

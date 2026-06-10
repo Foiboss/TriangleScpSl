@@ -91,7 +91,7 @@ public partial class ExactModel
 
     public override int PrimitiveCount => IsDestroyedValue
         ? 0
-        : _parallelograms.Count * 2 + _rectangles.Count + NativePrimitives.Count + NativePrimitiveBaseCount + 1;
+        : _parallelograms.Count * 2 + _rectangles.Count + NativePrimitives.Count + 1;
 
     public override Color Color
     {

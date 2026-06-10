@@ -28,19 +28,15 @@ public partial class HierarchicalModel
         Vector3 edgeB = vLeft - vUp;
         float width = edgeB.magnitude;
         float height = edgeA.magnitude;
+        Vector3 forward = Vector3.Cross(edgeB, edgeA).normalized;
 
-        // Manual normalization: Vector3.normalized snaps sub-1e-5 vectors to zero,
-        // which would needlessly route small rectangles through the parallelogram path.
-        Vector3 cross = Vector3.Cross(edgeB, edgeA);
-        float crossMag = cross.magnitude;
-
-        if (crossMag < 1e-12f || width < 1e-7f || height < 1e-7f)
+        if (forward.sqrMagnitude < 1e-6f || width < 1e-7f || height < 1e-7f)
         {
             CreateParallelogram(vLeft, vUp, center, flags, color);
             return;
         }
 
-        Quaternion rotation = Quaternion.LookRotation(cross / crossMag, edgeA / height);
+        Quaternion rotation = Quaternion.LookRotation(forward, edgeA.normalized);
 
         var quad = Primitive.Create(PrimitiveType.Quad, flags, center, rotation.eulerAngles,
             new Vector3(width, height, 1f), true, color);
@@ -98,13 +94,6 @@ public partial class HierarchicalModel
 
         Vector3 v1 = ApproximateModelUtils.ForwardTransform(vLeft, sT, sP);
         Vector3 v2 = ApproximateModelUtils.ForwardTransform(vUp, sT, sP);
-
-        if (!ApproximateModelUtils.CanRenderInStretchSpace(v1, v2) ||
-            !ApproximateModelUtils.IsStretchSafe(v1, v2, sP))
-        {
-            CreateFallbackParallelogram(vLeft, vUp, center, flags, color);
-            return;
-        }
 
         Primitive stretch;
 

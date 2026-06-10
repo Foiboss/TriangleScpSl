@@ -27,7 +27,8 @@ public static partial class CubeDetector
             normals.Add(n / area);
         }
 
-        if (normals.Count < 3) return false;
+        // 2 orthogonal faces are enough — the third axis comes from the cross product.
+        if (normals.Count < 2) return false;
 
         var directions = new List<Vector3>();
         var directionCounts = new List<int>();
@@ -266,8 +267,10 @@ public static partial class CubeDetector
             if (hasFace[i]) presentFaces++;
         }
 
-        if (presentFaces < 3) return false;
-        if (presentFaces >= 6) return false;
+        // 2 visible directions suffice — every hidden direction is verified to be
+        // embedded in solid below. 6 visible directions are allowed too: this is
+        // the relaxed-tolerance rescue for boxes the exact detector rejected.
+        if (presentFaces < 2) return false;
 
         for (var i = 0; i < 6; i++)
         {

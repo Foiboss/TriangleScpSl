@@ -12,10 +12,6 @@ public abstract class ModelBase
     protected readonly Primitive BaseQuad;
     protected readonly List<ModelPrimitive> ModelPrimitives = [];
     protected readonly List<Primitive> NativePrimitives = [];
-
-    // One entry per native primitive: the invisible deformation base, or null
-    // when the primitive has uniform scale and needs no base.
-    protected readonly List<Primitive?> NativePrimitiveBases = [];
     protected readonly bool InvertWinding;
     protected PrimitiveFlags FlagsValue;
     protected Vector3 PositionValue;
@@ -44,23 +40,6 @@ public abstract class ModelBase
     public abstract int ParallelogramCount { get; }
     public abstract int PrimitiveCount { get; }
     public int NativePrimitiveCount => ModelPrimitives.Count;
-
-    /// <summary>Number of spawned native primitive bases (null placeholders excluded).</summary>
-    protected int NativePrimitiveBaseCount
-    {
-        get
-        {
-            var count = 0;
-
-            foreach (Primitive? b in NativePrimitiveBases)
-            {
-                if (b != null)
-                    count++;
-            }
-
-            return count;
-        }
-    }
 
     public Vector3 Position
     {
@@ -136,31 +115,16 @@ public abstract class ModelBase
             Vector3 worldCenter = TransformPoint(mp.Center);
             Quaternion worldRot = RotationValue * mp.Rotation;
 
-            if (IsUniformScale(mp.Scale))
-            {
-                var shapePrim = Primitive.Create(
-                    mp.Type, flags, worldCenter, worldRot.eulerAngles,
-                    mp.Scale, true, mp.Color);
+            // A single primitive with rotation + scale yields the matrix T·R·S —
+            // identical to the old invisible-base-quad + identity-child pattern,
+            // but one primitive cheaper. Non-uniform scale on a rotated primitive
+            // applies along its own (rotated) local axes, which is exactly what
+            // the detectors output (extents along the primitive's axes).
+            var shapePrim = Primitive.Create(
+                mp.Type, flags, worldCenter, worldRot.eulerAngles,
+                mp.Scale, true, mp.Color);
 
-                NativePrimitives.Add(shapePrim);
-                NativePrimitiveBases.Add(null);
-            }
-            else
-            {
-                var basePrim = Primitive.Create(
-                    PrimitiveType.Quad, PrimitiveFlags.None,
-                    worldCenter, worldRot.eulerAngles,
-                    mp.Scale, true, Color.clear);
-
-                var shapePrim = Primitive.Create(
-                    mp.Type, flags, Vector3.zero, null,
-                    Vector3.one, true, mp.Color);
-
-                shapePrim.Transform.SetParent(basePrim.Transform, false);
-
-                NativePrimitives.Add(shapePrim);
-                NativePrimitiveBases.Add(basePrim);
-            }
+            NativePrimitives.Add(shapePrim);
         }
     }
 
@@ -169,17 +133,6 @@ public abstract class ModelBase
         foreach (Primitive p in NativePrimitives)
             p.Destroy();
 
-        foreach (Primitive? b in NativePrimitiveBases)
-            b?.Destroy();
         NativePrimitives.Clear();
-        NativePrimitiveBases.Clear();
-    }
-
-    protected static bool IsUniformScale(Vector3 s)
-    {
-        const float eps = 1e-3f;
-
-        return Mathf.Abs(s.x - s.y) < eps * Mathf.Max(1f, s.x)
-            && Mathf.Abs(s.y - s.z) < eps * Mathf.Max(1f, s.y);
     }
 }

@@ -153,33 +153,12 @@ public partial class HierarchicalModel
         {
             Primitive nat = NativePrimitives[i];
             ModelPrimitive mod = ModelPrimitives[i];
-            bool hasBase = i < NativePrimitiveBases.Count && NativePrimitiveBases[i] != null;
 
-            if (hasBase)
-            {
-                Primitive bp = NativePrimitiveBases[i]!;
-                Transform bt = bp.Transform;
-                int bpi = idx.TryGetValue(bt.parent, out int fb) ? fb : baseIdx;
-                int bi = snapshot.Count;
+            Transform nt = nat.Transform;
+            int npi = idx.TryGetValue(nt.parent, out int fn) ? fn : baseIdx;
 
-                snapshot.Add(new PrimitiveSnapshot(bp.Position, bp.Rotation, bp.Scale,
-                    bt.localPosition, bt.localRotation, bt.localScale, bp.Color, bp.Flags, "NativeBase", bpi));
-                idx[bt] = bi;
-
-                Transform nt = nat.Transform;
-                int npi = idx.TryGetValue(nt.parent, out int fn) ? fn : bi;
-
-                snapshot.Add(new PrimitiveSnapshot(nat.Position, nat.Rotation, nat.Scale,
-                    nt.localPosition, nt.localRotation, nt.localScale, nat.Color, nat.Flags, "Native", npi, mod.Type));
-            }
-            else
-            {
-                Transform nt = nat.Transform;
-                int npi = idx.TryGetValue(nt.parent, out int fn) ? fn : baseIdx;
-
-                snapshot.Add(new PrimitiveSnapshot(nat.Position, nat.Rotation, nat.Scale,
-                    nt.localPosition, nt.localRotation, nt.localScale, nat.Color, nat.Flags, "Native", npi, mod.Type));
-            }
+            snapshot.Add(new PrimitiveSnapshot(nat.Position, nat.Rotation, nat.Scale,
+                nt.localPosition, nt.localRotation, nt.localScale, nat.Color, nat.Flags, "Native", npi, mod.Type));
         }
     }
 }

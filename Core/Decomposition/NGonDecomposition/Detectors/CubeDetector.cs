@@ -248,7 +248,9 @@ public static partial class CubeDetector
     {
         result = null!;
 
-        if (faces.Count < 3 || faces.Count > 20 || uniqueVertices.Count < 4)
+        // 2-face corners are enough: the third axis is inferred from the cross
+        // product and the four hidden sides are verified against the solid volume.
+        if (faces.Count < 2 || faces.Count > 48 || uniqueVertices.Count < 4)
             return false;
 
         if (TryDetectPartialFromNormals(faces, uniqueVertices, solid, config, out result))

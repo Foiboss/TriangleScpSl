@@ -4,9 +4,23 @@ Detects when a cluster of mesh faces forms a recognizable Unity primitive shape 
 
 ## Detection Flow
 
-`PrimitiveShapeDetector` groups faces into connected components by color and edge adjacency, then runs detectors in priority order. The first match wins.
+`PrimitiveShapeDetector` groups faces into connected components by color and edge adjacency, then runs detection passes in priority order. The first match wins.
+
+**Passes (per iteration):**
+
+1. **Exact detection** on whole clusters (sphere → cylinder → cube).
+2. **Smooth sub-cluster splitting** — clusters are split on normal similarity so e.g. a sphere welded to a same-color wall is separated and detected.
+3. **Convex-piece splitting** — clusters are split at *concave* edges into convex pieces (e.g. two stacked boxes meet at a concave seam). Each piece is retried with exact and partial-box detection.
+4. **Approximate sphere/cylinder fit** with relaxed tolerance (requires solid volume).
+5. **Partial box detection** — 2+ visible box faces with the hidden sides verified embedded in solid material.
+
+**Iteration:** after a round of consumption the remaining faces are re-clustered and the passes run again (up to 3 rounds). This resolves composite clusters incrementally — extracting one shape often leaves a clean remainder.
+
+**Embedded-face culling:** after detection, any remaining face that lies entirely inside a detected primitive (which is an opaque convex solid) is dropped — it can never be seen, so rendering it would only waste primitives. Faces lying exactly on a primitive's surface (decals) are kept via a depth threshold.
 
 **Smoothness gate:** Before trying sphere or cylinder detection, `SmoothnessCheck` verifies that the surface is smooth (not faceted). This prevents replacing intentionally low-poly geometry (like an icosahedron) with a smooth sphere.
+
+**Foreign-vertex guard:** a candidate primitive is rejected when an unrelated face has a vertex just below the candidate's surface — such vertices were visible before the replacement and the primitive would cover them, changing the model's look.
 
 ## Detectors
 
@@ -53,12 +67,12 @@ Detects axis-aligned or arbitrarily rotated boxes.
 3. Project vertices onto each axis for extents
 4. Verify all vertices lie on box surface
 
-**Partial mode** (`TryDetectPartial`): For 3-5 visible faces forming a box protrusion. Two approaches:
+**Partial mode** (`TryDetectPartial`): For 2-48 visible faces forming a box protrusion (2 orthogonal faces are enough — the third axis comes from the cross product). Two approaches:
 
 1. **Normal-based:** cluster visible face normals into orthogonal groups, infer missing axes from cross products
 2. **OBB fallback:** covariance eigendecomposition of vertex positions, fit oriented bounding box (**OBB**), verify vertices on surface
 
-Both partial methods verify hidden faces are inside solid material.
+Both partial methods verify hidden faces are inside solid material, that ≥75% of face normals point outward (rejects concave room corners), and that at least one visible face has empty space outside it.
 
 ### SmoothnessCheck
 

@@ -78,60 +78,23 @@ public partial class ApproximateModel
             Vector3 worldCenter = TransformPoint(mp.Center);
             Quaternion worldRot = Rotation * mp.Rotation;
 
-            if (IsUniformScale(mp.Scale))
+            // A single primitive block with rotation + scale yields T·R·S —
+            // identical to the old base+child pair, but one block cheaper.
+            blocks.Add(new ProjectMerBlock
             {
-                int shapeId = objectId++;
-
-                blocks.Add(new ProjectMerBlock
-                {
-                    Name = $"(Native.{i + 1})",
-                    ObjectId = shapeId,
-                    ParentId = modelObjectId,
-                    Position = inverseTransformPoint(worldCenter),
-                    Rotation = (inverseRotation * worldRot).eulerAngles,
-                    Scale = mp.Scale,
-                    BlockType = 1,
-                    IsPrimitive = true,
-                    PrimitiveType = (int)mp.Type,
-                    PrimitiveColor = mp.Color,
-                    PrimitiveFlags = currentFlags,
-                    Static = false,
-                });
-            }
-            else
-            {
-                int baseId = objectId++;
-                int shapeId = objectId++;
-
-                blocks.Add(new ProjectMerBlock
-                {
-                    Name = $"(Native.{i + 1}).Base",
-                    ObjectId = baseId,
-                    ParentId = modelObjectId,
-                    Position = inverseTransformPoint(worldCenter),
-                    Rotation = (inverseRotation * worldRot).eulerAngles,
-                    Scale = mp.Scale,
-                    BlockType = 0,
-                    IsPrimitive = false,
-                    Static = false,
-                });
-
-                blocks.Add(new ProjectMerBlock
-                {
-                    Name = $"(Native.{i + 1})",
-                    ObjectId = shapeId,
-                    ParentId = baseId,
-                    Position = Vector3.zero,
-                    Rotation = Vector3.zero,
-                    Scale = Vector3.one,
-                    BlockType = 1,
-                    IsPrimitive = true,
-                    PrimitiveType = (int)mp.Type,
-                    PrimitiveColor = mp.Color,
-                    PrimitiveFlags = currentFlags,
-                    Static = false,
-                });
-            }
+                Name = $"(Native.{i + 1})",
+                ObjectId = objectId++,
+                ParentId = modelObjectId,
+                Position = inverseTransformPoint(worldCenter),
+                Rotation = (inverseRotation * worldRot).eulerAngles,
+                Scale = mp.Scale,
+                BlockType = 1,
+                IsPrimitive = true,
+                PrimitiveType = (int)mp.Type,
+                PrimitiveColor = mp.Color,
+                PrimitiveFlags = currentFlags,
+                Static = false,
+            });
         }
 
         return blocks;
