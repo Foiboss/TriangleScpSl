@@ -1,7 +1,8 @@
+using TriangleScpSl.Core.Decomposition.NGonDecomposition.Geometry;
 using TriangleScpSl.Core.Primitives.Parallelogram;
 using UnityEngine;
 
-namespace TriangleScpSl.Core.Decomposition.NGonDecomposition;
+namespace TriangleScpSl.Core.Decomposition.NGonDecomposition.Parallelogram;
 
 /// <summary>
 ///     Bounding-rectangle covering: find the minimum-area oriented bounding rectangle

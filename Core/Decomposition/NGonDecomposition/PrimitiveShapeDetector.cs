@@ -2,6 +2,8 @@ using System.Collections;
 using System.Diagnostics;
 using Exiled.API.Features;
 using TriangleScpSl.Core.Decomposition.NGonDecomposition.Detectors;
+using TriangleScpSl.Core.Decomposition.NGonDecomposition.Geometry;
+using TriangleScpSl.Core.Decomposition.NGonDecomposition.Parsing;
 using UnityEngine;
 
 namespace TriangleScpSl.Core.Decomposition.NGonDecomposition;

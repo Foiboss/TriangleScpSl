@@ -136,13 +136,7 @@ public partial class ApproximateModel
     {
         if (!VectorPhiSolver.TrySolve(vLeft, vUp, out float theta, out float phi))
         {
-            var parallelogram = ParallelogramPrimitive.Create(vUp, vLeft, center, color, flags);
-            _fallbackParallelograms.Add(parallelogram);
-
-            if (parallelogram.Transform.parent != BaseQuad.Transform)
-                parallelogram.Transform.SetParent(BaseQuad.Transform);
-
-            _parallelogramSnapshots.Add(new ParallelogramSnapshot(vUp, vLeft, center, color, flags, true));
+            CreateFallbackParallelogram(vLeft, vUp, center, flags, color);
             return;
         }
 
@@ -164,23 +158,15 @@ public partial class ApproximateModel
             }
         }
 
-        Primitive stretch;
         float stretchTheta, stretchPhi;
 
         if (bestStretch != null)
         {
-            stretch = bestStretch;
             stretchTheta = bestTheta;
             stretchPhi = bestPhi;
         }
         else
         {
-            stretch = ApproximateModelUtils.CreateStretch(theta, phi);
-            _stretches.Add(theta, phi, stretch);
-
-            if (stretch.Transform.parent != BaseQuad.Transform)
-                stretch.Transform.SetParent(BaseQuad.Transform);
-
             stretchTheta = theta;
             stretchPhi = phi;
         }
@@ -188,9 +174,41 @@ public partial class ApproximateModel
         Vector3 v1ForStretch = ApproximateModelUtils.ForwardTransform(vLeft, stretchTheta, stretchPhi);
         Vector3 v2ForStretch = ApproximateModelUtils.ForwardTransform(vUp, stretchTheta, stretchPhi);
 
+        if (!ApproximateModelUtils.IsStretchSafe(v1ForStretch, v2ForStretch, stretchPhi))
+        {
+            CreateFallbackParallelogram(vLeft, vUp, center, flags, color);
+            return;
+        }
+
+        Primitive stretch;
+
+        if (bestStretch != null)
+        {
+            stretch = bestStretch;
+        }
+        else
+        {
+            stretch = ApproximateModelUtils.CreateStretch(stretchTheta, stretchPhi);
+            _stretches.Add(stretchTheta, stretchPhi, stretch);
+
+            if (stretch.Transform.parent != BaseQuad.Transform)
+                stretch.Transform.SetParent(BaseQuad.Transform);
+        }
+
         _parallelograms.Add(
             ApproximateModelUtils.CreateParallelogram(center, v1ForStretch, v2ForStretch, stretch, flags, color));
         _parallelogramSnapshots.Add(new ParallelogramSnapshot(vUp, vLeft, center, color, flags, false));
+    }
+
+    void CreateFallbackParallelogram(Vector3 vLeft, Vector3 vUp, Vector3 center, PrimitiveFlags flags, Color color)
+    {
+        var parallelogram = ParallelogramPrimitive.Create(vUp, vLeft, center, color, flags);
+        _fallbackParallelograms.Add(parallelogram);
+
+        if (parallelogram.Transform.parent != BaseQuad.Transform)
+            parallelogram.Transform.SetParent(BaseQuad.Transform);
+
+        _parallelogramSnapshots.Add(new ParallelogramSnapshot(vUp, vLeft, center, color, flags, true));
     }
 
     /// <summary>

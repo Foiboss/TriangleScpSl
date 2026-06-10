@@ -1,7 +1,7 @@
 using TriangleScpSl.Core.Primitives.Parallelogram;
 using UnityEngine;
 
-namespace TriangleScpSl.Core.Decomposition.NGonDecomposition;
+namespace TriangleScpSl.Core.Decomposition.NGonDecomposition.Parallelogram;
 
 /// <summary>
 ///     Parallel-sides peel: scan for 4 consecutive vertices forming a parallelogram,

@@ -85,7 +85,7 @@ public class TriangulateV2Command : ICommand
             return false;
         }
 
-        var createdModel = ApproximateModel.CreateDeferred(
+        var createdModel = new ApproximateModel(
             triangles,
             spawnPosition,
             PrimitiveFlags.Visible,

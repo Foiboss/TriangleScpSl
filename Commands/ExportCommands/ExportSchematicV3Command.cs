@@ -88,7 +88,7 @@ public sealed class ExportSchematicV3Command : ICommand
                 yield break;
             }
 
-            _activeModel = HierarchicalModel.CreateDeferred(
+            _activeModel = new HierarchicalModel(
                 triangles,
                 Vector3.zero,
                 PrimitiveFlags.Visible,

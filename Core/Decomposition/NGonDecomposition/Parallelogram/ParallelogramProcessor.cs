@@ -1,9 +1,11 @@
 using Exiled.API.Features;
+using TriangleScpSl.Core.Decomposition.NGonDecomposition.Geometry;
+using TriangleScpSl.Core.Decomposition.NGonDecomposition.Merging;
 using TriangleScpSl.Core.Primitives.Parallelogram;
 using TriangleScpSl.Core.Primitives.Triangle;
 using UnityEngine;
 
-namespace TriangleScpSl.Core.Decomposition.NGonDecomposition;
+namespace TriangleScpSl.Core.Decomposition.NGonDecomposition.Parallelogram;
 
 /// <summary>Decomposes convex n-gons into parallelograms and triangles.</summary>
 public static class ParallelogramProcessor

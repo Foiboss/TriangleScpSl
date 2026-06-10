@@ -28,7 +28,7 @@ public partial class ExactModel
         AdminToys.PrimitiveFlags flags = AdminToys.PrimitiveFlags.Visible,
         float scale = 1f,
         bool invertWinding = false,
-        bool buildImmediately = true)
+        bool buildImmediately = false)
         : this(worldPosition, flags, scale, invertWinding)
     {
         if (triangles.Count == 0)
@@ -53,7 +53,7 @@ public partial class ExactModel
         AdminToys.PrimitiveFlags flags = AdminToys.PrimitiveFlags.Visible,
         float scale = 1f,
         bool invertWinding = false,
-        bool buildImmediately = true)
+        bool buildImmediately = false)
         : this(worldPosition, flags, scale, invertWinding)
     {
         if (parallelograms.Count == 0)
@@ -74,7 +74,7 @@ public partial class ExactModel
         AdminToys.PrimitiveFlags flags = AdminToys.PrimitiveFlags.Visible,
         float scale = 1f,
         bool invertWinding = false,
-        bool buildImmediately = true)
+        bool buildImmediately = false)
         : this(worldPosition, flags, scale, invertWinding)
     {
         foreach (ModelParallelogram parallelogram in parallelograms)
@@ -136,62 +136,6 @@ public partial class ExactModel
     }
 
     public override string ProjectMerDefaultName => "TriangulatedModel";
-
-    public static ExactModel Create
-    (
-        IReadOnlyList<ModelTriangle> triangles,
-        Vector3 worldPosition,
-        AdminToys.PrimitiveFlags flags = AdminToys.PrimitiveFlags.Visible,
-        float scale = 1f,
-        bool invertWinding = false)
-        => new(triangles, worldPosition, flags, scale, invertWinding);
-
-    public static ExactModel CreateDeferred
-    (
-        IReadOnlyList<ModelTriangle> triangles,
-        Vector3 worldPosition,
-        AdminToys.PrimitiveFlags flags = AdminToys.PrimitiveFlags.Visible,
-        float scale = 1f,
-        bool invertWinding = false)
-        => new(triangles, worldPosition, flags, scale, invertWinding, false);
-
-    public static ExactModel Create
-    (
-        IReadOnlyList<ModelParallelogram> parallelograms,
-        Vector3 worldPosition,
-        AdminToys.PrimitiveFlags flags = AdminToys.PrimitiveFlags.Visible,
-        float scale = 1f,
-        bool invertWinding = false)
-        => new(parallelograms, worldPosition, flags, scale, invertWinding);
-
-    public static ExactModel CreateDeferred
-    (
-        IReadOnlyList<ModelParallelogram> parallelograms,
-        Vector3 worldPosition,
-        AdminToys.PrimitiveFlags flags = AdminToys.PrimitiveFlags.Visible,
-        float scale = 1f,
-        bool invertWinding = false)
-        => new(parallelograms, worldPosition, flags, scale, invertWinding, false);
-
-    public static ExactModel Create
-    (
-        IReadOnlyList<ModelParallelogram> parallelograms,
-        IReadOnlyList<ModelPrimitive> primitives,
-        Vector3 worldPosition,
-        AdminToys.PrimitiveFlags flags = AdminToys.PrimitiveFlags.Visible,
-        float scale = 1f,
-        bool invertWinding = false)
-        => new(parallelograms, primitives, worldPosition, flags, scale, invertWinding);
-
-    public static ExactModel CreateDeferred
-    (
-        IReadOnlyList<ModelParallelogram> parallelograms,
-        IReadOnlyList<ModelPrimitive> primitives,
-        Vector3 worldPosition,
-        AdminToys.PrimitiveFlags flags = AdminToys.PrimitiveFlags.Visible,
-        float scale = 1f,
-        bool invertWinding = false)
-        => new(parallelograms, primitives, worldPosition, flags, scale, invertWinding, false);
 
     public override void Destroy()
     {

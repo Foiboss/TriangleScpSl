@@ -85,7 +85,7 @@ public class TriangulateV3Command : ICommand
             return false;
         }
 
-        var createdModel = HierarchicalModel.CreateDeferred(
+        var createdModel = new HierarchicalModel(
             triangles,
             spawnPosition,
             PrimitiveFlags.Visible,

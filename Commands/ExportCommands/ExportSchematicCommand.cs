@@ -78,7 +78,7 @@ public sealed class ExportSchematicCommand : ICommand
                 yield break;
             }
 
-            _activeModel = ExactModel.CreateDeferred(triangles, spawnPosition, PrimitiveFlags.Visible);
+            _activeModel = new ExactModel(triangles, spawnPosition, PrimitiveFlags.Visible);
             yield return _activeModel.BuildTrianglesCoroutine(PrimitiveFlags.Visible, buildBatch);
 
             if (_activeModel.ParallelogramCount == 0)

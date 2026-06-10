@@ -91,7 +91,7 @@ public class TriangulateNGonCommand : ICommand
             yield break;
         }
 
-        var createdModel = ExactModel.CreateDeferred(loadResult.Parallelograms, loadResult.DetectedPrimitives, spawnPosition, PrimitiveFlags.Visible, 1f);
+        var createdModel = new ExactModel(loadResult.Parallelograms, loadResult.DetectedPrimitives, spawnPosition, PrimitiveFlags.Visible, 1f);
         _model = createdModel;
 
         yield return createdModel.BuildTrianglesCoroutine(PrimitiveFlags.Visible, batchSize);

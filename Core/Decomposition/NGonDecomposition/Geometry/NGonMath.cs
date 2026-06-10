@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace TriangleScpSl.Core.Decomposition.NGonDecomposition;
+namespace TriangleScpSl.Core.Decomposition.NGonDecomposition.Geometry;
 
 /// <summary>
 ///     Shared geometric utilities for NGon processing.

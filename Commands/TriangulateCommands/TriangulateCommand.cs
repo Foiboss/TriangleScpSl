@@ -73,7 +73,7 @@ public class TriangulateCommand : ICommand
             return false;
         }
 
-        var createdModel = ExactModel.CreateDeferred(triangles, spawnPosition, PrimitiveFlags.Visible);
+        var createdModel = new ExactModel(triangles, spawnPosition, PrimitiveFlags.Visible);
         _model = createdModel;
         _isBuilding = true;
 

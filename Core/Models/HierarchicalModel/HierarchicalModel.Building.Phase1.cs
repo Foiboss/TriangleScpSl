@@ -53,12 +53,7 @@ public partial class HierarchicalModel
     {
         if (!VectorPhiSolver.TrySolve(vLeft, vUp, out float theta, out float phi))
         {
-            var parallelogram = ParallelogramPrimitive.Create(vUp, vLeft, center, color, flags);
-            _fallbackParallelograms.Add(parallelogram);
-
-            if (parallelogram.Transform.parent != BaseQuad.Transform)
-                parallelogram.Transform.SetParent(BaseQuad.Transform);
-            _parallelogramSnapshots.Add(new ParallelogramSnapshot(vUp, vLeft, center, color, flags, true));
+            CreateFallbackParallelogram(vLeft, vUp, center, flags, color);
             return;
         }
 
@@ -84,22 +79,15 @@ public partial class HierarchicalModel
             }
         }
 
-        Primitive stretch;
         float sT, sP;
 
         if (bestStretch != null)
         {
-            stretch = bestStretch;
             sT = bestTheta;
             sP = bestPhi;
         }
         else
         {
-            stretch = ApproximateModelUtils.CreateStretch(theta, phi);
-            _stretches.Add(theta, phi, stretch);
-
-            if (stretch.Transform.parent != BaseQuad.Transform)
-                stretch.Transform.SetParent(BaseQuad.Transform);
             sT = theta;
             sP = phi;
         }
@@ -107,11 +95,42 @@ public partial class HierarchicalModel
         Vector3 v1 = ApproximateModelUtils.ForwardTransform(vLeft, sT, sP);
         Vector3 v2 = ApproximateModelUtils.ForwardTransform(vUp, sT, sP);
 
+        if (!ApproximateModelUtils.IsStretchSafe(v1, v2, sP))
+        {
+            CreateFallbackParallelogram(vLeft, vUp, center, flags, color);
+            return;
+        }
+
+        Primitive stretch;
+
+        if (bestStretch != null)
+        {
+            stretch = bestStretch;
+        }
+        else
+        {
+            stretch = ApproximateModelUtils.CreateStretch(sT, sP);
+            _stretches.Add(sT, sP, stretch);
+
+            if (stretch.Transform.parent != BaseQuad.Transform)
+                stretch.Transform.SetParent(BaseQuad.Transform);
+        }
+
         int idx = _parallelograms.Count;
         _parallelograms.Add(ApproximateModelUtils.CreateParallelogram(center, v1, v2, stretch, flags, color));
         _parallelogramSnapshots.Add(new ParallelogramSnapshot(vUp, vLeft, center, color, flags, false));
         _quadBuildInfos.Add(new QuadBuildInfo(vLeft, vUp, center, stretch));
         _hierarchyDepths[idx] = 0;
+    }
+
+    void CreateFallbackParallelogram(Vector3 vLeft, Vector3 vUp, Vector3 center, PrimitiveFlags flags, Color color)
+    {
+        var parallelogram = ParallelogramPrimitive.Create(vUp, vLeft, center, color, flags);
+        _fallbackParallelograms.Add(parallelogram);
+
+        if (parallelogram.Transform.parent != BaseQuad.Transform)
+            parallelogram.Transform.SetParent(BaseQuad.Transform);
+        _parallelogramSnapshots.Add(new ParallelogramSnapshot(vUp, vLeft, center, color, flags, true));
     }
 
     bool TryCreateUnderParent(Vector3 vLeft, Vector3 vUp, Vector3 center, PrimitiveFlags flags, Color color)

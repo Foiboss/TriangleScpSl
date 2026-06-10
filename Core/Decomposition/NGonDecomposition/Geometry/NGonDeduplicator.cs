@@ -1,7 +1,8 @@
 using Exiled.API.Features;
+using TriangleScpSl.Core.Decomposition.NGonDecomposition.Parsing;
 using UnityEngine;
 
-namespace TriangleScpSl.Core.Decomposition.NGonDecomposition;
+namespace TriangleScpSl.Core.Decomposition.NGonDecomposition.Geometry;
 
 /// <summary>Removes near-duplicate n-gons by comparing geometry and vertices.</summary>
 public static class NGonDeduplicator

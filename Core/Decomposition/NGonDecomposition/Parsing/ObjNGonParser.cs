@@ -1,7 +1,7 @@
 using System.Globalization;
 using UnityEngine;
 
-namespace TriangleScpSl.Core.Decomposition.NGonDecomposition;
+namespace TriangleScpSl.Core.Decomposition.NGonDecomposition.Parsing;
 
 public static class ObjNGonParser
 {

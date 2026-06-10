@@ -79,15 +79,13 @@ public sealed class ExportSchematicNGonV3Command : ICommand
                 yield break;
             }
 
-            _activeModel = HierarchicalModel.CreateDeferred(
+            _activeModel = new HierarchicalModel(
                 loadResult.Parallelograms,
                 loadResult.DetectedPrimitives,
                 Vector3.zero,
                 PrimitiveFlags.Visible,
                 config.Accuracy,
-                1f,
-                false,
-                config.HierarchicalOptimizationPasses);
+                optimizationPasses: config.HierarchicalOptimizationPasses);
 
             yield return _activeModel.BuildTrianglesCoroutine(PrimitiveFlags.Visible, buildBatch);
 

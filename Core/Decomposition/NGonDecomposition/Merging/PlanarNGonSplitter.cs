@@ -1,6 +1,7 @@
+using TriangleScpSl.Core.Decomposition.NGonDecomposition.Parsing;
 using UnityEngine;
 
-namespace TriangleScpSl.Core.Decomposition.NGonDecomposition;
+namespace TriangleScpSl.Core.Decomposition.NGonDecomposition.Merging;
 
 public static partial class PlanarNGonSplitter
 {

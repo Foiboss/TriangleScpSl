@@ -1,5 +1,9 @@
 using System.Collections;
 using Exiled.API.Features;
+using TriangleScpSl.Core.Decomposition.NGonDecomposition.Geometry;
+using TriangleScpSl.Core.Decomposition.NGonDecomposition.Merging;
+using TriangleScpSl.Core.Decomposition.NGonDecomposition.Parallelogram;
+using TriangleScpSl.Core.Decomposition.NGonDecomposition.Parsing;
 using TriangleScpSl.Core.Paths;
 using TriangleScpSl.Core.Primitives.Parallelogram;
 using UnityEngine;

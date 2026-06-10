@@ -1,11 +1,13 @@
 using System.Collections;
 using System.Diagnostics;
 using Exiled.API.Features;
+using TriangleScpSl.Core.Decomposition.NGonDecomposition.Geometry;
+using TriangleScpSl.Core.Decomposition.NGonDecomposition.Merging;
 using TriangleScpSl.Core.Primitives.Parallelogram;
 using TriangleScpSl.Core.Primitives.Triangle;
 using UnityEngine;
 
-namespace TriangleScpSl.Core.Decomposition.NGonDecomposition;
+namespace TriangleScpSl.Core.Decomposition.NGonDecomposition.Parallelogram;
 
 /// <summary>
 ///     Converts convex n-gons into ModelParallelogram instances using parallel-sides peeling,

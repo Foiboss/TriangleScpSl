@@ -91,15 +91,13 @@ public class TriangulateNGonV3Command : ICommand
             yield break;
         }
 
-        var createdModel = HierarchicalModel.CreateDeferred(
+        var createdModel = new HierarchicalModel(
             loadResult.Parallelograms,
             loadResult.DetectedPrimitives,
             spawnPosition,
             PrimitiveFlags.Visible,
             config.Accuracy,
-            1f,
-            false,
-            config.HierarchicalOptimizationPasses);
+            optimizationPasses: config.HierarchicalOptimizationPasses);
 
         _model = createdModel;
 

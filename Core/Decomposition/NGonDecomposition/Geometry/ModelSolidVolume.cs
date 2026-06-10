@@ -1,6 +1,7 @@
+using TriangleScpSl.Core.Decomposition.NGonDecomposition.Parsing;
 using UnityEngine;
 
-namespace TriangleScpSl.Core.Decomposition.NGonDecomposition;
+namespace TriangleScpSl.Core.Decomposition.NGonDecomposition.Geometry;
 
 /// <summary>Determines if a point lies inside the solid material of a 3D mesh using generalized winding numbers.</summary>
 public sealed class ModelSolidVolume

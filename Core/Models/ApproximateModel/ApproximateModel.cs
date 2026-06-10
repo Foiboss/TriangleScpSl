@@ -40,7 +40,7 @@ public partial class ApproximateModel
         float absoluteToleranceUnits = 0.001f,
         float scale = 1f,
         bool invertWinding = false,
-        bool buildImmediately = true)
+        bool buildImmediately = false)
         : this(worldPosition, flags, absoluteToleranceUnits, scale, invertWinding)
     {
         if (triangles.Count == 0)
@@ -63,7 +63,7 @@ public partial class ApproximateModel
         float absoluteToleranceUnits = 0.001f,
         float scale = 1f,
         bool invertWinding = false,
-        bool buildImmediately = true)
+        bool buildImmediately = false)
         : this(worldPosition, flags, absoluteToleranceUnits, scale, invertWinding)
     {
         if (parallelograms.Count == 0)
@@ -87,7 +87,7 @@ public partial class ApproximateModel
         float absoluteToleranceUnits = 0.001f,
         float scale = 1f,
         bool invertWinding = false,
-        bool buildImmediately = true)
+        bool buildImmediately = false)
         : this(worldPosition, flags, absoluteToleranceUnits, scale, invertWinding)
     {
         foreach (ModelParallelogram p in parallelograms)
@@ -165,68 +165,6 @@ public partial class ApproximateModel
             0.05f,
             _absoluteToleranceUnits / maxSize * 2f);
     }
-
-    public static ApproximateModel Create
-    (
-        IReadOnlyList<ModelTriangle> triangles,
-        Vector3 worldPosition,
-        PrimitiveFlags flags = PrimitiveFlags.Visible,
-        float absoluteToleranceUnits = 0.001f,
-        float scale = 1f,
-        bool invertWinding = false)
-        => new(triangles, worldPosition, flags, absoluteToleranceUnits, scale, invertWinding);
-
-    public static ApproximateModel CreateDeferred
-    (
-        IReadOnlyList<ModelTriangle> triangles,
-        Vector3 worldPosition,
-        PrimitiveFlags flags = PrimitiveFlags.Visible,
-        float absoluteToleranceUnits = 0.001f,
-        float scale = 1f,
-        bool invertWinding = false)
-        => new(triangles, worldPosition, flags, absoluteToleranceUnits, scale, invertWinding, false);
-
-    public static ApproximateModel Create
-    (
-        IReadOnlyList<ModelParallelogram> parallelograms,
-        Vector3 worldPosition,
-        PrimitiveFlags flags = PrimitiveFlags.Visible,
-        float absoluteToleranceUnits = 0.001f,
-        float scale = 1f,
-        bool invertWinding = false)
-        => new(parallelograms, worldPosition, flags, absoluteToleranceUnits, scale, invertWinding);
-
-    public static ApproximateModel CreateDeferred
-    (
-        IReadOnlyList<ModelParallelogram> parallelograms,
-        Vector3 worldPosition,
-        PrimitiveFlags flags = PrimitiveFlags.Visible,
-        float absoluteToleranceUnits = 0.001f,
-        float scale = 1f,
-        bool invertWinding = false)
-        => new(parallelograms, worldPosition, flags, absoluteToleranceUnits, scale, invertWinding, false);
-
-    public static ApproximateModel Create
-    (
-        IReadOnlyList<ModelParallelogram> parallelograms,
-        IReadOnlyList<ModelPrimitive> primitives,
-        Vector3 worldPosition,
-        PrimitiveFlags flags = PrimitiveFlags.Visible,
-        float absoluteToleranceUnits = 0.001f,
-        float scale = 1f,
-        bool invertWinding = false)
-        => new(parallelograms, primitives, worldPosition, flags, absoluteToleranceUnits, scale, invertWinding);
-
-    public static ApproximateModel CreateDeferred
-    (
-        IReadOnlyList<ModelParallelogram> parallelograms,
-        IReadOnlyList<ModelPrimitive> primitives,
-        Vector3 worldPosition,
-        PrimitiveFlags flags = PrimitiveFlags.Visible,
-        float absoluteToleranceUnits = 0.001f,
-        float scale = 1f,
-        bool invertWinding = false)
-        => new(parallelograms, primitives, worldPosition, flags, absoluteToleranceUnits, scale, invertWinding, false);
 
     public override void Destroy()
     {

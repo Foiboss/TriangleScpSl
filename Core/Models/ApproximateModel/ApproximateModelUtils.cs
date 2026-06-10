@@ -119,6 +119,53 @@ public static class ApproximateModelUtils
         return Mathf.Max(dA, dB);
     }
 
+    /// <summary>
+    ///     Determines whether a parallelogram can safely use the stretch mechanism
+    ///     without significant shear-induced rendering errors after TRS decomposition.
+    ///     Combines the stretch's scale non-uniformity with the face's tilt from XY.
+    ///     When both are large, the combined matrix has shear that lossy TRS decomposition
+    ///     (euler angles + scale) cannot represent, causing wrong face orientation on clients.
+    /// </summary>
+    /// <param name="v1">First half-diagonal in stretch-local space.</param>
+    /// <param name="v2">Second half-diagonal in stretch-local space.</param>
+    /// <param name="phi">The phi angle of the stretch (determines scale non-uniformity).</param>
+    public static bool IsStretchSafe(Vector3 v1, Vector3 v2, float phi)
+    {
+        // Scale non-uniformity: how different sx and sy are.
+        // sx = cos(phi)*F, sy = sin(phi)*F  →  ratio = |cos(phi) - sin(phi)| / max(cos,sin)
+        float cp = Mathf.Abs(Mathf.Cos(phi));
+        float sp = Mathf.Abs(Mathf.Sin(phi));
+        float maxCS = Mathf.Max(cp, sp);
+
+        if (maxCS < 1e-8f)
+            return false;
+
+        float scaleRatio = Mathf.Abs(cp - sp) / maxCS;
+
+        // If the stretch is nearly uniform (cp ≈ sp, i.e. phi ≈ π/4),
+        // any tilt is fine — uniform scale + rotation = no shear.
+        if (scaleRatio < 0.01f)
+            return true;
+
+        // Tilt from XY: how far the face normal deviates from +Z.
+        // normal = cross(v1, v2); tilt = sqrt(nx² + ny²) / |normal|
+        Vector3 normal = Vector3.Cross(v1, v2);
+        float normalMagSq = normal.sqrMagnitude;
+
+        if (normalMagSq < 1e-20f)
+            return false;
+
+        float tiltFromZ = Mathf.Sqrt((normal.x * normal.x + normal.y * normal.y) / normalMagSq);
+
+        // Combined shear estimate: product of non-uniformity and tilt.
+        // 0 when either the stretch is uniform OR the face is in the XY plane.
+        // Large when both contribute.
+        float shearEstimate = scaleRatio * tiltFromZ;
+
+        const float threshold = 0.15f;
+        return shearEstimate < threshold;
+    }
+
     public static Primitive CreateParallelogram
     (
         Vector3 position, Vector3 v1, Vector3 v2,

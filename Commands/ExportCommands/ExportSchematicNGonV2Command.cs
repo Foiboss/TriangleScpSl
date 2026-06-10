@@ -79,7 +79,7 @@ public sealed class ExportSchematicNGonV2Command : ICommand
                 yield break;
             }
 
-            _activeModel = ApproximateModel.CreateDeferred(
+            _activeModel = new ApproximateModel(
                 loadResult.Parallelograms,
                 loadResult.DetectedPrimitives,
                 Vector3.zero,

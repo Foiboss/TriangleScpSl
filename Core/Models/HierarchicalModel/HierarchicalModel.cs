@@ -65,7 +65,7 @@ public partial class HierarchicalModel
         float absoluteToleranceUnits = 0.001f,
         float scale = 1f,
         bool invertWinding = false,
-        bool buildImmediately = true,
+        bool buildImmediately = false,
         int optimizationPasses = 3)
         : this(worldPosition, flags, absoluteToleranceUnits, scale, invertWinding, optimizationPasses)
     {
@@ -88,7 +88,7 @@ public partial class HierarchicalModel
         float absoluteToleranceUnits = 0.001f,
         float scale = 1f,
         bool invertWinding = false,
-        bool buildImmediately = true,
+        bool buildImmediately = false,
         int optimizationPasses = 3)
         : this(worldPosition, flags, absoluteToleranceUnits, scale, invertWinding, optimizationPasses)
     {
@@ -112,7 +112,7 @@ public partial class HierarchicalModel
         float absoluteToleranceUnits = 0.001f,
         float scale = 1f,
         bool invertWinding = false,
-        bool buildImmediately = true,
+        bool buildImmediately = false,
         int optimizationPasses = 3)
         : this(worldPosition, flags, absoluteToleranceUnits, scale, invertWinding, optimizationPasses)
     {
@@ -191,44 +191,6 @@ public partial class HierarchicalModel
         float maxSize = ComputeMaxParallelogramSize();
         _stretches = new StretchSpatialIndex(0.05f, _absoluteToleranceUnits / maxSize * 2f);
     }
-
-    public static HierarchicalModel Create
-    (IReadOnlyList<ModelTriangle> triangles, Vector3 worldPosition,
-        PrimitiveFlags flags = PrimitiveFlags.Visible, float absoluteToleranceUnits = 0.001f,
-        float scale = 1f, bool invertWinding = false, int optimizationPasses = 3)
-        => new(triangles, worldPosition, flags, absoluteToleranceUnits, scale, invertWinding, true, optimizationPasses);
-
-    public static HierarchicalModel CreateDeferred
-    (IReadOnlyList<ModelTriangle> triangles, Vector3 worldPosition,
-        PrimitiveFlags flags = PrimitiveFlags.Visible, float absoluteToleranceUnits = 0.001f,
-        float scale = 1f, bool invertWinding = false, int optimizationPasses = 3)
-        => new(triangles, worldPosition, flags, absoluteToleranceUnits, scale, invertWinding, false, optimizationPasses);
-
-    public static HierarchicalModel Create
-    (IReadOnlyList<ModelParallelogram> parallelograms, Vector3 worldPosition,
-        PrimitiveFlags flags = PrimitiveFlags.Visible, float absoluteToleranceUnits = 0.001f,
-        float scale = 1f, bool invertWinding = false, int optimizationPasses = 3)
-        => new(parallelograms, worldPosition, flags, absoluteToleranceUnits, scale, invertWinding, true, optimizationPasses);
-
-    public static HierarchicalModel CreateDeferred
-    (IReadOnlyList<ModelParallelogram> parallelograms, Vector3 worldPosition,
-        PrimitiveFlags flags = PrimitiveFlags.Visible, float absoluteToleranceUnits = 0.001f,
-        float scale = 1f, bool invertWinding = false, int optimizationPasses = 3)
-        => new(parallelograms, worldPosition, flags, absoluteToleranceUnits, scale, invertWinding, false, optimizationPasses);
-
-    public static HierarchicalModel Create
-    (IReadOnlyList<ModelParallelogram> parallelograms,
-        IReadOnlyList<ModelPrimitive> primitives, Vector3 worldPosition,
-        PrimitiveFlags flags = PrimitiveFlags.Visible, float absoluteToleranceUnits = 0.001f,
-        float scale = 1f, bool invertWinding = false, int optimizationPasses = 3)
-        => new(parallelograms, primitives, worldPosition, flags, absoluteToleranceUnits, scale, invertWinding, true, optimizationPasses);
-
-    public static HierarchicalModel CreateDeferred
-    (IReadOnlyList<ModelParallelogram> parallelograms,
-        IReadOnlyList<ModelPrimitive> primitives, Vector3 worldPosition,
-        PrimitiveFlags flags = PrimitiveFlags.Visible, float absoluteToleranceUnits = 0.001f,
-        float scale = 1f, bool invertWinding = false, int optimizationPasses = 3)
-        => new(parallelograms, primitives, worldPosition, flags, absoluteToleranceUnits, scale, invertWinding, false, optimizationPasses);
 
     public override void Destroy()
     {

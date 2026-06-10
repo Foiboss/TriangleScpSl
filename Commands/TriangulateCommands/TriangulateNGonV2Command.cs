@@ -91,7 +91,7 @@ public class TriangulateNGonV2Command : ICommand
             yield break;
         }
 
-        var createdModel = ApproximateModel.CreateDeferred(
+        var createdModel = new ApproximateModel(
             loadResult.Parallelograms,
             loadResult.DetectedPrimitives,
             spawnPosition,

@@ -92,7 +92,7 @@ public sealed class ExportSchematicV2Command : ICommand
                 yield break;
             }
 
-            _activeModel = ApproximateModel.CreateDeferred(
+            _activeModel = new ApproximateModel(
                 triangles,
                 spawnPosition,
                 PrimitiveFlags.Visible,
