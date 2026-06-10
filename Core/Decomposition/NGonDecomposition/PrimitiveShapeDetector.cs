@@ -18,328 +18,20 @@ public static class PrimitiveShapeDetector
         NGonModelConfig config,
         ModelSolidVolume? solid = null)
     {
-        var detected = new List<ModelPrimitive>();
+        List<ModelPrimitive> detected = [];
+        List<NGonRaw> remaining = faces;
 
-        if (faces.Count < 3)
-            return (detected, faces);
-
-        int faceCount = faces.Count;
-
-        // Deduplicate vertices into a shared table (remove near-duplicates)
-        var intern = new VertexInternTable(VertexMergeEps);
-        var faceIdx = new int[faceCount][];
-
-        for (var f = 0; f < faceCount; f++)
-        {
-            List<Vector3> verts = faces[f].Vertices;
-            faceIdx[f] = new int[verts.Count];
-
-            for (var v = 0; v < verts.Count; v++)
+        // With an infinite frame budget the coroutine never yields, so draining
+        // it runs the whole pipeline synchronously.
+        IEnumerator routine = DetectCoroutine(faces, config, solid, float.PositiveInfinity,
+            (d, r) =>
             {
-                faceIdx[f][v] = intern.Intern(verts[v]);
-            }
-        }
+                detected = d;
+                remaining = r;
+            });
 
-        List<Vector3> table = intern.Table;
-
-        // Build edge-to-faces adjacency map
-        var edgeMap = new Dictionary<long, List<int>>();
-
-        for (var f = 0; f < faceCount; f++)
+        while (routine.MoveNext())
         {
-            int[] idx = faceIdx[f];
-            int n = idx.Length;
-
-            for (var i = 0; i < n; i++)
-            {
-                int a = idx[i];
-                int b = idx[(i + 1) % n];
-                long key = NGonMath.EdgeKey(a, b);
-
-                if (!edgeMap.TryGetValue(key, out List<int>? list))
-                {
-                    list = new List<int>(2);
-                    edgeMap[key] = list;
-                }
-
-                list.Add(f);
-            }
-        }
-
-        // Union-Find: cluster same-color edge-connected faces
-        var parent = new int[faceCount];
-        var clusterSize = new int[faceCount];
-
-        for (var i = 0; i < faceCount; i++)
-        {
-            parent[i] = i;
-            clusterSize[i] = 1;
-        }
-
-        foreach (KeyValuePair<long, List<int>> kv in edgeMap)
-        {
-            List<int> facesOnEdge = kv.Value;
-            if (facesOnEdge.Count < 2) continue;
-
-            for (var i = 0; i < facesOnEdge.Count; i++)
-            {
-                int fa = facesOnEdge[i];
-
-                for (int j = i + 1; j < facesOnEdge.Count; j++)
-                {
-                    int fb = facesOnEdge[j];
-
-                    if (!NGonMath.ColorsClose(faces[fa].Color, faces[fb].Color))
-                        continue;
-
-                    if (faces[fa].ObjectGroup >= 0 && faces[fb].ObjectGroup >= 0 &&
-                        faces[fa].ObjectGroup != faces[fb].ObjectGroup)
-                        continue;
-
-                    NGonMath.Union(parent, clusterSize, fa, fb);
-                }
-            }
-        }
-
-        // Group faces by cluster root
-        var clusters = new Dictionary<int, List<int>>();
-
-        for (var f = 0; f < faceCount; f++)
-        {
-            int root = NGonMath.Find(parent, f);
-
-            if (!clusters.TryGetValue(root, out List<int>? list))
-            {
-                list = new List<int>();
-                clusters[root] = list;
-            }
-
-            list.Add(f);
-        }
-
-        // Try fitting each cluster to a primitive shape
-        var consumed = new bool[faceCount];
-
-        // Sort clusters by size descending (biggest savings first)
-        var sortedClusters = new List<KeyValuePair<int, List<int>>>(clusters);
-        sortedClusters.Sort((a, b) => b.Value.Count.CompareTo(a.Value.Count));
-
-        // Pass 1: Exact primitive detection
-        foreach (KeyValuePair<int, List<int>> kv in sortedClusters)
-        {
-            List<int> clusterFaceIndices = kv.Value;
-
-            // Collect cluster faces and unique vertices
-            var clusterFaces = new List<NGonRaw>(clusterFaceIndices.Count);
-            var vertexSet = new HashSet<int>();
-
-            foreach (int fi in clusterFaceIndices)
-            {
-                clusterFaces.Add(faces[fi]);
-
-                foreach (int vi in faceIdx[fi])
-                    vertexSet.Add(vi);
-            }
-
-            var uniqueVerts = new List<Vector3>(vertexSet.Count);
-
-            foreach (int vi in vertexSet)
-                uniqueVerts.Add(table[vi]);
-
-            // Try detectors in priority order
-            ModelPrimitive? primitive = null;
-
-            if (SphereDetector.TryDetect(clusterFaces, uniqueVerts, out ModelPrimitive sphereResult, config, solid))
-                primitive = sphereResult;
-            else if (CylinderDetector.TryDetect(clusterFaces, uniqueVerts, out ModelPrimitive cylResult, config))
-                primitive = cylResult;
-            else if (CubeDetector.TryDetect(clusterFaces, uniqueVerts, out ModelPrimitive cubeResult, config, solid))
-                primitive = cubeResult;
-
-            if (primitive == null) continue;
-
-            if (HasForeignVerticesInsidePrimitive(primitive, clusterFaceIndices, faces, consumed, faceCount, config.SurfaceDepthThreshold))
-                continue;
-
-            detected.Add(primitive);
-
-            foreach (int fi in clusterFaceIndices)
-                consumed[fi] = true;
-
-            Log.Info($"PrimitiveShapeDetector: Detected {primitive.Type} " +
-                $"({clusterFaceIndices.Count} faces → 1 primitive)");
-        }
-
-        // Pass 1b: Sub-cluster splitting - retry failed clusters by splitting on normal similarity
-        {
-            var subClustersToTry = new List<List<int>>();
-
-            foreach (KeyValuePair<int, List<int>> kv in sortedClusters)
-            {
-                List<int> clusterFaceIndices = kv.Value;
-                if (clusterFaceIndices.Any(i => consumed[i])) continue;
-                if (clusterFaceIndices.Count < 4) continue; // Need enough faces to split meaningfully
-
-                List<List<int>> subs = ExtractSmoothSubClusters(
-                    clusterFaceIndices, faces, faceIdx, edgeMap);
-
-                // Only useful if the split produced multiple sub-clusters
-                if (subs.Count <= 1) continue;
-
-                foreach (List<int> sub in subs)
-                {
-                    if (sub.Count >= 3)
-                        subClustersToTry.Add(sub);
-                }
-            }
-
-            // Sort sub-clusters largest first
-            subClustersToTry.Sort((a, b) => b.Count.CompareTo(a.Count));
-
-            foreach (List<int> subCluster in subClustersToTry)
-            {
-                if (subCluster.Any(i => consumed[i])) continue;
-
-                var clusterFaces = new List<NGonRaw>(subCluster.Count);
-                var vertexSet = new HashSet<int>();
-
-                foreach (int fi in subCluster)
-                {
-                    clusterFaces.Add(faces[fi]);
-
-                    foreach (int vi in faceIdx[fi])
-                        vertexSet.Add(vi);
-                }
-
-                var uniqueVerts = new List<Vector3>(vertexSet.Count);
-
-                foreach (int vi in vertexSet)
-                    uniqueVerts.Add(table[vi]);
-
-                ModelPrimitive? primitive = null;
-
-                if (SphereDetector.TryDetect(clusterFaces, uniqueVerts, out ModelPrimitive sphereResult2, config, solid))
-                    primitive = sphereResult2;
-                else if (CylinderDetector.TryDetect(clusterFaces, uniqueVerts, out ModelPrimitive cylResult2, config))
-                    primitive = cylResult2;
-                else if (CubeDetector.TryDetect(clusterFaces, uniqueVerts, out ModelPrimitive cubeResult2, config, solid))
-                    primitive = cubeResult2;
-
-                if (primitive == null) continue;
-
-                if (HasForeignVerticesInsidePrimitive(primitive, subCluster, faces, consumed, faceCount, config.SurfaceDepthThreshold))
-                    continue;
-
-                detected.Add(primitive);
-
-                foreach (int fi in subCluster)
-                    consumed[fi] = true;
-
-                Log.Info($"PrimitiveShapeDetector: Detected {primitive.Type} via sub-cluster split " +
-                    $"({subCluster.Count} faces → 1 primitive)");
-            }
-        }
-
-        // Pass 2: Approximate sphere/cylinder fit with relaxed tolerance
-        if (solid != null)
-        {
-            foreach (KeyValuePair<int, List<int>> kv in sortedClusters)
-            {
-                List<int> clusterFaceIndices = kv.Value;
-                if (clusterFaceIndices.Any(i => consumed[i])) continue;
-                if (clusterFaceIndices.Count < 6) continue;
-
-                var clusterFaces = new List<NGonRaw>(clusterFaceIndices.Count);
-                var vertexSet = new HashSet<int>();
-
-                foreach (int fi in clusterFaceIndices)
-                {
-                    clusterFaces.Add(faces[fi]);
-
-                    foreach (int vi in faceIdx[fi])
-                        vertexSet.Add(vi);
-                }
-
-                var uniqueVerts = new List<Vector3>(vertexSet.Count);
-
-                foreach (int vi in vertexSet)
-                    uniqueVerts.Add(table[vi]);
-
-                ModelPrimitive? approxPrimitive = null;
-
-                if (SphereDetector.TryDetectApproximate(clusterFaces, uniqueVerts, solid,
-                    out ModelPrimitive approxResult, config))
-                    approxPrimitive = approxResult;
-                else if (CylinderDetector.TryDetectApproximate(clusterFaces, uniqueVerts, solid,
-                    out ModelPrimitive cylApproxResult, config))
-                    approxPrimitive = cylApproxResult;
-
-                if (approxPrimitive != null &&
-                    !HasForeignVerticesInsidePrimitive(approxPrimitive, clusterFaceIndices, faces, consumed, faceCount, config.SurfaceDepthThreshold))
-                {
-                    detected.Add(approxPrimitive);
-
-                    foreach (int fi in clusterFaceIndices)
-                        consumed[fi] = true;
-
-                    Log.Info($"PrimitiveShapeDetector: Approximated {approxPrimitive.Type} " +
-                        $"({clusterFaceIndices.Count} faces → 1 primitive, approx)");
-                }
-            }
-        }
-
-        // Pass 3: Partial box detection (3-5 visible faces with hidden faces inside solid)
-        if (solid != null)
-        {
-            foreach (KeyValuePair<int, List<int>> kv in sortedClusters)
-            {
-                List<int> clusterFaceIndices = kv.Value;
-                if (clusterFaceIndices.Any(i => consumed[i])) continue;
-                if (clusterFaceIndices.Count is < 3 or > 20) continue;
-
-                var clusterFaces = new List<NGonRaw>(clusterFaceIndices.Count);
-                var vertexSet = new HashSet<int>();
-
-                foreach (int fi in clusterFaceIndices)
-                {
-                    clusterFaces.Add(faces[fi]);
-
-                    foreach (int vi in faceIdx[fi])
-                        vertexSet.Add(vi);
-                }
-
-                var uniqueVerts = new List<Vector3>(vertexSet.Count);
-
-                foreach (int vi in vertexSet)
-                    uniqueVerts.Add(table[vi]);
-
-                if (CubeDetector.TryDetectPartial(clusterFaces, uniqueVerts, solid, config,
-                    out ModelPrimitive boxResult))
-                {
-                    detected.Add(boxResult);
-
-                    foreach (int fi in clusterFaceIndices)
-                        consumed[fi] = true;
-
-                    Log.Info($"PrimitiveShapeDetector: Detected partial {boxResult.Type} " +
-                        $"({clusterFaceIndices.Count} faces → 1 primitive)");
-                }
-            }
-        }
-
-        // Build remaining faces list
-        var remaining = new List<NGonRaw>();
-
-        for (var f = 0; f < faceCount; f++)
-        {
-            if (!consumed[f])
-                remaining.Add(faces[f]);
-        }
-
-        if (detected.Count > 0)
-        {
-            Log.Info($"PrimitiveShapeDetector: {detected.Count} primitives detected, " +
-                $"{remaining.Count}/{faceCount} faces remaining");
         }
 
         return (detected, remaining);
@@ -362,103 +54,8 @@ public static class PrimitiveShapeDetector
             yield break;
         }
 
+        var ctx = new DetectionContext(faces, config, solid);
         var sw = Stopwatch.StartNew();
-
-        int faceCount = faces.Count;
-
-        var intern = new VertexInternTable(VertexMergeEps);
-        var faceIdx = new int[faceCount][];
-
-        for (var f = 0; f < faceCount; f++)
-        {
-            List<Vector3> verts = faces[f].Vertices;
-            faceIdx[f] = new int[verts.Count];
-
-            for (var v = 0; v < verts.Count; v++)
-            {
-                faceIdx[f][v] = intern.Intern(verts[v]);
-            }
-        }
-
-        List<Vector3> table = intern.Table;
-
-        var edgeMap = new Dictionary<long, List<int>>();
-
-        for (var f = 0; f < faceCount; f++)
-        {
-            int[] idx = faceIdx[f];
-            int n = idx.Length;
-
-            for (var i = 0; i < n; i++)
-            {
-                int a = idx[i];
-                int b = idx[(i + 1) % n];
-                long key = NGonMath.EdgeKey(a, b);
-
-                if (!edgeMap.TryGetValue(key, out List<int>? list))
-                {
-                    list = new List<int>(2);
-                    edgeMap[key] = list;
-                }
-
-                list.Add(f);
-            }
-        }
-
-        var parent = new int[faceCount];
-        var clusterSize = new int[faceCount];
-
-        for (var i = 0; i < faceCount; i++)
-        {
-            parent[i] = i;
-            clusterSize[i] = 1;
-        }
-
-        foreach (KeyValuePair<long, List<int>> kv in edgeMap)
-        {
-            List<int> facesOnEdge = kv.Value;
-            if (facesOnEdge.Count < 2) continue;
-
-            for (var i = 0; i < facesOnEdge.Count; i++)
-            {
-                int fa = facesOnEdge[i];
-
-                for (int j = i + 1; j < facesOnEdge.Count; j++)
-                {
-                    int fb = facesOnEdge[j];
-
-                    if (!NGonMath.ColorsClose(faces[fa].Color, faces[fb].Color))
-                        continue;
-
-                    if (faces[fa].ObjectGroup >= 0 && faces[fb].ObjectGroup >= 0 &&
-                        faces[fa].ObjectGroup != faces[fb].ObjectGroup)
-                        continue;
-
-                    NGonMath.Union(parent, clusterSize, fa, fb);
-                }
-            }
-        }
-
-        var clusters = new Dictionary<int, List<int>>();
-
-        for (var f = 0; f < faceCount; f++)
-        {
-            int root = NGonMath.Find(parent, f);
-
-            if (!clusters.TryGetValue(root, out List<int>? list))
-            {
-                list = new List<int>();
-                clusters[root] = list;
-            }
-
-            list.Add(f);
-        }
-
-        var consumed = new bool[faceCount];
-        var detected = new List<ModelPrimitive>();
-
-        var sortedClusters = new List<KeyValuePair<int, List<int>>>(clusters);
-        sortedClusters.Sort((a, b) => b.Value.Count.CompareTo(a.Value.Count));
 
         if (sw.Elapsed.TotalMilliseconds >= maxMsPerFrame)
         {
@@ -466,47 +63,10 @@ public static class PrimitiveShapeDetector
             sw.Restart();
         }
 
-        // Pass 1: Exact primitive detection
-        foreach (KeyValuePair<int, List<int>> kv in sortedClusters)
+        // Pass 1: Exact primitive detection on whole clusters
+        foreach (List<int> cluster in ctx.SortedClusters)
         {
-            List<int> clusterFaceIndices = kv.Value;
-
-            var clusterFaces = new List<NGonRaw>(clusterFaceIndices.Count);
-            var vertexSet = new HashSet<int>();
-
-            foreach (int fi in clusterFaceIndices)
-            {
-                clusterFaces.Add(faces[fi]);
-
-                foreach (int vi in faceIdx[fi])
-                    vertexSet.Add(vi);
-            }
-
-            var uniqueVerts = new List<Vector3>(vertexSet.Count);
-
-            foreach (int vi in vertexSet)
-                uniqueVerts.Add(table[vi]);
-
-            ModelPrimitive? primitive = null;
-
-            if (SphereDetector.TryDetect(clusterFaces, uniqueVerts, out ModelPrimitive sphereResult, config, solid))
-                primitive = sphereResult;
-            else if (CylinderDetector.TryDetect(clusterFaces, uniqueVerts, out ModelPrimitive cylResult, config))
-                primitive = cylResult;
-            else if (CubeDetector.TryDetect(clusterFaces, uniqueVerts, out ModelPrimitive cubeResult, config, solid))
-                primitive = cubeResult;
-
-            if (primitive != null &&
-                !HasForeignVerticesInsidePrimitive(primitive, clusterFaceIndices, faces, consumed, faceCount, config.SurfaceDepthThreshold))
-            {
-                detected.Add(primitive);
-
-                foreach (int fi in clusterFaceIndices)
-                    consumed[fi] = true;
-
-                Log.Info($"PrimitiveShapeDetector: Detected {primitive.Type} " +
-                    $"({clusterFaceIndices.Count} faces -> 1 primitive)");
-            }
+            ctx.TryDetectExact(cluster, null);
 
             if (sw.Elapsed.TotalMilliseconds >= maxMsPerFrame)
             {
@@ -515,193 +75,336 @@ public static class PrimitiveShapeDetector
             }
         }
 
-        // Pass 1b: Sub-cluster splitting
+        // Pass 1b: Sub-cluster splitting - retry failed clusters by splitting on normal similarity
+        foreach (List<int> subCluster in ctx.CollectSmoothSubClusters())
         {
-            var subClustersToTry = new List<List<int>>();
+            ctx.TryDetectExact(subCluster, "via sub-cluster split");
 
-            foreach (KeyValuePair<int, List<int>> kv in sortedClusters)
+            if (sw.Elapsed.TotalMilliseconds >= maxMsPerFrame)
             {
-                List<int> clusterFaceIndices = kv.Value;
-                if (clusterFaceIndices.Any(i => consumed[i])) continue;
-                if (clusterFaceIndices.Count < 4) continue;
+                yield return null;
+                sw.Restart();
+            }
+        }
 
-                List<List<int>> subs = ExtractSmoothSubClusters(
-                    clusterFaceIndices, faces, faceIdx, edgeMap);
+        // Pass 2: Approximate sphere/cylinder fit with relaxed tolerance
+        if (solid != null)
+        {
+            foreach (List<int> cluster in ctx.SortedClusters)
+            {
+                ctx.TryDetectApproximate(cluster);
 
+                if (sw.Elapsed.TotalMilliseconds >= maxMsPerFrame)
+                {
+                    yield return null;
+                    sw.Restart();
+                }
+            }
+        }
+
+        // Pass 3: Partial box detection (3-5 visible faces with hidden faces inside solid)
+        if (solid != null)
+        {
+            foreach (List<int> cluster in ctx.SortedClusters)
+            {
+                ctx.TryDetectPartialBox(cluster);
+
+                if (sw.Elapsed.TotalMilliseconds >= maxMsPerFrame)
+                {
+                    yield return null;
+                    sw.Restart();
+                }
+            }
+        }
+
+        List<NGonRaw> remaining = ctx.BuildRemaining();
+
+        if (ctx.Detected.Count > 0)
+        {
+            Log.Info($"PrimitiveShapeDetector: {ctx.Detected.Count} primitives detected, " +
+                $"{remaining.Count}/{faces.Count} faces remaining");
+        }
+
+        onComplete(ctx.Detected, remaining);
+    }
+
+    /// <summary>
+    ///     Shared state for one detection run: interned vertices, edge adjacency,
+    ///     color clusters, and the consumed/detected bookkeeping used by all passes.
+    /// </summary>
+    sealed class DetectionContext
+    {
+        readonly List<NGonRaw> _faces;
+        readonly NGonModelConfig _config;
+        readonly ModelSolidVolume? _solid;
+        readonly int[][] _faceIdx;
+        readonly List<Vector3> _table;
+        readonly Dictionary<long, List<int>> _edgeMap;
+        readonly bool[] _consumed;
+
+        public DetectionContext(List<NGonRaw> faces, NGonModelConfig config, ModelSolidVolume? solid)
+        {
+            _faces = faces;
+            _config = config;
+            _solid = solid;
+            _consumed = new bool[faces.Count];
+
+            // Deduplicate vertices into a shared table (remove near-duplicates)
+            var intern = new VertexInternTable(VertexMergeEps);
+            _faceIdx = new int[faces.Count][];
+
+            for (var f = 0; f < faces.Count; f++)
+            {
+                List<Vector3> verts = faces[f].Vertices;
+                _faceIdx[f] = new int[verts.Count];
+
+                for (var v = 0; v < verts.Count; v++)
+                {
+                    _faceIdx[f][v] = intern.Intern(verts[v]);
+                }
+            }
+
+            _table = intern.Table;
+            _edgeMap = BuildEdgeMap();
+            SortedClusters = BuildClusters();
+        }
+
+        public List<ModelPrimitive> Detected { get; } = [];
+
+        /// <summary>Same-color edge-connected face clusters, biggest first (biggest savings first).</summary>
+        public List<List<int>> SortedClusters { get; }
+
+        /// <summary>
+        ///     Splits unconsumed clusters into smooth connected sub-clusters worth
+        ///     retrying, largest first. Only clusters whose split actually produced
+        ///     multiple sub-clusters are included.
+        /// </summary>
+        public List<List<int>> CollectSmoothSubClusters()
+        {
+            var subClusters = new List<List<int>>();
+
+            foreach (List<int> cluster in SortedClusters)
+            {
+                if (cluster.Any(i => _consumed[i])) continue;
+                if (cluster.Count < 4) continue; // Need enough faces to split meaningfully
+
+                List<List<int>> subs = ExtractSmoothSubClusters(cluster, _faces, _faceIdx, _edgeMap);
+
+                // Only useful if the split produced multiple sub-clusters
                 if (subs.Count <= 1) continue;
 
                 foreach (List<int> sub in subs)
                 {
                     if (sub.Count >= 3)
-                        subClustersToTry.Add(sub);
+                        subClusters.Add(sub);
                 }
             }
 
-            subClustersToTry.Sort((a, b) => b.Count.CompareTo(a.Count));
+            subClusters.Sort((a, b) => b.Count.CompareTo(a.Count));
+            return subClusters;
+        }
 
-            foreach (List<int> subCluster in subClustersToTry)
+        public void TryDetectExact(List<int> cluster, string? note)
+        {
+            if (cluster.Any(i => _consumed[i])) return;
+
+            (List<NGonRaw> clusterFaces, List<Vector3> uniqueVerts) = Gather(cluster);
+
+            // Try detectors in priority order
+            ModelPrimitive? primitive = null;
+
+            if (SphereDetector.TryDetect(clusterFaces, uniqueVerts, out ModelPrimitive sphereResult, _config, _solid))
+                primitive = sphereResult;
+            else if (CylinderDetector.TryDetect(clusterFaces, uniqueVerts, out ModelPrimitive cylResult, _config))
+                primitive = cylResult;
+            else if (CubeDetector.TryDetect(clusterFaces, uniqueVerts, out ModelPrimitive cubeResult, _config, _solid))
+                primitive = cubeResult;
+
+            if (primitive == null) return;
+
+            if (HasForeignVerticesInsidePrimitive(primitive, cluster, _faces, _consumed, _faces.Count, _config.SurfaceDepthThreshold))
+                return;
+
+            string suffix = note == null ? "" : $" {note}";
+
+            Consume(cluster, primitive,
+                $"PrimitiveShapeDetector: Detected {primitive.Type}{suffix} " +
+                $"({cluster.Count} faces -> 1 primitive)");
+        }
+
+        public void TryDetectApproximate(List<int> cluster)
+        {
+            if (_solid == null) return;
+            if (cluster.Count < 6) return;
+            if (cluster.Any(i => _consumed[i])) return;
+
+            (List<NGonRaw> clusterFaces, List<Vector3> uniqueVerts) = Gather(cluster);
+
+            ModelPrimitive? primitive = null;
+
+            if (SphereDetector.TryDetectApproximate(clusterFaces, uniqueVerts, _solid,
+                out ModelPrimitive sphereResult, _config))
+                primitive = sphereResult;
+            else if (CylinderDetector.TryDetectApproximate(clusterFaces, uniqueVerts, _solid,
+                out ModelPrimitive cylResult, _config))
+                primitive = cylResult;
+
+            if (primitive == null) return;
+
+            if (HasForeignVerticesInsidePrimitive(primitive, cluster, _faces, _consumed, _faces.Count, _config.SurfaceDepthThreshold))
+                return;
+
+            Consume(cluster, primitive,
+                $"PrimitiveShapeDetector: Approximated {primitive.Type} " +
+                $"({cluster.Count} faces -> 1 primitive, approx)");
+        }
+
+        public void TryDetectPartialBox(List<int> cluster)
+        {
+            if (_solid == null) return;
+            if (cluster.Count is < 3 or > 20) return;
+            if (cluster.Any(i => _consumed[i])) return;
+
+            (List<NGonRaw> clusterFaces, List<Vector3> uniqueVerts) = Gather(cluster);
+
+            if (!CubeDetector.TryDetectPartial(clusterFaces, uniqueVerts, _solid, _config,
+                out ModelPrimitive boxResult))
+                return;
+
+            Consume(cluster, boxResult,
+                $"PrimitiveShapeDetector: Detected partial {boxResult.Type} " +
+                $"({cluster.Count} faces -> 1 primitive)");
+        }
+
+        public List<NGonRaw> BuildRemaining()
+        {
+            var remaining = new List<NGonRaw>();
+
+            for (var f = 0; f < _faces.Count; f++)
             {
-                if (subCluster.Any(i => consumed[i])) continue;
-
-                var clusterFaces = new List<NGonRaw>(subCluster.Count);
-                var vertexSet = new HashSet<int>();
-
-                foreach (int fi in subCluster)
-                {
-                    clusterFaces.Add(faces[fi]);
-
-                    foreach (int vi in faceIdx[fi])
-                        vertexSet.Add(vi);
-                }
-
-                var uniqueVerts = new List<Vector3>(vertexSet.Count);
-
-                foreach (int vi in vertexSet)
-                    uniqueVerts.Add(table[vi]);
-
-                ModelPrimitive? primitive = null;
-
-                if (SphereDetector.TryDetect(clusterFaces, uniqueVerts, out ModelPrimitive sphereResult2, config, solid))
-                    primitive = sphereResult2;
-                else if (CylinderDetector.TryDetect(clusterFaces, uniqueVerts, out ModelPrimitive cylResult2, config))
-                    primitive = cylResult2;
-                else if (CubeDetector.TryDetect(clusterFaces, uniqueVerts, out ModelPrimitive cubeResult2, config, solid))
-                    primitive = cubeResult2;
-
-                if (primitive != null &&
-                    !HasForeignVerticesInsidePrimitive(primitive, subCluster, faces, consumed, faceCount, config.SurfaceDepthThreshold))
-                {
-                    detected.Add(primitive);
-
-                    foreach (int fi in subCluster)
-                        consumed[fi] = true;
-
-                    Log.Info($"PrimitiveShapeDetector: Detected {primitive.Type} via sub-cluster split " +
-                        $"({subCluster.Count} faces -> 1 primitive)");
-                }
-
-                if (sw.Elapsed.TotalMilliseconds >= maxMsPerFrame)
-                {
-                    yield return null;
-                    sw.Restart();
-                }
+                if (!_consumed[f])
+                    remaining.Add(_faces[f]);
             }
+
+            return remaining;
         }
 
-        // Pass 2: Approximate sphere/cylinder fit
-        if (solid != null)
+        Dictionary<long, List<int>> BuildEdgeMap()
         {
-            foreach (KeyValuePair<int, List<int>> kv in sortedClusters)
+            var edgeMap = new Dictionary<long, List<int>>();
+
+            for (var f = 0; f < _faces.Count; f++)
             {
-                List<int> clusterFaceIndices = kv.Value;
-                if (clusterFaceIndices.Any(i => consumed[i])) continue;
-                if (clusterFaceIndices.Count < 6) continue;
+                int[] idx = _faceIdx[f];
+                int n = idx.Length;
 
-                var clusterFaces = new List<NGonRaw>(clusterFaceIndices.Count);
-                var vertexSet = new HashSet<int>();
-
-                foreach (int fi in clusterFaceIndices)
+                for (var i = 0; i < n; i++)
                 {
-                    clusterFaces.Add(faces[fi]);
+                    long key = NGonMath.EdgeKey(idx[i], idx[(i + 1) % n]);
 
-                    foreach (int vi in faceIdx[fi])
-                        vertexSet.Add(vi);
-                }
+                    if (!edgeMap.TryGetValue(key, out List<int>? list))
+                    {
+                        list = new List<int>(2);
+                        edgeMap[key] = list;
+                    }
 
-                var uniqueVerts = new List<Vector3>(vertexSet.Count);
-
-                foreach (int vi in vertexSet)
-                    uniqueVerts.Add(table[vi]);
-
-                ModelPrimitive? approxPrimitive = null;
-
-                if (SphereDetector.TryDetectApproximate(clusterFaces, uniqueVerts, solid,
-                    out ModelPrimitive approxResult, config))
-                    approxPrimitive = approxResult;
-                else if (CylinderDetector.TryDetectApproximate(clusterFaces, uniqueVerts, solid,
-                    out ModelPrimitive cylApproxResult, config))
-                    approxPrimitive = cylApproxResult;
-
-                if (approxPrimitive != null &&
-                    !HasForeignVerticesInsidePrimitive(approxPrimitive, clusterFaceIndices, faces, consumed, faceCount, config.SurfaceDepthThreshold))
-                {
-                    detected.Add(approxPrimitive);
-
-                    foreach (int fi in clusterFaceIndices)
-                        consumed[fi] = true;
-
-                    Log.Info($"PrimitiveShapeDetector: Approximated {approxPrimitive.Type} " +
-                        $"({clusterFaceIndices.Count} faces -> 1 primitive, approx)");
-                }
-
-                if (sw.Elapsed.TotalMilliseconds >= maxMsPerFrame)
-                {
-                    yield return null;
-                    sw.Restart();
+                    list.Add(f);
                 }
             }
+
+            return edgeMap;
         }
 
-        // Pass 3: Partial box detection
-        if (solid != null)
+        List<List<int>> BuildClusters()
         {
-            foreach (KeyValuePair<int, List<int>> kv in sortedClusters)
+            int faceCount = _faces.Count;
+
+            // Union-Find: cluster same-color edge-connected faces
+            var parent = new int[faceCount];
+            var clusterSize = new int[faceCount];
+
+            for (var i = 0; i < faceCount; i++)
             {
-                List<int> clusterFaceIndices = kv.Value;
-                if (clusterFaceIndices.Any(i => consumed[i])) continue;
-                if (clusterFaceIndices.Count < 3 || clusterFaceIndices.Count > 20) continue;
+                parent[i] = i;
+                clusterSize[i] = 1;
+            }
 
-                var clusterFaces = new List<NGonRaw>(clusterFaceIndices.Count);
-                var vertexSet = new HashSet<int>();
+            foreach (KeyValuePair<long, List<int>> kv in _edgeMap)
+            {
+                List<int> facesOnEdge = kv.Value;
+                if (facesOnEdge.Count < 2) continue;
 
-                foreach (int fi in clusterFaceIndices)
+                for (var i = 0; i < facesOnEdge.Count; i++)
                 {
-                    clusterFaces.Add(faces[fi]);
+                    int fa = facesOnEdge[i];
 
-                    foreach (int vi in faceIdx[fi])
-                        vertexSet.Add(vi);
-                }
+                    for (int j = i + 1; j < facesOnEdge.Count; j++)
+                    {
+                        int fb = facesOnEdge[j];
 
-                var uniqueVerts = new List<Vector3>(vertexSet.Count);
+                        if (!NGonMath.ColorsClose(_faces[fa].Color, _faces[fb].Color))
+                            continue;
 
-                foreach (int vi in vertexSet)
-                    uniqueVerts.Add(table[vi]);
+                        if (_faces[fa].ObjectGroup >= 0 && _faces[fb].ObjectGroup >= 0 &&
+                            _faces[fa].ObjectGroup != _faces[fb].ObjectGroup)
+                            continue;
 
-                if (CubeDetector.TryDetectPartial(clusterFaces, uniqueVerts, solid, config,
-                    out ModelPrimitive boxResult))
-                {
-                    detected.Add(boxResult);
-
-                    foreach (int fi in clusterFaceIndices)
-                        consumed[fi] = true;
-
-                    Log.Info($"PrimitiveShapeDetector: Detected partial {boxResult.Type} " +
-                        $"({clusterFaceIndices.Count} faces -> 1 primitive)");
-                }
-
-                if (sw.Elapsed.TotalMilliseconds >= maxMsPerFrame)
-                {
-                    yield return null;
-                    sw.Restart();
+                        NGonMath.Union(parent, clusterSize, fa, fb);
+                    }
                 }
             }
+
+            // Group faces by cluster root
+            var clusters = new Dictionary<int, List<int>>();
+
+            for (var f = 0; f < faceCount; f++)
+            {
+                int root = NGonMath.Find(parent, f);
+
+                if (!clusters.TryGetValue(root, out List<int>? list))
+                {
+                    list = new List<int>();
+                    clusters[root] = list;
+                }
+
+                list.Add(f);
+            }
+
+            var sorted = new List<List<int>>(clusters.Values);
+            sorted.Sort((a, b) => b.Count.CompareTo(a.Count));
+            return sorted;
         }
 
-        var remaining = new List<NGonRaw>();
-
-        for (var f = 0; f < faceCount; f++)
+        (List<NGonRaw> clusterFaces, List<Vector3> uniqueVerts) Gather(List<int> cluster)
         {
-            if (!consumed[f])
-                remaining.Add(faces[f]);
+            var clusterFaces = new List<NGonRaw>(cluster.Count);
+            var vertexSet = new HashSet<int>();
+
+            foreach (int fi in cluster)
+            {
+                clusterFaces.Add(_faces[fi]);
+
+                foreach (int vi in _faceIdx[fi])
+                    vertexSet.Add(vi);
+            }
+
+            var uniqueVerts = new List<Vector3>(vertexSet.Count);
+
+            foreach (int vi in vertexSet)
+                uniqueVerts.Add(_table[vi]);
+
+            return (clusterFaces, uniqueVerts);
         }
 
-        if (detected.Count > 0)
+        void Consume(List<int> cluster, ModelPrimitive primitive, string message)
         {
-            Log.Info($"PrimitiveShapeDetector: {detected.Count} primitives detected, " +
-                $"{remaining.Count}/{faceCount} faces remaining");
-        }
+            Detected.Add(primitive);
 
-        onComplete(detected, remaining);
+            foreach (int fi in cluster)
+                _consumed[fi] = true;
+
+            Log.Info(message);
+        }
     }
 
     /// <summary>
@@ -826,7 +529,6 @@ public static class PrimitiveShapeDetector
     ///     Vertices deep inside are allowed: they were already occluded by the original
     ///     mesh faces before approximation.
     /// </summary>
-    /// 
     static bool HasForeignVerticesInsidePrimitive
     (
         ModelPrimitive primitive,

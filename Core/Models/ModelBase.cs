@@ -12,7 +12,10 @@ public abstract class ModelBase
     protected readonly Primitive BaseQuad;
     protected readonly List<ModelPrimitive> ModelPrimitives = [];
     protected readonly List<Primitive> NativePrimitives = [];
-    protected readonly List<Primitive> NativePrimitiveBases = [];
+
+    // One entry per native primitive: the invisible deformation base, or null
+    // when the primitive has uniform scale and needs no base.
+    protected readonly List<Primitive?> NativePrimitiveBases = [];
     protected readonly bool InvertWinding;
     protected PrimitiveFlags FlagsValue;
     protected Vector3 PositionValue;
@@ -41,6 +44,23 @@ public abstract class ModelBase
     public abstract int ParallelogramCount { get; }
     public abstract int PrimitiveCount { get; }
     public int NativePrimitiveCount => ModelPrimitives.Count;
+
+    /// <summary>Number of spawned native primitive bases (null placeholders excluded).</summary>
+    protected int NativePrimitiveBaseCount
+    {
+        get
+        {
+            var count = 0;
+
+            foreach (Primitive? b in NativePrimitiveBases)
+            {
+                if (b != null)
+                    count++;
+            }
+
+            return count;
+        }
+    }
 
     public Vector3 Position
     {
@@ -123,7 +143,7 @@ public abstract class ModelBase
                     mp.Scale, true, mp.Color);
 
                 NativePrimitives.Add(shapePrim);
-                NativePrimitiveBases.Add(null!);
+                NativePrimitiveBases.Add(null);
             }
             else
             {

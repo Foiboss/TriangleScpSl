@@ -45,9 +45,12 @@ public partial class HierarchicalModel
         if (e1M < 1e-7f || e2M < 1e-7f) return false;
 
         Vector3 n = Vector3.Cross(e1, e2);
-        if (n.sqrMagnitude < 1e-12f) return false;
+        float nMag = n.magnitude;
+        if (nMag < 1e-12f) return false;
 
-        Quaternion rot = Quaternion.LookRotation(n.normalized, e2.normalized);
+        // Manual normalization: Vector3.normalized snaps sub-1e-5 vectors to zero,
+        // which would hand LookRotation a zero axis for tiny quads.
+        Quaternion rot = Quaternion.LookRotation(n / nMag, e2 / e2M);
         var scale = new Vector3(e1M, e2M, 1f);
 
         float err = MeasureCornerError(parentTransform, center, rot, scale, wc0, wc1, wc2, wc3);

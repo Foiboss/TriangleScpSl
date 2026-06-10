@@ -135,7 +135,7 @@ public partial class HierarchicalModel
     public override int PrimitiveCount => IsDestroyedValue
         ? 0
         : _usedStretches.Count + _parallelograms.Count + _fallbackParallelograms.Count * 2
-        + NativePrimitives.Count + NativePrimitiveBases.Count + 1;
+        + NativePrimitives.Count + NativePrimitiveBaseCount + 1;
 
     public int ReparentedCount { get; private set; }
 

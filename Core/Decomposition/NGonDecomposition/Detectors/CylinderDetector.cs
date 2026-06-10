@@ -200,25 +200,8 @@ public static class CylinderDetector
         var rCount = 0;
 
         // Collect which vertices belong to lateral faces
-        var isLateralVertex = new HashSet<int>();
-
-        foreach (int ni in lateralFaceIndices)
-        {
-            int fi = faceNormalIndices[ni];
-
-            foreach (Vector3 v in faces[fi].Vertices)
-            {
-                // Find closest vertex in uniqueVertices
-                for (var vi = 0; vi < uniqueVertices.Count; vi++)
-                {
-                    if ((uniqueVertices[vi] - v).sqrMagnitude < 1e-8f)
-                    {
-                        isLateralVertex.Add(vi);
-                        break;
-                    }
-                }
-            }
-        }
+        HashSet<int> isLateralVertex = CollectLateralVertexIndices(
+            faces, uniqueVertices, lateralFaceIndices, faceNormalIndices);
 
         // If we have enough lateral vertices, use them for radius; otherwise use all
         if (isLateralVertex.Count >= 4)
@@ -362,6 +345,83 @@ public static class CylinderDetector
         };
         return true;
     }
+
+    const float VertexMatchDistSq = 1e-8f;
+    const float VertexGridCellSize = 2e-4f;
+
+    /// <summary>
+    ///     Maps every vertex of the lateral faces back to its index in
+    ///     uniqueVertices. Vertices are bucketed into a coarse grid so each face
+    ///     vertex is matched against a few candidates instead of the whole list.
+    /// </summary>
+    static HashSet<int> CollectLateralVertexIndices
+    (
+        List<NGonRaw> faces,
+        List<Vector3> uniqueVertices,
+        List<int> lateralFaceIndices,
+        List<int> faceNormalIndices)
+    {
+        var grid = new Dictionary<(int, int, int), List<int>>();
+
+        for (var vi = 0; vi < uniqueVertices.Count; vi++)
+        {
+            (int, int, int) cell = CellOf(uniqueVertices[vi]);
+
+            if (!grid.TryGetValue(cell, out List<int>? bucket))
+            {
+                bucket = new List<int>(4);
+                grid[cell] = bucket;
+            }
+
+            bucket.Add(vi);
+        }
+
+        var result = new HashSet<int>();
+
+        foreach (int ni in lateralFaceIndices)
+        {
+            foreach (Vector3 v in faces[faceNormalIndices[ni]].Vertices)
+            {
+                int match = FindUniqueVertex(v, uniqueVertices, grid);
+
+                if (match >= 0)
+                    result.Add(match);
+            }
+        }
+
+        return result;
+    }
+
+    static int FindUniqueVertex
+    (
+        Vector3 v,
+        List<Vector3> uniqueVertices,
+        Dictionary<(int, int, int), List<int>> grid)
+    {
+        var (cx, cy, cz) = CellOf(v);
+
+        // Scan the 3x3x3 neighborhood to handle vertices near cell boundaries
+        for (int dx = -1; dx <= 1; dx++)
+        for (int dy = -1; dy <= 1; dy++)
+        for (int dz = -1; dz <= 1; dz++)
+        {
+            if (!grid.TryGetValue((cx + dx, cy + dy, cz + dz), out List<int>? bucket))
+                continue;
+
+            foreach (int vi in bucket)
+            {
+                if ((uniqueVertices[vi] - v).sqrMagnitude < VertexMatchDistSq)
+                    return vi;
+            }
+        }
+
+        return -1;
+    }
+
+    static (int x, int y, int z) CellOf(Vector3 v)
+        => (Mathf.FloorToInt(v.x / VertexGridCellSize),
+            Mathf.FloorToInt(v.y / VertexGridCellSize),
+            Mathf.FloorToInt(v.z / VertexGridCellSize));
 
     /// <summary>
     ///     For approximate cylinder detection, verify that parts of the cylinder

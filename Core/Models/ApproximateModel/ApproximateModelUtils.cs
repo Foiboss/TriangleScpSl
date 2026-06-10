@@ -93,8 +93,11 @@ public static class ApproximateModelUtils
         if (a < 1e-12f || b < 1e-12f) return float.MaxValue;
 
         Vector3 normalLocal = Vector3.Cross(v1C, v2C);
-        if (normalLocal.sqrMagnitude < 1e-24f) return float.MaxValue;
-        normalLocal = normalLocal.normalized;
+        float normalMag = normalLocal.magnitude;
+        if (normalMag < 1e-12f) return float.MaxValue;
+        // Manual normalization: Vector3.normalized snaps sub-1e-5 vectors to zero,
+        // which would corrupt the basis for tiny parallelograms.
+        normalLocal /= normalMag;
 
         // Same orientation CreateParallelogram applies via LookRotation:
         // local Y along (v1-v2), local Z along normal, local X = Y × Z.
@@ -113,10 +116,41 @@ public static class ApproximateModelUtils
 
         // Geometric matching is fixed: cornerA always falls on the ±vUp corner pair,
         // cornerB on the ±vLeft pair (this drops out of LookRotation's basis choice).
-        // Min(±) just picks which side of the pair.
-        float dA = Mathf.Min((worldA - vUp).magnitude, (worldA + vUp).magnitude);
-        float dB = Mathf.Min((worldB - vLeft).magnitude, (worldB + vLeft).magnitude);
-        return Mathf.Max(dA, dB);
+        // The signs must match coherently: either both direct or both flipped (a 180°
+        // in-plane turn — identical for a centrally symmetric quad). A mixed sign
+        // combination would describe a mirrored quad whose normal faces the wrong
+        // way, so it must not count as a match even when corner positions line up.
+        float errDirect = Mathf.Max((worldA - vUp).magnitude, (worldB - vLeft).magnitude);
+        float errFlipped = Mathf.Max((worldA + vUp).magnitude, (worldB + vLeft).magnitude);
+        return Mathf.Min(errDirect, errFlipped);
+    }
+
+    /// <summary>
+    ///     Checks that the stretch-local half-diagonals describe a quad that
+    ///     CreateParallelogram can actually orient. Extreme phi solutions squash the
+    ///     diagonals to near-parallel vectors; their cross product then normalizes to
+    ///     zero (or precision garbage) and LookRotation silently returns identity —
+    ///     the quad spawns as an untransformed default rectangle facing wherever the
+    ///     stretch faces. Callers must fall back to an exact 2-quad
+    ///     ParallelogramPrimitive when this returns false.
+    /// </summary>
+    /// <param name="v1">First half-diagonal in stretch-local space.</param>
+    /// <param name="v2">Second half-diagonal in stretch-local space.</param>
+    public static bool CanRenderInStretchSpace(Vector3 v1, Vector3 v2)
+    {
+        // Child quad local scale axes must be non-degenerate.
+        float a = (v1 + v2).magnitude;
+        float b = (v1 - v2).magnitude;
+
+        if (a < 1e-6f || b < 1e-6f)
+            return false;
+
+        // Near-parallel diagonals: the plane normal comes from cancelling float
+        // products and can no longer orient the quad reliably. (a, b >= 1e-6
+        // already guarantees the cross product is far enough from zero to divide by.)
+        Vector3 cross = Vector3.Cross(v1, v2);
+        float magProduct = v1.magnitude * v2.magnitude;
+        return cross.magnitude > magProduct * 1e-4f;
     }
 
     /// <summary>
@@ -171,15 +205,22 @@ public static class ApproximateModelUtils
         Vector3 position, Vector3 v1, Vector3 v2,
         Primitive stretch, PrimitiveFlags flags, Color color)
     {
-        Vector3 normal = Vector3.Cross(v1, v2).normalized;
         float a = (v1 + v2).magnitude;
         float b = (v1 - v2).magnitude;
+
+        // Manual normalization: Vector3.normalized snaps sub-1e-5 vectors to zero,
+        // which would hand LookRotation a zero axis and silently produce an identity
+        // rotation — the quad would spawn as an untransformed default rectangle.
+        // Callers guarantee non-degenerate inputs via CanRenderInStretchSpace.
+        Vector3 cross = Vector3.Cross(v1, v2);
+        Vector3 normal = cross / cross.magnitude;
+        Vector3 up = (v1 - v2) / b;
 
         var prim = Primitive.Create(
             PrimitiveType.Quad, flags, position, null, Vector3.one, true, color);
 
         prim.Transform.SetParent(stretch.Transform, true);
-        prim.Transform.localRotation = Quaternion.LookRotation(normal, (v1 - v2).normalized);
+        prim.Transform.localRotation = Quaternion.LookRotation(normal, up);
         prim.Transform.localScale = new Vector3(a, b, 1f);
         return prim;
     }

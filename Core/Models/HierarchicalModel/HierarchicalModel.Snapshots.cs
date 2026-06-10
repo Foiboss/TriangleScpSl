@@ -157,7 +157,7 @@ public partial class HierarchicalModel
 
             if (hasBase)
             {
-                Primitive bp = NativePrimitiveBases[i];
+                Primitive bp = NativePrimitiveBases[i]!;
                 Transform bt = bp.Transform;
                 int bpi = idx.TryGetValue(bt.parent, out int fb) ? fb : baseIdx;
                 int bi = snapshot.Count;

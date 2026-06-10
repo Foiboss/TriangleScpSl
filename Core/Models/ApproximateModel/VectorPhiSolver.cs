@@ -14,7 +14,14 @@ public static class VectorPhiSolver
     // Tolerance thresholds
     const double Epsilon = 1e-15;
     const double EpsilonLarge = 1e-12;
-    const double TBoundaryTolerance = 1e-9;
+
+    // t = cos(phi)^2 must stay clear of 0 and 1: near the boundary one stretch
+    // scale axis approaches zero, and float precision in the child quad's
+    // transform collapses — the quad then renders as a degenerate/untransformed
+    // rectangle. 1e-5 caps the stretch scale anisotropy at ~316:1; parallelograms
+    // that only solve beyond that are rejected so the caller falls back to the
+    // exact 2-quad form.
+    const double TBoundaryTolerance = 1e-5;
 
     /// <summary>
     ///     Rotate XY by -theta (Z unchanged)
@@ -120,7 +127,10 @@ public static class VectorPhiSolver
         theta = 0f;
         phi = 0f;
 
-        // Try a small set of candidate thetas first: covers almost all cases cheaply
+        // Try a small set of candidate thetas first: covers almost all cases cheaply.
+        // All candidates are evaluated and the phi closest to pi/4 wins — the closer
+        // phi is to pi/4, the more uniform the stretch scale and the less float
+        // precision is lost in the child quad's transform.
         double[] candidates =
         [
             0,
@@ -130,29 +140,45 @@ public static class VectorPhiSolver
             3 * Math.PI / 4,
         ];
 
+        var found = false;
+        double bestTheta = 0, bestPhi = 0;
+
         foreach (double thetaD in candidates)
         {
-            if (TrySolveForPhi(v1, v2, thetaD, out double phiD))
+            if (!TrySolveForPhi(v1, v2, thetaD, out double phiD))
+                continue;
+
+            if (!found || Math.Abs(phiD - Math.PI / 4) < Math.Abs(bestPhi - Math.PI / 4))
             {
-                theta = (float)thetaD;
-                phi = (float)phiD;
-                return true;
+                found = true;
+                bestTheta = thetaD;
+                bestPhi = phiD;
             }
         }
 
         // Brute-force fallback for the rare remaining cases
-        for (var i = 1; i <= 360; i++)
+        if (!found)
         {
-            double thetaD = i * Math.PI / 360.0;
-
-            if (TrySolveForPhi(v1, v2, thetaD, out double phiD))
+            for (var i = 1; i <= 360; i++)
             {
-                theta = (float)thetaD;
-                phi = (float)phiD;
-                return true;
+                double thetaD = i * Math.PI / 360.0;
+
+                if (!TrySolveForPhi(v1, v2, thetaD, out double phiD))
+                    continue;
+
+                if (!found || Math.Abs(phiD - Math.PI / 4) < Math.Abs(bestPhi - Math.PI / 4))
+                {
+                    found = true;
+                    bestTheta = thetaD;
+                    bestPhi = phiD;
+                }
             }
         }
 
-        return false;
+        if (!found) return false;
+
+        theta = (float)bestTheta;
+        phi = (float)bestPhi;
+        return true;
     }
 }

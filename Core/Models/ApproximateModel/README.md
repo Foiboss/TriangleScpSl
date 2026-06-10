@@ -31,7 +31,11 @@ When `IsRectangle=true` (equal-length half-diagonals), a single Quad is created 
 
 ### Fallback
 
-When `VectorPhiSolver` cannot find a valid `(theta, phi)` decomposition, the parallelogram falls back to a 2-Quad `ParallelogramPrimitive` (same as V1).
+A parallelogram falls back to a 2-Quad `ParallelogramPrimitive` (same as V1) when:
+
+- `VectorPhiSolver` cannot find a valid `(theta, phi)` decomposition (including solutions that would need a stretch scale anisotropy beyond ~316:1 — float precision cannot render those reliably),
+- the stretch-local diagonals are degenerate (`CanRenderInStretchSpace` fails — near-parallel diagonals would give `LookRotation` a zero forward axis and the quad would spawn as an untransformed default rectangle), or
+- the combined shear is too large for lossy TRS sync (`IsStretchSafe` fails).
 
 ## Primitive Count
 

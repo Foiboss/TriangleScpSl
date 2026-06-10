@@ -109,7 +109,7 @@ public partial class ApproximateModel
 
     public override int PrimitiveCount => IsDestroyedValue
         ? 0
-        : _stretches.Count + _parallelograms.Count + _fallbackParallelograms.Count * 2 + NativePrimitives.Count + NativePrimitiveBases.Count + 1;
+        : _stretches.Count + _parallelograms.Count + _fallbackParallelograms.Count * 2 + NativePrimitives.Count + NativePrimitiveBaseCount + 1;
 
     public override Color Color
     {

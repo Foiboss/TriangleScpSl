@@ -8,7 +8,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="ExMod.Exiled" Version="9.13.3" />
+      <PackageReference Include="ExMod.Exiled" Version="9.14.2" />
       <PackageReference Include="UnityEngine.Modules" Version="2021.3.33">
         <PrivateAssets>all</PrivateAssets>
         <IncludeAssets>compile; runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

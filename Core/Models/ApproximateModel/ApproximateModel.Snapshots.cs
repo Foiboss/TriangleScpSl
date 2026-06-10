@@ -264,7 +264,7 @@ public partial class ApproximateModel
 
             if (hasBase)
             {
-                Primitive basePrim = NativePrimitiveBases[i];
+                Primitive basePrim = NativePrimitiveBases[i]!;
                 Transform baseTransform = basePrim.Transform;
                 int baseParent = indexByTransform.TryGetValue(baseTransform.parent, out int foundBase) ? foundBase : modelBaseIndex;
                 int baseIndex = snapshot.Count;
