@@ -6,12 +6,13 @@ namespace TriangleScpSl.Core.Decomposition.NGonDecomposition.Geometry;
 /// <summary>Determines if a point lies inside the solid material of a 3D mesh using generalized winding numbers.</summary>
 public sealed class ModelSolidVolume
 {
-    // Inside/outside threshold for winding number
+    /// <summary> Inside/outside threshold for winding number </summary>
     const float InsideThreshold = 0.5f;
 
-    // Grid density for tail sampling
+    /// <summary> Grid density for tail sampling </summary>
     public static readonly int TailGridDepth = 5;
-    // Maximum distance between consecutive edge-walk samples (world units)
+
+    /// <summary> Maximum distance between consecutive edge-walk samples (world units) </summary>
     public static readonly float MaxEdgeSampleSpacing = 0.08f;
 
     // Triangle vertices for winding number calculation (fan-based from first vertex)
@@ -77,7 +78,7 @@ public sealed class ModelSolidVolume
         return new ModelSolidVolume(a.ToArray(), b.ToArray(), c.ToArray(), bounds);
     }
 
-    /// <summary>Returns true iff point p is strictly inside solid material.</summary>
+    /// <summary>Returns true if point p is strictly inside solid material.</summary>
     public bool IsSolid(Vector3 p)
     {
         if (!_modelBounds.Contains(p)) return false;
@@ -85,7 +86,7 @@ public sealed class ModelSolidVolume
         return w >= InsideThreshold;
     }
 
-    // Generalized winding number using van Oosterom-Strang solid angle formula
+    /// <summary> Generalized winding number using van Oosterom-Strang solid angle formula </summary>
     float WindingNumber(Vector3 p)
     {
         var sum = 0.0;
@@ -124,7 +125,7 @@ public sealed class ModelSolidVolume
     ///     <para>
     ///         When <paramref name="useEdgeWalk" /> is false (default/fast path): samples discrete points
     ///         on the triangle, each pulled toward the centroid by <paramref name="pullIn" /> (barycentric fraction,
-    ///         0..0.49), and checks <see cref="IsSolid" /> directly. This is the original proven approach.
+    ///         0..0.49), and checks <see cref="IsSolid" /> directly.
     ///     </para>
     ///     <para>
     ///         When <paramref name="useEdgeWalk" /> is true (precise path): builds a full barycentric grid,

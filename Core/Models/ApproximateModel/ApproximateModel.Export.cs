@@ -78,7 +78,7 @@ public partial class ApproximateModel
             Vector3 worldCenter = TransformPoint(mp.Center);
             Quaternion worldRot = Rotation * mp.Rotation;
 
-            // A single primitive block with rotation + scale yields T·R·S —
+            // A single primitive block with rotation + scale yields T·R·S -
             // identical to the old base+child pair, but one block cheaper.
             blocks.Add(new ProjectMerBlock
             {

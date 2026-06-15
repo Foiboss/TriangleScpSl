@@ -91,7 +91,7 @@ public static partial class SphereDetector
 
     /// <summary>
     ///     Computes an adaptive smoothness angle threshold based on face count.
-    ///     Low-poly spheres/ellipsoids have large inter-face angles that
+    ///     Low-poly spheres/ellipsoids have large interface angles that
     ///     would fail a strict threshold. UV spheres have non-uniform face
     ///     distribution with larger equatorial angles than icospheres, so
     ///     the multiplier is generous.

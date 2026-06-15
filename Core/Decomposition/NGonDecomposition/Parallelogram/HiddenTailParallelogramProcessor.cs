@@ -1,5 +1,5 @@
-using System.Collections;
 using System.Diagnostics;
+using MEC;
 using Exiled.API.Features;
 using TriangleScpSl.Core.Decomposition.NGonDecomposition.Geometry;
 using TriangleScpSl.Core.Decomposition.NGonDecomposition.Merging;
@@ -37,7 +37,7 @@ public static partial class HiddenTailParallelogramProcessor
     /// <summary>
     ///     Coroutine version of Process that yields periodically to avoid freezing.
     /// </summary>
-    public static IEnumerator ProcessCoroutine
+    public static IEnumerator<float> ProcessCoroutine
     (
         List<ConvexNGon> nGons,
         ModelSolidVolume? solid,
@@ -57,7 +57,7 @@ public static partial class HiddenTailParallelogramProcessor
 
             if (sw.Elapsed.TotalMilliseconds >= maxMsPerFrame)
             {
-                yield return null;
+                yield return Timing.WaitForOneFrame;
                 sw.Restart();
             }
         }

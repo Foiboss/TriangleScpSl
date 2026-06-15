@@ -1,5 +1,5 @@
-using System.Collections;
 using AdminToys;
+using MEC;
 using CommandSystem;
 using Exiled.API.Features;
 using TriangleScpSl.Core.Decomposition.TriangleDecomposition.ModelFactory;
@@ -14,7 +14,7 @@ namespace TriangleScpSl.Commands.TriangulateCommands;
 public class TriangulateV2Command : ICommand
 {
     readonly Color _fallbackColor = Color.white;
-    Coroutine? _buildCoroutine;
+    CoroutineHandle _buildCoroutine;
     bool _isBuilding;
     ApproximateModel? _model;
 
@@ -24,10 +24,9 @@ public class TriangulateV2Command : ICommand
 
     void Clear()
     {
-        if (_buildCoroutine is not null)
-            CoroutineHost.Stop(_buildCoroutine);
+        _buildCoroutine.Kill();
 
-        _buildCoroutine = null;
+        _buildCoroutine = default;
         _isBuilding = false;
         _model?.Destroy();
         _model = null;
@@ -95,17 +94,17 @@ public class TriangulateV2Command : ICommand
         _isBuilding = true;
 
         int batchSize = Mathf.Max(1, Plugin.Instance?.Config.TriangulateV2BuildBatchSize ?? 16);
-        _buildCoroutine = CoroutineHost.Run(BuildRoutine(createdModel, fileName, batchSize));
+        _buildCoroutine = BuildRoutine(createdModel, fileName, batchSize).Run();
 
         response = $"Started building model '{fileName}' asynchronously. Run command again to cancel while building.";
         return true;
     }
 
-    IEnumerator BuildRoutine(ApproximateModel model, string fileName, int batchSize)
+    IEnumerator<float> BuildRoutine(ApproximateModel model, string fileName, int batchSize)
     {
-        yield return model.BuildTrianglesCoroutine(PrimitiveFlags.Visible, batchSize);
+        yield return Timing.WaitUntilDone(Timing.RunCoroutine(model.BuildTrianglesCoroutine(PrimitiveFlags.Visible, batchSize)));
 
-        _buildCoroutine = null;
+        _buildCoroutine = default;
         _isBuilding = false;
 
         if (!ReferenceEquals(_model, model))

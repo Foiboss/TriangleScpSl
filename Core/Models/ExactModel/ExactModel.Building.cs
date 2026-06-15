@@ -1,5 +1,5 @@
-using System.Collections;
 using Exiled.API.Features.Toys;
+using MEC;
 using TriangleScpSl.Core.Primitives.Parallelogram;
 using TriangleScpSl.Core.Primitives.Triangle;
 using UnityEngine;
@@ -8,7 +8,7 @@ namespace TriangleScpSl.Core.Models.ExactModel;
 
 public partial class ExactModel
 {
-    public override IEnumerator BuildTrianglesCoroutine(AdminToys.PrimitiveFlags flags, int trianglesPerFrame)
+    public override IEnumerator<float> BuildTrianglesCoroutine(AdminToys.PrimitiveFlags flags, int trianglesPerFrame)
     {
         if (IsDestroyedValue)
             yield break;
@@ -52,7 +52,7 @@ public partial class ExactModel
             if (processed >= trianglesPerFrame)
             {
                 processed = 0;
-                yield return null;
+                yield return Timing.WaitForOneFrame;
             }
         }
 

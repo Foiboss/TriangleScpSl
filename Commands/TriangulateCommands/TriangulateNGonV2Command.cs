@@ -1,5 +1,5 @@
-using System.Collections;
 using AdminToys;
+using MEC;
 using CommandSystem;
 using Exiled.API.Features;
 using TriangleScpSl.Core.Decomposition.NGonDecomposition;
@@ -12,7 +12,7 @@ namespace TriangleScpSl.Commands.TriangulateCommands;
 [CommandHandler(typeof(RemoteAdminCommandHandler))]
 public class TriangulateNGonV2Command : ICommand
 {
-    Coroutine? _buildCoroutine;
+    CoroutineHandle _buildCoroutine;
     bool _isBuilding;
     ApproximateModel? _model;
 
@@ -22,10 +22,9 @@ public class TriangulateNGonV2Command : ICommand
 
     void Clear()
     {
-        if (_buildCoroutine is not null)
-            CoroutineHost.Stop(_buildCoroutine);
+        _buildCoroutine.Kill();
 
-        _buildCoroutine = null;
+        _buildCoroutine = default;
         _isBuilding = false;
         _model?.Destroy();
         _model = null;
@@ -70,22 +69,21 @@ public class TriangulateNGonV2Command : ICommand
         int batchSize = Mathf.Max(1, Plugin.Instance?.Config.TriangulateNGonV2BuildBatchSize ?? 16);
         Vector3 spawnPosition = player.Position + player.GameObject.transform.forward * 2.5f + Vector3.up * 1.2f;
 
-        _buildCoroutine = CoroutineHost.Run(
-            BuildRoutine(requestedFile, config, batchSize, spawnPosition));
+        _buildCoroutine = BuildRoutine(requestedFile, config, batchSize, spawnPosition).Run();
 
         response = $"Started building OBJ model '{requestedFile}' asynchronously. Run command again to cancel.";
         return true;
     }
 
-    IEnumerator BuildRoutine(string requestedFile, NGonModelConfig config, int batchSize, Vector3 spawnPosition)
+    IEnumerator<float> BuildRoutine(string requestedFile, NGonModelConfig config, int batchSize, Vector3 spawnPosition)
     {
         NGonModelResult? loadResult = null;
 
-        yield return NGonModelBuilder.LoadCoroutine(requestedFile, Color.white, result => { loadResult = result; }, config);
+        yield return Timing.WaitUntilDone(Timing.RunCoroutine(NGonModelBuilder.LoadCoroutine(requestedFile, Color.white, result => { loadResult = result; }, config)));
 
         if (loadResult == null)
         {
-            _buildCoroutine = null;
+            _buildCoroutine = default;
             _isBuilding = false;
             Log.Warn("[TriangulateNGonV2] Failed to load model.");
             yield break;
@@ -100,9 +98,9 @@ public class TriangulateNGonV2Command : ICommand
 
         _model = createdModel;
 
-        yield return createdModel.BuildTrianglesCoroutine(PrimitiveFlags.Visible, batchSize);
+        yield return Timing.WaitUntilDone(Timing.RunCoroutine(createdModel.BuildTrianglesCoroutine(PrimitiveFlags.Visible, batchSize)));
 
-        _buildCoroutine = null;
+        _buildCoroutine = default;
         _isBuilding = false;
 
         if (!ReferenceEquals(_model, createdModel))

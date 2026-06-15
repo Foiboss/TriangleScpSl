@@ -175,7 +175,7 @@ public static partial class CubeDetector
             {
                 if (hasFace[i]) continue;
 
-                // Missing face direction — need solid volume to verify it's embedded
+                // Missing face direction - need solid volume to verify it's embedded
                 if (solid == null) return false;
 
                 int axis = i / 2;

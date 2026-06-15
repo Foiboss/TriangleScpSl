@@ -16,6 +16,9 @@
     </ItemGroup>
 
     <ItemGroup>
+      <Reference Include="Assembly-CSharp-firstpass">
+        <HintPath>_ProjectDependencies\Assembly-CSharp-firstpass.dll</HintPath>
+      </Reference>
       <Reference Include="Mirror">
         <HintPath>_ProjectDependencies\Mirror.dll</HintPath>
       </Reference>

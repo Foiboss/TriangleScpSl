@@ -1,5 +1,5 @@
-using System.Collections;
 using System.Globalization;
+using MEC;
 using System.Text;
 using TriangleScpSl.Core.Models;
 using UnityEngine;
@@ -8,7 +8,7 @@ namespace TriangleScpSl.Core.ProjectMerExport;
 
 public static class ProjectMerSchematicExporter
 {
-    public static IEnumerator ExportCoroutine
+    public static IEnumerator<float> ExportCoroutine
     (
         ModelBase model,
         string outputPath,
@@ -86,7 +86,7 @@ public static class ProjectMerSchematicExporter
             if (processedTriangles >= trianglesPerFrame)
             {
                 processedTriangles = 0;
-                yield return null;
+                yield return Timing.WaitForOneFrame;
             }
         }
 

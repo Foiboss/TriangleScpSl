@@ -1,6 +1,6 @@
-using System.Collections;
 using System.Globalization;
 using AdminToys;
+using MEC;
 using CommandSystem;
 using Exiled.API.Features;
 using TriangleScpSl.Core.Decomposition.NGonDecomposition;
@@ -15,7 +15,7 @@ namespace TriangleScpSl.Commands.ExportCommands;
 [CommandHandler(typeof(RemoteAdminCommandHandler))]
 public sealed class ExportSchematicNGonV2Command : ICommand
 {
-    Coroutine? _exportCoroutine;
+    CoroutineHandle _exportCoroutine;
     bool _isExporting;
     ApproximateModel? _activeModel;
 
@@ -48,18 +48,18 @@ public sealed class ExportSchematicNGonV2Command : ICommand
         }
 
         var config = NGonModelConfig.CreateFromSession();
-        
+
         int buildBatch = Mathf.Max(1, Plugin.Instance?.Config.ExportBuildBatchSize ?? 64);
         int writeBatch = Mathf.Max(1, Plugin.Instance?.Config.ExportWriteBatchSize ?? 256);
 
         _isExporting = true;
-        _exportCoroutine = CoroutineHost.Run(ExportRoutine(requestedFile, outputFileName, config, buildBatch, writeBatch));
+        _exportCoroutine = ExportRoutine(requestedFile, outputFileName, config, buildBatch, writeBatch).Run();
 
         response = "Export started asynchronously. Run command again to cancel.";
         return true;
     }
 
-    IEnumerator ExportRoutine
+    IEnumerator<float> ExportRoutine
     (
         string requestedFile,
         string outputFileName,
@@ -71,7 +71,7 @@ public sealed class ExportSchematicNGonV2Command : ICommand
         {
             NGonModelResult? loadResult = null;
 
-            yield return NGonModelBuilder.LoadCoroutine(requestedFile, Color.white, result => { loadResult = result; }, config);
+            yield return Timing.WaitUntilDone(Timing.RunCoroutine(NGonModelBuilder.LoadCoroutine(requestedFile, Color.white, result => { loadResult = result; }, config)));
 
             if (loadResult == null)
             {
@@ -86,7 +86,7 @@ public sealed class ExportSchematicNGonV2Command : ICommand
                 PrimitiveFlags.Visible,
                 config.Accuracy);
 
-            yield return _activeModel.BuildTrianglesCoroutine(PrimitiveFlags.Visible, buildBatch);
+            yield return Timing.WaitUntilDone(Timing.RunCoroutine(_activeModel.BuildTrianglesCoroutine(PrimitiveFlags.Visible, buildBatch)));
 
             if (_activeModel.ParallelogramCount == 0 && _activeModel.NativePrimitiveCount == 0)
             {
@@ -104,7 +104,7 @@ public sealed class ExportSchematicNGonV2Command : ICommand
             var exportSucceeded = false;
             var exportError = string.Empty;
 
-            yield return ProjectMerSchematicExporter.ExportCoroutine(
+            yield return Timing.WaitUntilDone(Timing.RunCoroutine(ProjectMerSchematicExporter.ExportCoroutine(
                 _activeModel,
                 outputPath,
                 schematicName,
@@ -114,7 +114,7 @@ public sealed class ExportSchematicNGonV2Command : ICommand
                     exportSucceeded = success;
                     exportError = err;
                     completed = true;
-                });
+                })));
 
             if (!completed || !exportSucceeded)
             {
@@ -128,17 +128,16 @@ public sealed class ExportSchematicNGonV2Command : ICommand
         {
             _activeModel?.Destroy();
             _activeModel = null;
-            _exportCoroutine = null;
+            _exportCoroutine = default;
             _isExporting = false;
         }
     }
 
     void CancelCurrentExport()
     {
-        if (_exportCoroutine is not null)
-            CoroutineHost.Stop(_exportCoroutine);
+        _exportCoroutine.Kill();
 
-        _exportCoroutine = null;
+        _exportCoroutine = default;
         _isExporting = false;
 
         _activeModel?.Destroy();

@@ -1,5 +1,5 @@
-using System.Collections;
 using AdminToys;
+using MEC;
 using CommandSystem;
 using Exiled.API.Features;
 using TriangleScpSl.Core.Decomposition.TriangleDecomposition.ModelFactory;
@@ -14,7 +14,7 @@ namespace TriangleScpSl.Commands.TriangulateCommands;
 public class TriangulateV3Command : ICommand
 {
     readonly Color _fallbackColor = Color.white;
-    Coroutine? _buildCoroutine;
+    CoroutineHandle _buildCoroutine;
     bool _isBuilding;
     HierarchicalModel? _model;
 
@@ -24,10 +24,9 @@ public class TriangulateV3Command : ICommand
 
     void Clear()
     {
-        if (_buildCoroutine is not null)
-            CoroutineHost.Stop(_buildCoroutine);
+        _buildCoroutine.Kill();
 
-        _buildCoroutine = null;
+        _buildCoroutine = default;
         _isBuilding = false;
         _model?.Destroy();
         _model = null;
@@ -95,17 +94,17 @@ public class TriangulateV3Command : ICommand
         _isBuilding = true;
 
         int batchSize = Mathf.Max(1, Plugin.Instance?.Config.TriangulateV3BuildBatchSize ?? 64);
-        _buildCoroutine = CoroutineHost.Run(BuildRoutine(createdModel, fileName, batchSize));
+        _buildCoroutine = BuildRoutine(createdModel, fileName, batchSize).Run();
 
         response = $"Started building V3 hierarchical model '{fileName}' asynchronously. Run command again to cancel.";
         return true;
     }
 
-    IEnumerator BuildRoutine(HierarchicalModel model, string fileName, int batchSize)
+    IEnumerator<float> BuildRoutine(HierarchicalModel model, string fileName, int batchSize)
     {
-        yield return model.BuildTrianglesCoroutine(PrimitiveFlags.Visible, batchSize);
+        yield return Timing.WaitUntilDone(Timing.RunCoroutine(model.BuildTrianglesCoroutine(PrimitiveFlags.Visible, batchSize)));
 
-        _buildCoroutine = null;
+        _buildCoroutine = default;
         _isBuilding = false;
 
         if (!ReferenceEquals(_model, model))

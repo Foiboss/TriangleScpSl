@@ -1,5 +1,5 @@
-using System.Collections;
 using Exiled.API.Features;
+using MEC;
 using TriangleScpSl.Core.Decomposition.NGonDecomposition.Geometry;
 using TriangleScpSl.Core.Decomposition.NGonDecomposition.Merging;
 using TriangleScpSl.Core.Decomposition.NGonDecomposition.Parallelogram;
@@ -63,9 +63,9 @@ public static class NGonModelBuilder
 
     /// <summary>
     ///     Loads a model as a coroutine, yielding periodically to avoid freezing.
-    ///     Call with CoroutineHost.Run. The result callback fires when done.
+    ///     Run it with <c>.Run()</c>. The result callback fires when done.
     /// </summary>
-    public static IEnumerator LoadCoroutine
+    public static IEnumerator<float> LoadCoroutine
     (
         string requestedFile,
         Color defaultColor,
@@ -92,14 +92,14 @@ public static class NGonModelBuilder
             yield break;
         }
 
-        yield return null;
+        yield return Timing.WaitForOneFrame;
 
         ModelSolidVolume? solid = null;
 
         if (config.UseHiddenTailOptimization || config.DetectPrimitives)
         {
             solid = ModelSolidVolume.Build(ngons);
-            yield return null;
+            yield return Timing.WaitForOneFrame;
         }
 
         List<ModelPrimitive> detectedPrimitives = [];
@@ -109,14 +109,14 @@ public static class NGonModelBuilder
         {
             var detectDone = false;
 
-            yield return PrimitiveShapeDetector.DetectCoroutine(
+            yield return Timing.WaitUntilDone(Timing.RunCoroutine(PrimitiveShapeDetector.DetectCoroutine(
                 ngons, config, solid, config.MaxMsPerFrame,
                 (primitives, remaining) =>
                 {
                     detectedPrimitives = primitives;
                     remainingNgons = remaining;
                     detectDone = true;
-                });
+                })));
 
             if (!detectDone)
             {
@@ -127,21 +127,21 @@ public static class NGonModelBuilder
         }
 
         List<NGonRaw> planarNgons = PlanarNGonSplitter.SplitAll(remainingNgons, config.PlanarThreshold);
-        yield return null;
+        yield return Timing.WaitForOneFrame;
 
         List<ConvexNGon> convexNgons = ConvexNGonDecomposer.Decompose(planarNgons);
-        yield return null;
+        yield return Timing.WaitForOneFrame;
 
         List<ModelParallelogram> parallelograms = [];
         var paraDone = false;
 
-        yield return HiddenTailParallelogramProcessor.ProcessCoroutine(
+        yield return Timing.WaitUntilDone(Timing.RunCoroutine(HiddenTailParallelogramProcessor.ProcessCoroutine(
             convexNgons, solid, config.UseEdgeWalkSampling, config.HiddenTailPullIn, config.AllowNonPlanarNGons, config.MaxMsPerFrame,
             result =>
             {
                 parallelograms = result;
                 paraDone = true;
-            });
+            })));
 
         if (!paraDone)
         {

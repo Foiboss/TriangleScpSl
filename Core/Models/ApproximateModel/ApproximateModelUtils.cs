@@ -140,7 +140,7 @@ public static class ApproximateModelUtils
     /// <summary>
     ///     Finds the best existing stretch that can render the parallelogram within
     ///     tolerance. Stretches near the parallelogram's own (theta, phi) solution are
-    ///     checked first; on a miss, ALL stretches are scanned — a parallelogram has a
+    ///     checked first; on a miss, ALL stretches are scanned - a parallelogram has a
     ///     whole curve of valid (theta, phi) decompositions, so a stretch far from this
     ///     particular solution point can still render it within tolerance.
     /// </summary>
@@ -245,7 +245,7 @@ public static class ApproximateModelUtils
         int ChildCount(StretchSpatialIndex.Entry e)
             => childrenOf.TryGetValue(e.Stretch, out List<int>? l) ? l.Count : 0;
 
-        // Drain the least-used stretches first — cheapest wins, and their children
+        // Drain the least-used stretches first - cheapest wins, and their children
         // land on popular stretches, making those even better targets.
         entries.Sort((a, b) => ChildCount(a).CompareTo(ChildCount(b)));
 
@@ -271,7 +271,7 @@ public static class ApproximateModelUtils
                     if (ReferenceEquals(other.Stretch, entry.Stretch)) continue;
                     if (emptied.Contains(other.Stretch)) continue;
 
-                    // Only stretches that keep other children are useful targets —
+                    // Only stretches that keep other children are useful targets -
                     // moving everything onto an otherwise-empty stretch saves nothing.
                     if (ChildCount(other) == 0) continue;
 

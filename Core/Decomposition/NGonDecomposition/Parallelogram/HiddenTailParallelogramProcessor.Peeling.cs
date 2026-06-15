@@ -3,10 +3,8 @@ using UnityEngine;
 
 namespace TriangleScpSl.Core.Decomposition.NGonDecomposition.Parallelogram;
 
-/// <summary>
-///     Parallel-sides peel: scan for 4 consecutive vertices forming a parallelogram,
-///     emit it, and remove the 2 interior vertices. Rectangles are preferred (1 primitive vs 2).
-/// </summary>
+// Parallel-sides peel: scan for 4 consecutive vertices forming a parallelogram,
+// emit it, and remove the 2 interior vertices. Rectangles are preferred (1 primitive vs 2).
 public static partial class HiddenTailParallelogramProcessor
 {
     static bool TryParallelSidesPeel

@@ -56,7 +56,7 @@ public partial class HierarchicalModel
             Vector3 wc = TransformPoint(mp.Center);
             Quaternion wr = Rotation * mp.Rotation;
 
-            // A single primitive block with rotation + scale yields T·R·S —
+            // A single primitive block with rotation + scale yields T·R·S -
             // identical to the old base+child pair, but one block cheaper.
             blocks.Add(new ProjectMerBlock
             {

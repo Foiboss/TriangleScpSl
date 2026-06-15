@@ -4,9 +4,9 @@
 
 An [EXILED](https://github.com/ExMod-Team/EXILED) plugin for SCP: Secret Laboratory that renders 3D meshes from OBJ files in the game world using Unity primitive toys (Quads, Spheres, Cylinders, Cubes).
 
-- **Plugin:** `TriangleScpSl` v5.0.0
+- **Plugin:** `TriangleScpSl` v6.0.0
 - **Author:** Foibos
-- **Framework:** net48 / EXILED 9.13.3
+- **Framework:** net48 / EXILED 9.14.2
 - **License:** CC-BY-SA 3.0 (required by EXILED)
 
 ---
@@ -231,7 +231,7 @@ See `Core/Models/HierarchicalModel/README.md`, `Core/Models/ApproximateModel/REA
 
 ## Acknowledgments & Dependencies
 
-- **[EXILED](https://github.com/ExMod-Team/EXILED)** — Creative Commons Attribution-ShareAlike 3.0 Unported
+- **[EXILED](https://github.com/ExMod-Team/EXILED)** - Creative Commons Attribution-ShareAlike 3.0 Unported
 - **[Mirror Networking](https://github.com/MirrorNetworking/Mirror)** — MIT
 - **[Unity Engine](https://unity.com/)** — Unity Companion License
 

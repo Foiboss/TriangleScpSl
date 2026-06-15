@@ -4,9 +4,11 @@ namespace TriangleScpSl.Core.Decomposition.NGonDecomposition.Detectors;
 
 public static partial class SphereDetector
 {
-    // Jacobi eigendecomposition for 3x3 symmetric matrix.
-    // Input: upper triangle (m00, m01, m02, m11, m12, m22).
-    // Output: eigenvalues sorted descending, corresponding eigenvectors.
+    /// <summary>
+    ///     Jacobi eigendecomposition for 3x3 symmetric matrix.
+    ///     Input: upper triangle (m00, m01, m02, m11, m12, m22).
+    ///     Output: eigenvalues sorted descending, corresponding eigenvectors.
+    /// </summary>
     static void Eigen3X3
     (
         float m00, float m01, float m02,

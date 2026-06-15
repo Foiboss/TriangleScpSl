@@ -9,14 +9,15 @@ Detects when a cluster of mesh faces forms a recognizable Unity primitive shape 
 **Passes (per iteration):**
 
 1. **Exact detection** on whole clusters (sphere → cylinder → cube).
-2. **Smooth sub-cluster splitting** — clusters are split on normal similarity so e.g. a sphere welded to a same-color wall is separated and detected.
-3. **Convex-piece splitting** — clusters are split at *concave* edges into convex pieces (e.g. two stacked boxes meet at a concave seam). Each piece is retried with exact and partial-box detection.
+2. **Smooth sub-cluster splitting** - clusters are split on normal similarity so e.g. a sphere welded to a same-color wall is separated and detected.
+3. **Convex-piece splitting** - clusters are split at *concave* edges into convex pieces (e.g. two stacked boxes meet at a concave seam). Each piece is retried with exact and partial-box detection.
 4. **Approximate sphere/cylinder fit** with relaxed tolerance (requires solid volume).
-5. **Partial box detection** — 2+ visible box faces with the hidden sides verified embedded in solid material.
+5. **Partial box detection** - 2+ visible box faces with the hidden sides verified embedded in solid material.
 
 **Iteration:** after a round of consumption the remaining faces are re-clustered and the passes run again (up to 3 rounds). This resolves composite clusters incrementally — extracting one shape often leaves a clean remainder.
 
-**Embedded-face culling:** after detection, any remaining face that lies entirely inside a detected primitive (which is an opaque convex solid) is dropped — it can never be seen, so rendering it would only waste primitives. Faces lying exactly on a primitive's surface (decals) are kept via a depth threshold.
+**Embedded-face culling:** after detection, any remaining face that lies entirely inside a detected primitive (which is an opaque convex solid) is dropped — it can never be seen, so rendering it would only waste primitives. Faces lying exactly on a primitive's surface (decals) are kept via a depth
+threshold.
 
 **Smoothness gate:** Before trying sphere or cylinder detection, `SmoothnessCheck` verifies that the surface is smooth (not faceted). This prevents replacing intentionally low-poly geometry (like an icosahedron) with a smooth sphere.
 

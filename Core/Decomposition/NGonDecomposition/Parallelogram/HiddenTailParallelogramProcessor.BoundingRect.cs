@@ -4,11 +4,9 @@ using UnityEngine;
 
 namespace TriangleScpSl.Core.Decomposition.NGonDecomposition.Parallelogram;
 
-/// <summary>
-///     Bounding-rectangle covering: find the minimum-area oriented bounding rectangle
-///     for a convex nGon, verify excess regions are inside solid material, and emit
-///     the rectangle as a single parallelogram (1-2 primitives instead of O(n)).
-/// </summary>
+// Bounding-rectangle covering: find the minimum-area oriented bounding rectangle
+// for a convex nGon, verify excess regions are inside solid material, and emit
+// the rectangle as a single parallelogram (1-2 primitives instead of O(n)).
 public static partial class HiddenTailParallelogramProcessor
 {
     static bool TryEmitBoundingRect

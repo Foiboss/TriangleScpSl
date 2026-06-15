@@ -6,6 +6,9 @@ namespace TriangleScpSl.Core.Decomposition.NGonDecomposition.Detectors;
 
 public static class CylinderDetector
 {
+    const float VertexMatchDistSq = 1e-8f;
+    const float VertexGridCellSize = 2e-4f;
+
     public static bool TryDetect
     (
         List<NGonRaw> faces,
@@ -110,7 +113,6 @@ public static class CylinderDetector
 
         // Classify faces as lateral (perpendicular to axis) or cap (parallel to axis).
         var lateralFaceIndices = new List<int>();
-        var capFaceIndices = new List<int>();
 
         for (var ni = 0; ni < faceNormals.Count; ni++)
         {
@@ -118,8 +120,6 @@ public static class CylinderDetector
 
             if (axisDot < 0.5f)
                 lateralFaceIndices.Add(ni);
-            else
-                capFaceIndices.Add(ni);
         }
 
         // At least 50% of faces should be lateral
@@ -345,9 +345,6 @@ public static class CylinderDetector
         };
         return true;
     }
-
-    const float VertexMatchDistSq = 1e-8f;
-    const float VertexGridCellSize = 2e-4f;
 
     /// <summary>
     ///     Maps every vertex of the lateral faces back to its index in

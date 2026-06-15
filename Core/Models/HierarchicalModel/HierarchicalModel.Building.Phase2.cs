@@ -107,7 +107,7 @@ public partial class HierarchicalModel
     /// <summary>
     ///     Drains sparsely-used stretches by rehoming their remaining quads onto other
     ///     stretches within tolerance. Emptied stretches end up with no children, so
-    ///     MarkUsedStretches/DestroyUnusedStretches removes them — one primitive each.
+    ///     MarkUsedStretches/DestroyUnusedStretches removes them - one primitive each.
     /// </summary>
     void ConsolidateStretches()
     {

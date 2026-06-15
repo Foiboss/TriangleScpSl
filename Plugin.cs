@@ -5,7 +5,6 @@ using Exiled.API.Features;
 using Exiled.API.Features.Toys;
 using Mirror;
 using TriangleScpSl.Core.Paths;
-using TriangleScpSl.Core.Runtime;
 using UnityEngine;
 
 namespace TriangleScpSl;
@@ -31,7 +30,6 @@ public class Plugin : Plugin<Config>
     public override void OnDisabled()
     {
         Exiled.Events.Handlers.Server.WaitingForPlayers -= OnWaitingForPlayers;
-        CoroutineHost.Shutdown();
         Instance = null;
         base.OnDisabled();
     }
@@ -54,6 +52,6 @@ public class Plugin : Plugin<Config>
             return;
         }
 
-        Log.Warn("[TriangleScpSl] Could not find PrimitiveObjectToy in NetworkClient.prefabs — Primitive.Create will fail!");
+        Log.Warn("[TriangleScpSl] Could not find PrimitiveObjectToy in NetworkClient.prefabs - Primitive.Create will fail!");
     }
 }

@@ -1,5 +1,5 @@
-using System.Collections;
 using System.Diagnostics;
+using MEC;
 using Exiled.API.Features;
 using TriangleScpSl.Core.Decomposition.NGonDecomposition.Detectors;
 using TriangleScpSl.Core.Decomposition.NGonDecomposition.Geometry;
@@ -32,16 +32,14 @@ public static class PrimitiveShapeDetector
 
         // With an infinite frame budget the coroutine never yields, so draining
         // it runs the whole pipeline synchronously.
-        IEnumerator routine = DetectCoroutine(faces, config, solid, float.PositiveInfinity,
+        IEnumerator<float> routine = DetectCoroutine(faces, config, solid, float.PositiveInfinity,
             (d, r) =>
             {
                 detected = d;
                 remaining = r;
             });
 
-        while (routine.MoveNext())
-        {
-        }
+        while (routine.MoveNext()) { }
 
         return (detected, remaining);
     }
@@ -49,7 +47,7 @@ public static class PrimitiveShapeDetector
     /// <summary>
     ///     Coroutine version of Detect that yields periodically to avoid freezing.
     /// </summary>
-    public static IEnumerator DetectCoroutine
+    public static IEnumerator<float> DetectCoroutine
     (
         List<NGonRaw> faces,
         NGonModelConfig config,
@@ -76,7 +74,7 @@ public static class PrimitiveShapeDetector
 
             if (sw.Elapsed.TotalMilliseconds >= maxMsPerFrame)
             {
-                yield return null;
+                yield return Timing.WaitForOneFrame;
                 sw.Restart();
             }
 
@@ -87,7 +85,7 @@ public static class PrimitiveShapeDetector
 
                 if (sw.Elapsed.TotalMilliseconds >= maxMsPerFrame)
                 {
-                    yield return null;
+                    yield return Timing.WaitForOneFrame;
                     sw.Restart();
                 }
             }
@@ -99,7 +97,7 @@ public static class PrimitiveShapeDetector
 
                 if (sw.Elapsed.TotalMilliseconds >= maxMsPerFrame)
                 {
-                    yield return null;
+                    yield return Timing.WaitForOneFrame;
                     sw.Restart();
                 }
             }
@@ -114,7 +112,7 @@ public static class PrimitiveShapeDetector
 
                 if (sw.Elapsed.TotalMilliseconds >= maxMsPerFrame)
                 {
-                    yield return null;
+                    yield return Timing.WaitForOneFrame;
                     sw.Restart();
                 }
             }
@@ -128,7 +126,7 @@ public static class PrimitiveShapeDetector
 
                     if (sw.Elapsed.TotalMilliseconds >= maxMsPerFrame)
                     {
-                        yield return null;
+                        yield return Timing.WaitForOneFrame;
                         sw.Restart();
                     }
                 }
@@ -143,7 +141,7 @@ public static class PrimitiveShapeDetector
 
                     if (sw.Elapsed.TotalMilliseconds >= maxMsPerFrame)
                     {
-                        yield return null;
+                        yield return Timing.WaitForOneFrame;
                         sw.Restart();
                     }
                 }
@@ -170,6 +168,313 @@ public static class PrimitiveShapeDetector
         }
 
         onComplete(detected, remaining);
+    }
+
+    /// <summary>
+    ///     Splits a cluster into smooth connected sub-clusters based on normal similarity.
+    ///     Faces that are edge-adjacent AND have similar normals stay in the same sub-cluster.
+    ///     This separates e.g. a sphere that shares edges with a flat wall of the same color.
+    /// </summary>
+    static List<List<int>> ExtractSmoothSubClusters
+    (
+        List<int> clusterFaceIndices,
+        List<NGonRaw> allFaces,
+        int[][] faceIdx,
+        Dictionary<long, List<int>> edgeMap)
+    {
+        int count = clusterFaceIndices.Count;
+
+        // Compute normals for faces in this cluster
+        var normals = new Vector3[count];
+        var clusterSet = new HashSet<int>(clusterFaceIndices);
+
+        for (var i = 0; i < count; i++)
+        {
+            int fi = clusterFaceIndices[i];
+            List<Vector3> verts = allFaces[fi].Vertices;
+
+            if (verts.Count >= 3)
+            {
+                Vector3 n = NGonMath.NewellNormal(verts);
+                float mag = n.magnitude;
+                normals[i] = mag > 1e-10f ? n / mag : Vector3.up;
+            }
+            else
+            {
+                normals[i] = Vector3.up;
+            }
+        }
+
+        // Map face index → local index
+        var faceToLocal = new Dictionary<int, int>(count);
+
+        for (var i = 0; i < count; i++)
+        {
+            faceToLocal[clusterFaceIndices[i]] = i;
+        }
+
+        // Adaptive normal threshold: for clusters with many faces, use a stricter
+        // threshold to separate curved from flat. For small clusters, be more lenient.
+        float normalThreshold = count >= 24 ? 0.25f : 0.40f;
+        float cosThreshold = Mathf.Cos(normalThreshold);
+
+        // Union-Find within this cluster, only joining smooth-adjacent pairs
+        var subParent = new int[count];
+        var subSize = new int[count];
+
+        for (var i = 0; i < count; i++)
+        {
+            subParent[i] = i;
+            subSize[i] = 1;
+        }
+
+        // Check adjacency via the existing edge map
+        for (var i = 0; i < count; i++)
+        {
+            int fi = clusterFaceIndices[i];
+            int[] idx = faceIdx[fi];
+            int n = idx.Length;
+
+            for (var e = 0; e < n; e++)
+            {
+                int a = idx[e];
+                int b = idx[(e + 1) % n];
+                long key = NGonMath.EdgeKey(a, b);
+
+                if (!edgeMap.TryGetValue(key, out List<int>? facesOnEdge))
+                    continue;
+
+                foreach (int fj in facesOnEdge)
+                {
+                    if (fj == fi) continue;
+                    if (!clusterSet.Contains(fj)) continue;
+
+                    if (!faceToLocal.TryGetValue(fj, out int j))
+                        continue;
+
+                    // Only join if normals are similar
+                    float dot = Vector3.Dot(normals[i], normals[j]);
+
+                    if (dot >= cosThreshold)
+                        NGonMath.Union(subParent, subSize, i, j);
+                }
+            }
+        }
+
+        // Extract connected components
+        var components = new Dictionary<int, List<int>>();
+
+        for (var i = 0; i < count; i++)
+        {
+            int root = NGonMath.Find(subParent, i);
+
+            if (!components.TryGetValue(root, out List<int>? list))
+            {
+                list = new List<int>();
+                components[root] = list;
+            }
+
+            list.Add(clusterFaceIndices[i]); // Store original face indices
+        }
+
+        var result = new List<List<int>>(components.Count);
+
+        foreach (KeyValuePair<int, List<int>> kv in components)
+            result.Add(kv.Value);
+
+        return result;
+    }
+
+    /// <summary>
+    ///     Checks whether any unconsumed, non-cluster face has a vertex that is inside
+    ///     the primitive but near its surface. Such vertices were visible before the
+    ///     approximation and would be hidden by the smooth primitive - so reject.
+    ///     Vertices deep inside are allowed: they were already occluded by the original
+    ///     mesh faces before approximation.
+    /// </summary>
+    static bool HasForeignVerticesInsidePrimitive
+    (
+        ModelPrimitive primitive,
+        List<int> clusterFaceIndices,
+        List<NGonRaw> faces,
+        bool[] consumed,
+        int faceCount,
+        float surfaceDepthThreshold)
+    {
+        var clusterSet = new HashSet<int>(clusterFaceIndices);
+
+        // Pre-compute inverse rotation once (local space transform)
+        Quaternion invRot = Quaternion.Inverse(primitive.Rotation);
+
+        for (var f = 0; f < faceCount; f++)
+        {
+            if (consumed[f] || clusterSet.Contains(f)) continue;
+
+            List<Vector3> verts = faces[f].Vertices;
+            if (verts.Count < 3) continue;
+
+            foreach (Vector3 v in verts)
+            {
+                if (IsPointNearSurfaceInside(v, primitive, invRot, surfaceDepthThreshold))
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    ///     Returns true if the point is inside the primitive AND near its surface.
+    ///     "Near surface" means the normalized depth (0 = surface, 1 = center) is
+    ///     below the given threshold.
+    ///     Points outside or deep inside return false.
+    /// </summary>
+    static bool IsPointNearSurfaceInside(Vector3 point, ModelPrimitive prim, Quaternion invRot, float threshold)
+        => TryGetInsideDepth(point, prim, invRot, true, out float depth) && depth < threshold;
+
+    /// <summary>
+    ///     Removes remaining faces that lie entirely inside one of the detected
+    ///     primitives. The primitives are opaque convex solids, so a face whose
+    ///     vertices are all inside the same primitive is fully contained (convexity)
+    ///     and can never be seen - rendering it would only waste primitives.
+    ///     The depth threshold keeps faces lying exactly ON a primitive's surface
+    ///     (decals, touching geometry) alive.
+    /// </summary>
+    static int CullFacesHiddenInsidePrimitives
+    (
+        List<NGonRaw> remaining,
+        List<ModelPrimitive> detected,
+        float surfaceDepthThreshold)
+    {
+        if (detected.Count == 0 || remaining.Count == 0)
+            return 0;
+
+        // Never cull at depth 0 even when foreign-vertex rejection is disabled -
+        // surface decals must survive.
+        float threshold = Mathf.Max(surfaceDepthThreshold, 0.02f);
+
+        var invRots = new Quaternion[detected.Count];
+
+        for (var p = 0; p < detected.Count; p++)
+        {
+            invRots[p] = Quaternion.Inverse(detected[p].Rotation);
+        }
+
+        return remaining.RemoveAll(face =>
+        {
+            List<Vector3> verts = face.Vertices;
+            if (verts.Count < 3) return false;
+
+            for (var p = 0; p < detected.Count; p++)
+            {
+                var allInside = true;
+
+                foreach (Vector3 v in verts)
+                {
+                    // Cap depth included so decals on cylinder caps survive too.
+                    if (!TryGetInsideDepth(v, detected[p], invRots[p], false, out float depth) ||
+                        depth < threshold)
+                    {
+                        allInside = false;
+                        break;
+                    }
+                }
+
+                if (allInside)
+                    return true;
+            }
+
+            return false;
+        });
+    }
+
+    /// <summary>
+    ///     Computes the normalized depth (0 = surface, 1 = center/axis) of a point
+    ///     inside the primitive. Returns false when the point is outside.
+    ///     With <paramref name="cylinderLateralOnly" /> the cylinder depth is measured
+    ///     from the lateral (radial) surface only - the primitive adds solid caps that
+    ///     the original mesh didn't have, so vertices near caps were already inside
+    ///     before approximation. Without it, cap distance is included.
+    /// </summary>
+    static bool TryGetInsideDepth(Vector3 point, ModelPrimitive prim, Quaternion invRot, bool cylinderLateralOnly, out float depth)
+    {
+        depth = 0f;
+
+        // Transform point into primitive's local space
+        Vector3 local = invRot * (point - prim.Center);
+
+        switch (prim.Type)
+        {
+            case PrimitiveType.Sphere:
+            {
+                float rx = prim.Scale.x * 0.5f;
+                float ry = prim.Scale.y * 0.5f;
+                float rz = prim.Scale.z * 0.5f;
+
+                if (rx < 1e-6f || ry < 1e-6f || rz < 1e-6f) return false;
+
+                float nx = local.x / rx;
+                float ny = local.y / ry;
+                float nz = local.z / rz;
+                float normDistSq = nx * nx + ny * ny + nz * nz;
+
+                // Outside the sphere
+                if (normDistSq >= 1f) return false;
+
+                // Normalized depth: 0 at surface, 1 at center
+                depth = 1f - Mathf.Sqrt(normDistSq);
+                return true;
+            }
+
+            case PrimitiveType.Cylinder:
+            {
+                float radius = prim.Scale.x * 0.5f;
+                float halfHeight = prim.Scale.y; // Scale.y IS half-height
+
+                if (radius < 1e-6f || halfHeight < 1e-6f) return false;
+
+                // Outside height bounds - not inside the cylinder at all
+                if (Mathf.Abs(local.y) >= halfHeight) return false;
+
+                float radialDist = Mathf.Sqrt(local.x * local.x + local.z * local.z);
+
+                // Outside radial bounds
+                if (radialDist >= radius) return false;
+
+                depth = (radius - radialDist) / radius;
+
+                if (!cylinderLateralOnly)
+                    depth = Mathf.Min(depth, (halfHeight - Mathf.Abs(local.y)) / halfHeight);
+
+                return true;
+            }
+
+            case PrimitiveType.Cube:
+            {
+                float hx = prim.Scale.x * 0.5f;
+                float hy = prim.Scale.y * 0.5f;
+                float hz = prim.Scale.z * 0.5f;
+
+                if (hx < 1e-6f || hy < 1e-6f || hz < 1e-6f) return false;
+
+                float dx = hx - Mathf.Abs(local.x);
+                float dy = hy - Mathf.Abs(local.y);
+                float dz = hz - Mathf.Abs(local.z);
+
+                // Outside the box
+                if (dx <= 0f || dy <= 0f || dz <= 0f) return false;
+
+                // Normalized depth from closest face
+                float depthX = dx / hx;
+                float depthY = dy / hy;
+                float depthZ = dz / hz;
+                depth = Mathf.Min(depthX, Mathf.Min(depthY, depthZ));
+                return true;
+            }
+
+            default:
+                return false;
+        }
     }
 
     /// <summary>
@@ -315,7 +620,9 @@ public static class PrimitiveShapeDetector
             var faceToLocal = new Dictionary<int, int>(count);
 
             for (var i = 0; i < count; i++)
+            {
                 faceToLocal[clusterFaceIndices[i]] = i;
+            }
 
             var pieceParent = new int[count];
             var pieceSize = new int[count];
@@ -587,311 +894,6 @@ public static class PrimitiveShapeDetector
                 _consumed[fi] = true;
 
             Log.Info(message);
-        }
-    }
-
-    /// <summary>
-    ///     Splits a cluster into smooth connected sub-clusters based on normal similarity.
-    ///     Faces that are edge-adjacent AND have similar normals stay in the same sub-cluster.
-    ///     This separates e.g. a sphere that shares edges with a flat wall of the same color.
-    /// </summary>
-    static List<List<int>> ExtractSmoothSubClusters
-    (
-        List<int> clusterFaceIndices,
-        List<NGonRaw> allFaces,
-        int[][] faceIdx,
-        Dictionary<long, List<int>> edgeMap)
-    {
-        int count = clusterFaceIndices.Count;
-
-        // Compute normals for faces in this cluster
-        var normals = new Vector3[count];
-        var clusterSet = new HashSet<int>(clusterFaceIndices);
-
-        for (var i = 0; i < count; i++)
-        {
-            int fi = clusterFaceIndices[i];
-            List<Vector3> verts = allFaces[fi].Vertices;
-
-            if (verts.Count >= 3)
-            {
-                Vector3 n = NGonMath.NewellNormal(verts);
-                float mag = n.magnitude;
-                normals[i] = mag > 1e-10f ? n / mag : Vector3.up;
-            }
-            else
-            {
-                normals[i] = Vector3.up;
-            }
-        }
-
-        // Map face index → local index
-        var faceToLocal = new Dictionary<int, int>(count);
-
-        for (var i = 0; i < count; i++)
-        {
-            faceToLocal[clusterFaceIndices[i]] = i;
-        }
-
-        // Adaptive normal threshold: for clusters with many faces, use a stricter
-        // threshold to separate curved from flat. For small clusters, be more lenient.
-        float normalThreshold = count >= 24 ? 0.25f : 0.40f;
-        float cosThreshold = Mathf.Cos(normalThreshold);
-
-        // Union-Find within this cluster, only joining smooth-adjacent pairs
-        var subParent = new int[count];
-        var subSize = new int[count];
-
-        for (var i = 0; i < count; i++)
-        {
-            subParent[i] = i;
-            subSize[i] = 1;
-        }
-
-        // Check adjacency via the existing edge map
-        for (var i = 0; i < count; i++)
-        {
-            int fi = clusterFaceIndices[i];
-            int[] idx = faceIdx[fi];
-            int n = idx.Length;
-
-            for (var e = 0; e < n; e++)
-            {
-                int a = idx[e];
-                int b = idx[(e + 1) % n];
-                long key = NGonMath.EdgeKey(a, b);
-
-                if (!edgeMap.TryGetValue(key, out List<int>? facesOnEdge))
-                    continue;
-
-                foreach (int fj in facesOnEdge)
-                {
-                    if (fj == fi) continue;
-                    if (!clusterSet.Contains(fj)) continue;
-
-                    if (!faceToLocal.TryGetValue(fj, out int j))
-                        continue;
-
-                    // Only join if normals are similar
-                    float dot = Vector3.Dot(normals[i], normals[j]);
-
-                    if (dot >= cosThreshold)
-                        NGonMath.Union(subParent, subSize, i, j);
-                }
-            }
-        }
-
-        // Extract connected components
-        var components = new Dictionary<int, List<int>>();
-
-        for (var i = 0; i < count; i++)
-        {
-            int root = NGonMath.Find(subParent, i);
-
-            if (!components.TryGetValue(root, out List<int>? list))
-            {
-                list = new List<int>();
-                components[root] = list;
-            }
-
-            list.Add(clusterFaceIndices[i]); // Store original face indices
-        }
-
-        var result = new List<List<int>>(components.Count);
-
-        foreach (KeyValuePair<int, List<int>> kv in components)
-            result.Add(kv.Value);
-
-        return result;
-    }
-
-    /// <summary>
-    ///     Checks whether any unconsumed, non-cluster face has a vertex that is inside
-    ///     the primitive but near its surface. Such vertices were visible before the
-    ///     approximation and would be hidden by the smooth primitive — so reject.
-    ///     Vertices deep inside are allowed: they were already occluded by the original
-    ///     mesh faces before approximation.
-    /// </summary>
-    static bool HasForeignVerticesInsidePrimitive
-    (
-        ModelPrimitive primitive,
-        List<int> clusterFaceIndices,
-        List<NGonRaw> faces,
-        bool[] consumed,
-        int faceCount,
-        float surfaceDepthThreshold)
-    {
-        var clusterSet = new HashSet<int>(clusterFaceIndices);
-
-        // Pre-compute inverse rotation once (local space transform)
-        Quaternion invRot = Quaternion.Inverse(primitive.Rotation);
-
-        for (var f = 0; f < faceCount; f++)
-        {
-            if (consumed[f] || clusterSet.Contains(f)) continue;
-
-            List<Vector3> verts = faces[f].Vertices;
-            if (verts.Count < 3) continue;
-
-            foreach (Vector3 v in verts)
-            {
-                if (IsPointNearSurfaceInside(v, primitive, invRot, surfaceDepthThreshold))
-                    return true;
-            }
-        }
-
-        return false;
-    }
-
-    /// <summary>
-    ///     Returns true if the point is inside the primitive AND near its surface.
-    ///     "Near surface" means the normalized depth (0 = surface, 1 = center) is
-    ///     below the given threshold.
-    ///     Points outside or deep inside return false.
-    /// </summary>
-    static bool IsPointNearSurfaceInside(Vector3 point, ModelPrimitive prim, Quaternion invRot, float threshold)
-        => TryGetInsideDepth(point, prim, invRot, cylinderLateralOnly: true, out float depth) && depth < threshold;
-
-    /// <summary>
-    ///     Removes remaining faces that lie entirely inside one of the detected
-    ///     primitives. The primitives are opaque convex solids, so a face whose
-    ///     vertices are all inside the same primitive is fully contained (convexity)
-    ///     and can never be seen — rendering it would only waste primitives.
-    ///     The depth threshold keeps faces lying exactly ON a primitive's surface
-    ///     (decals, touching geometry) alive.
-    /// </summary>
-    static int CullFacesHiddenInsidePrimitives
-    (
-        List<NGonRaw> remaining,
-        List<ModelPrimitive> detected,
-        float surfaceDepthThreshold)
-    {
-        if (detected.Count == 0 || remaining.Count == 0)
-            return 0;
-
-        // Never cull at depth 0 even when foreign-vertex rejection is disabled —
-        // surface decals must survive.
-        float threshold = Mathf.Max(surfaceDepthThreshold, 0.02f);
-
-        var invRots = new Quaternion[detected.Count];
-
-        for (var p = 0; p < detected.Count; p++)
-            invRots[p] = Quaternion.Inverse(detected[p].Rotation);
-
-        return remaining.RemoveAll(face =>
-        {
-            List<Vector3> verts = face.Vertices;
-            if (verts.Count < 3) return false;
-
-            for (var p = 0; p < detected.Count; p++)
-            {
-                var allInside = true;
-
-                foreach (Vector3 v in verts)
-                {
-                    // Cap depth included so decals on cylinder caps survive too.
-                    if (!TryGetInsideDepth(v, detected[p], invRots[p], cylinderLateralOnly: false, out float depth) ||
-                        depth < threshold)
-                    {
-                        allInside = false;
-                        break;
-                    }
-                }
-
-                if (allInside)
-                    return true;
-            }
-
-            return false;
-        });
-    }
-
-    /// <summary>
-    ///     Computes the normalized depth (0 = surface, 1 = center/axis) of a point
-    ///     inside the primitive. Returns false when the point is outside.
-    ///     With <paramref name="cylinderLateralOnly" /> the cylinder depth is measured
-    ///     from the lateral (radial) surface only — the primitive adds solid caps that
-    ///     the original mesh didn't have, so vertices near caps were already inside
-    ///     before approximation. Without it, cap distance is included.
-    /// </summary>
-    static bool TryGetInsideDepth(Vector3 point, ModelPrimitive prim, Quaternion invRot, bool cylinderLateralOnly, out float depth)
-    {
-        depth = 0f;
-
-        // Transform point into primitive's local space
-        Vector3 local = invRot * (point - prim.Center);
-
-        switch (prim.Type)
-        {
-            case PrimitiveType.Sphere:
-            {
-                float rx = prim.Scale.x * 0.5f;
-                float ry = prim.Scale.y * 0.5f;
-                float rz = prim.Scale.z * 0.5f;
-
-                if (rx < 1e-6f || ry < 1e-6f || rz < 1e-6f) return false;
-
-                float nx = local.x / rx;
-                float ny = local.y / ry;
-                float nz = local.z / rz;
-                float normDistSq = nx * nx + ny * ny + nz * nz;
-
-                // Outside the sphere
-                if (normDistSq >= 1f) return false;
-
-                // Normalized depth: 0 at surface, 1 at center
-                depth = 1f - Mathf.Sqrt(normDistSq);
-                return true;
-            }
-
-            case PrimitiveType.Cylinder:
-            {
-                float radius = prim.Scale.x * 0.5f;
-                float halfHeight = prim.Scale.y; // Scale.y IS half-height
-
-                if (radius < 1e-6f || halfHeight < 1e-6f) return false;
-
-                // Outside height bounds — not inside the cylinder at all
-                if (Mathf.Abs(local.y) >= halfHeight) return false;
-
-                float radialDist = Mathf.Sqrt(local.x * local.x + local.z * local.z);
-
-                // Outside radial bounds
-                if (radialDist >= radius) return false;
-
-                depth = (radius - radialDist) / radius;
-
-                if (!cylinderLateralOnly)
-                    depth = Mathf.Min(depth, (halfHeight - Mathf.Abs(local.y)) / halfHeight);
-
-                return true;
-            }
-
-            case PrimitiveType.Cube:
-            {
-                float hx = prim.Scale.x * 0.5f;
-                float hy = prim.Scale.y * 0.5f;
-                float hz = prim.Scale.z * 0.5f;
-
-                if (hx < 1e-6f || hy < 1e-6f || hz < 1e-6f) return false;
-
-                float dx = hx - Mathf.Abs(local.x);
-                float dy = hy - Mathf.Abs(local.y);
-                float dz = hz - Mathf.Abs(local.z);
-
-                // Outside the box
-                if (dx <= 0f || dy <= 0f || dz <= 0f) return false;
-
-                // Normalized depth from closest face
-                float depthX = dx / hx;
-                float depthY = dy / hy;
-                float depthZ = dz / hz;
-                depth = Mathf.Min(depthX, Mathf.Min(depthY, depthZ));
-                return true;
-            }
-
-            default:
-                return false;
         }
     }
 

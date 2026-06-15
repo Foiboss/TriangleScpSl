@@ -1,6 +1,6 @@
-using System.Collections;
 using System.Globalization;
 using AdminToys;
+using MEC;
 using CommandSystem;
 using Exiled.API.Features;
 using TriangleScpSl.Core.Decomposition.TriangleDecomposition.ModelFactory;
@@ -17,7 +17,7 @@ namespace TriangleScpSl.Commands.ExportCommands;
 public sealed class ExportSchematicV2Command : ICommand
 {
     readonly Color _fallbackColor = Color.white;
-    Coroutine? _exportCoroutine;
+    CoroutineHandle _exportCoroutine;
     bool _isExporting;
     ApproximateModel? _activeModel;
 
@@ -68,13 +68,13 @@ public sealed class ExportSchematicV2Command : ICommand
         int writeBatch = Mathf.Max(1, Plugin.Instance?.Config.ExportWriteBatchSize ?? 256);
 
         _isExporting = true;
-        _exportCoroutine = CoroutineHost.Run(ExportRoutine(requestedFile, outputFileName, spawnPosition, accuracy, 1f, buildBatch, writeBatch));
+        _exportCoroutine = ExportRoutine(requestedFile, outputFileName, spawnPosition, accuracy, 1f, buildBatch, writeBatch).Run();
 
         response = "Export started asynchronously. Run command again to cancel current export.";
         return true;
     }
 
-    IEnumerator ExportRoutine
+    IEnumerator<float> ExportRoutine
     (
         string requestedFile,
         string outputFileName,
@@ -98,7 +98,7 @@ public sealed class ExportSchematicV2Command : ICommand
                 PrimitiveFlags.Visible,
                 accuracy);
 
-            yield return _activeModel.BuildTrianglesCoroutine(PrimitiveFlags.Visible, buildBatch);
+            yield return Timing.WaitUntilDone(Timing.RunCoroutine(_activeModel.BuildTrianglesCoroutine(PrimitiveFlags.Visible, buildBatch)));
 
             if (_activeModel.ParallelogramCount == 0)
             {
@@ -116,7 +116,7 @@ public sealed class ExportSchematicV2Command : ICommand
             var exportSucceeded = false;
             var exportError = string.Empty;
 
-            yield return ProjectMerSchematicExporter.ExportCoroutine(
+            yield return Timing.WaitUntilDone(Timing.RunCoroutine(ProjectMerSchematicExporter.ExportCoroutine(
                 _activeModel,
                 outputPath,
                 schematicName,
@@ -126,7 +126,7 @@ public sealed class ExportSchematicV2Command : ICommand
                     exportSucceeded = success;
                     exportError = error;
                     completed = true;
-                });
+                })));
 
             if (!completed || !exportSucceeded)
             {
@@ -140,17 +140,16 @@ public sealed class ExportSchematicV2Command : ICommand
         {
             _activeModel?.Destroy();
             _activeModel = null;
-            _exportCoroutine = null;
+            _exportCoroutine = default;
             _isExporting = false;
         }
     }
 
     void CancelCurrentExport()
     {
-        if (_exportCoroutine is not null)
-            CoroutineHost.Stop(_exportCoroutine);
+        _exportCoroutine.Kill();
 
-        _exportCoroutine = null;
+        _exportCoroutine = default;
         _isExporting = false;
 
         _activeModel?.Destroy();

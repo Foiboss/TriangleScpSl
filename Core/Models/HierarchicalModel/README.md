@@ -10,7 +10,7 @@ Extends `ApproximateModel` (V2) with hierarchical parenting and post-build stret
 ### Phase 1: Inline Parenting + V2 Stretch Clustering
 
 For each new parallelogram, the builder first tries to parent it directly under an
-already-built, stretch-free visible quad (`TryCreateUnderParent`) — that costs 1 quad and
+already-built, stretch-free visible quad (`TryCreateUnderParent`) - that costs 1 quad and
 no stretch at all. If no visible quad fits, it falls back to the same `VectorPhiSolver` +
 `StretchSpatialIndex` pipeline as V2.
 
@@ -34,7 +34,7 @@ Controlled by the `HierarchicalOptimizationPasses` config value (default 3).
 After the sweeps, sparsely-used stretches are drained, smallest first: each remaining
 child quad is rehomed onto another stretch using `MaxVertexError` with the same strict
 `Accuracy` tolerance (no extra visual error). If ALL children of a stretch can be
-rehomed, the stretch ends up childless and is destroyed — one primitive saved each.
+rehomed, the stretch ends up childless and is destroyed - one primitive saved each.
 
 This cleans up the orphans that build order creates: an early parallelogram spawns its
 own stretch before the popular stretch that would also have fit it exists.
@@ -45,15 +45,15 @@ All stretches with no remaining children are destroyed to free network bandwidth
 
 ## Files
 
-| File                                      | Description                                                       |
-|-------------------------------------------|-------------------------------------------------------------------|
-| `HierarchicalModel.cs`                     | Main class, state, constructors, Destroy, QuadBuildInfo           |
-| `HierarchicalModel.Building.cs`            | Build orchestration (immediate + coroutine)                       |
-| `HierarchicalModel.Building.Phase1.cs`     | Inline parenting + V2 stretch clustering                          |
-| `HierarchicalModel.Building.Phase2.cs`     | Optimization sweeps + stretch consolidation                       |
-| `HierarchicalModel.Building.Helpers.cs`    | Fit-under-quad math, used-stretch tracking, size computation      |
-| `HierarchicalModel.Snapshots.cs`           | Immutable primitive snapshots for serialization                   |
-| `HierarchicalModel.Export.cs`              | ProjectMER schematic JSON export                                  |
+| File                                    | Description                                                  |
+|-----------------------------------------|--------------------------------------------------------------|
+| `HierarchicalModel.cs`                  | Main class, state, constructors, Destroy, QuadBuildInfo      |
+| `HierarchicalModel.Building.cs`         | Build orchestration (immediate + coroutine)                  |
+| `HierarchicalModel.Building.Phase1.cs`  | Inline parenting + V2 stretch clustering                     |
+| `HierarchicalModel.Building.Phase2.cs`  | Optimization sweeps + stretch consolidation                  |
+| `HierarchicalModel.Building.Helpers.cs` | Fit-under-quad math, used-stretch tracking, size computation |
+| `HierarchicalModel.Snapshots.cs`        | Immutable primitive snapshots for serialization              |
+| `HierarchicalModel.Export.cs`           | ProjectMER schematic JSON export                             |
 
 ## API
 

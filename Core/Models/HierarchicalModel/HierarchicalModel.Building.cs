@@ -1,5 +1,5 @@
-using System.Collections;
 using AdminToys;
+using MEC;
 using Exiled.API.Features;
 using TriangleScpSl.Core.Primitives.Parallelogram;
 using TriangleScpSl.Core.Primitives.Triangle;
@@ -56,7 +56,7 @@ public partial class HierarchicalModel
             $"(saved {StretchesSaved}).");
     }
 
-    public override IEnumerator BuildTrianglesCoroutine(PrimitiveFlags flags, int trianglesPerFrame)
+    public override IEnumerator<float> BuildTrianglesCoroutine(PrimitiveFlags flags, int trianglesPerFrame)
     {
         if (IsDestroyedValue) yield break;
 
@@ -86,7 +86,7 @@ public partial class HierarchicalModel
             if (processed >= trianglesPerFrame)
             {
                 processed = 0;
-                yield return null;
+                yield return Timing.WaitForOneFrame;
             }
         }
 
@@ -103,21 +103,21 @@ public partial class HierarchicalModel
             if (processed >= trianglesPerFrame)
             {
                 processed = 0;
-                yield return null;
+                yield return Timing.WaitForOneFrame;
             }
         }
 
         if (IsDestroyedValue) yield break;
         RunOptimizationSweeps();
-        yield return null;
+        yield return Timing.WaitForOneFrame;
 
         if (IsDestroyedValue) yield break;
         ConsolidateStretches();
-        yield return null;
+        yield return Timing.WaitForOneFrame;
 
         MarkUsedStretches();
         DestroyUnusedStretches();
-        yield return null;
+        yield return Timing.WaitForOneFrame;
 
         BuildNativePrimitives(flags);
     }

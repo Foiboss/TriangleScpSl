@@ -1,4 +1,3 @@
-using System.Collections;
 using AdminToys;
 using Exiled.API.Features.Toys;
 using TriangleScpSl.Core.Decomposition.NGonDecomposition;
@@ -96,7 +95,7 @@ public abstract class ModelBase
             ScaleValue.z != 0f ? local.z / ScaleValue.z : 0f);
     }
 
-    public abstract IEnumerator BuildTrianglesCoroutine(PrimitiveFlags flags, int trianglesPerFrame);
+    public abstract IEnumerator<float> BuildTrianglesCoroutine(PrimitiveFlags flags, int trianglesPerFrame);
     public abstract void Destroy();
 
     public abstract IReadOnlyList<ProjectMerBlock> GetProjectMerBlocks
@@ -115,7 +114,7 @@ public abstract class ModelBase
             Vector3 worldCenter = TransformPoint(mp.Center);
             Quaternion worldRot = RotationValue * mp.Rotation;
 
-            // A single primitive with rotation + scale yields the matrix T·R·S —
+            // A single primitive with rotation + scale yields the matrix T·R·S -
             // identical to the old invisible-base-quad + identity-child pattern,
             // but one primitive cheaper. Non-uniform scale on a rotated primitive
             // applies along its own (rotated) local axes, which is exactly what
