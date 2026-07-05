@@ -12,37 +12,14 @@ public static class PrimitiveShapeDetector
 {
     const float VertexMergeEps = 1e-5f;
 
-    // Re-cluster and retry after each round of consumption; composite clusters
-    // usually resolve fully within 2-3 rounds.
+    // Re-cluster and retry after each round of consumption.
+    // Composite clusters usually resolve fully within 2-3 rounds.
     const int MaxDetectionIterations = 3;
 
     // Relative concavity tolerance for convex-piece splitting: faces stay in the
     // same piece when each face's centroid is at most this fraction of the centroid
     // distance in front of the other face's plane (tolerates mild mesh noise).
     const float ConvexSplitTolerance = 0.01f;
-
-    public static (List<ModelPrimitive> detected, List<NGonRaw> remaining) Detect
-    (
-        List<NGonRaw> faces,
-        NGonModelConfig config,
-        ModelSolidVolume? solid = null)
-    {
-        List<ModelPrimitive> detected = [];
-        List<NGonRaw> remaining = faces;
-
-        // With an infinite frame budget the coroutine never yields, so draining
-        // it runs the whole pipeline synchronously.
-        IEnumerator<float> routine = DetectCoroutine(faces, config, solid, float.PositiveInfinity,
-            (d, r) =>
-            {
-                detected = d;
-                remaining = r;
-            });
-
-        while (routine.MoveNext()) { }
-
-        return (detected, remaining);
-    }
 
     /// <summary>
     ///     Coroutine version of Detect that yields periodically to avoid freezing.

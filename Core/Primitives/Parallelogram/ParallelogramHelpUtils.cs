@@ -35,7 +35,10 @@ public static class ParallelogramHelpUtils
 
     public static void Create(Vector3 vUp, Vector3 vLeft, Vector3 center, Primitive quad, Primitive baseQuad)
     {
-        if (Mathf.Abs(Vector3.Dot(vLeft, vUp)) > vUp.sqrMagnitude)
+        // Make the longer half-diagonal the up axis. GetAffineComponents needs
+        // |Dot(vLeft, vUp)| strictly below vUp.sqrMagnitude with margin.
+        // Longer-up maximizes the margin
+        if (vUp.sqrMagnitude < vLeft.sqrMagnitude)
             (vUp, vLeft) = (vLeft, -vUp);
 
         (float a, float b, float x) = GetAffineComponents(vUp, vLeft);

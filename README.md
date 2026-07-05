@@ -36,7 +36,7 @@ An [EXILED](https://github.com/ExMod-Team/EXILED) plugin for SCP: Secret Laborat
 >
 > For export, use `ExportSchematicNGonV3` with the same pipeline.
 >
-> **Alternative:** Use `TriangulateNGonV2` / `ExportSchematicNGonV2` for V2 stretch clustering
+> **Alternative:** Use `TriangulateNGonV2` / `ExportSchematicNGonV2` for V2 stretch clustering and faster loading process
 > (slightly more primitives but shallower hierarchy).
 
 ---
@@ -90,14 +90,14 @@ Every command can be run again while building to cancel, or run again after the 
 
 ### Export Commands (also works in server console)
 
-| Command                                                     | Pipeline      | Description                                                |
-|-------------------------------------------------------------|---------------|------------------------------------------------------------|
-| `ExportSchematicNGonV3 <file> <output> [planar] [accuracy]` | N-gon + V3    | **Lowest primitives.** Same pipeline as TriangulateNGonV3. |
-| `ExportSchematicNGonV2 <file> <output> [planar] [accuracy]` | N-gon + V2    | Same pipeline as TriangulateNGonV2.                        |
-| `ExportSchematicNGon <file> <output> [planar]`              | N-gon + V1    | Export N-gon V1 to ProjectMER schematic JSON.              |
-| `ExportSchematicV3 <file> <output> [accuracy]`              | Triangle + V3 | Export triangle V3 to ProjectMER schematic JSON.           |
-| `ExportSchematicV2 <file> <output> [accuracy]`              | Triangle + V2 | Export triangle V2 to ProjectMER schematic JSON.           |
-| `ExportSchematic <file> <output>`                           | Triangle + V1 | Export triangle V1 to ProjectMER schematic JSON.           |
+| Command                                                     | Pipeline      |
+|-------------------------------------------------------------|---------------|
+| `ExportSchematicNGonV3 <file> <output> [planar] [accuracy]` | N-gon + V3    |
+| `ExportSchematicNGonV2 <file> <output> [planar] [accuracy]` | N-gon + V2    |
+| `ExportSchematicNGon <file> <output> [planar]`              | N-gon + V1    |
+| `ExportSchematicV3 <file> <output> [accuracy]`              | Triangle + V3 |
+| `ExportSchematicV2 <file> <output> [accuracy]`              | Triangle + V2 |
+| `ExportSchematic <file> <output>`                           | Triangle + V1 |
 
 ### Config & Debug Commands
 
@@ -176,7 +176,7 @@ TriangleScpSl/
     Models/
       ModelBase.cs              - Abstract base with shared fields and methods
       ApproximateModel/         - V2 stretch-clustering renderer
-      HierarchicalModel/       - V3 hierarchical parenting renderer
+      HierarchicalModel/        - V3 hierarchical parenting renderer
       ExactModel/               - V1 exact parallelogram renderer
     NGons/                      - N-gon decomposition pipeline
       Detectors/                - Primitive shape detection
@@ -202,7 +202,6 @@ yield return NGonModelBuilder.LoadCoroutine("model.obj", Color.white, result =>
     // result.Parallelograms, result.DetectedPrimitives, result.NormalizedFileName
 }, config);
 
-// Or synchronous (blocks the main thread)
 NGonModelResult result = NGonModelBuilder.Load("model.obj", Color.white, config);
 
 // Create models (V1 exact, V2 approximate, V3 hierarchical)
@@ -213,9 +212,6 @@ var hierarchical = HierarchicalModel.Create(result.Parallelograms, result.Detect
 // Or deferred (build in coroutine to avoid lag)
 var model = HierarchicalModel.CreateDeferred(result.Parallelograms, result.DetectedPrimitives, position);
 yield return model.BuildTrianglesCoroutine(PrimitiveFlags.Visible, batchSize: 64);
-
-// V3 stats
-Log.Info($"Reparented: {model.ReparentedCount}, Stretches saved: {model.StretchesSaved}");
 
 // Control
 model.Position = newPos;
@@ -231,7 +227,7 @@ See `Core/Models/HierarchicalModel/README.md`, `Core/Models/ApproximateModel/REA
 
 ## Acknowledgments & Dependencies
 
-- **[EXILED](https://github.com/ExMod-Team/EXILED)** - Creative Commons Attribution-ShareAlike 3.0 Unported
+- **[EXILED](https://github.com/ExMod-Team/EXILED)** — Creative Commons Attribution-ShareAlike 3.0 Unported
 - **[Mirror Networking](https://github.com/MirrorNetworking/Mirror)** — MIT
 - **[Unity Engine](https://unity.com/)** — Unity Companion License
 

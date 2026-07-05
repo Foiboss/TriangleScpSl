@@ -14,14 +14,14 @@ Detects when a cluster of mesh faces forms a recognizable Unity primitive shape 
 4. **Approximate sphere/cylinder fit** with relaxed tolerance (requires solid volume).
 5. **Partial box detection** - 2+ visible box faces with the hidden sides verified embedded in solid material.
 
-**Iteration:** after a round of consumption the remaining faces are re-clustered and the passes run again (up to 3 rounds). This resolves composite clusters incrementally — extracting one shape often leaves a clean remainder.
+**Iteration:** after a round of consumption the remaining faces are re-clustered and the passes run again (up to 3 rounds). This resolves composite clusters incrementally - extracting one shape often leaves a clean remainder.
 
-**Embedded-face culling:** after detection, any remaining face that lies entirely inside a detected primitive (which is an opaque convex solid) is dropped — it can never be seen, so rendering it would only waste primitives. Faces lying exactly on a primitive's surface (decals) are kept via a depth
+**Embedded-face culling:** after detection, any remaining face that lies entirely inside a detected primitive (which is an opaque convex solid) is dropped - it can never be seen, so rendering it would only waste primitives. Faces lying exactly on a primitive's surface (decals) are kept via a depth
 threshold.
 
 **Smoothness gate:** Before trying sphere or cylinder detection, `SmoothnessCheck` verifies that the surface is smooth (not faceted). This prevents replacing intentionally low-poly geometry (like an icosahedron) with a smooth sphere.
 
-**Foreign-vertex guard:** a candidate primitive is rejected when an unrelated face has a vertex just below the candidate's surface — such vertices were visible before the replacement and the primitive would cover them, changing the model's look.
+**Foreign-vertex guard:** a candidate primitive is rejected when an unrelated face has a vertex just below the candidate's surface - such vertices were visible before the replacement and the primitive would cover them, changing the model's look.
 
 ## Detectors
 
@@ -32,13 +32,13 @@ Fits a sphere or ellipsoid to a face cluster.
 **Algorithm:**
 
 1. Compute centroid C of all unique vertices
-2. **Sphere test:** check `max(|r_i - r_mean|) / r_mean < 0.02` (all vertices equidistant from center)
+2. **Sphere test:** check `max(|r_i - r_mean|) / r_mean < 0.05` (all vertices equidistant from center)
 3. **Ellipsoid fallback:** compute 3x3 covariance matrix of `(v_i - C)`, perform **Jacobi eigendecomposition** to get principal axes and semi-axis lengths. Transform vertices into the eigen-frame and check unit-sphere fit.
 4. **Normal validation:** verify face normals point outward from center
-5. **Coverage check:** compute total solid angle subtended by faces from center (must be >= 2pi, at least half-sphere)
+5. **Coverage check:** compute total solid angle subtended by faces from center (must be >= pi steradians, a quarter of the full sphere)
 6. For partial coverage: verify uncovered surface is inside solid material using **Fibonacci sphere sampling**
 
-**Approximate mode** (Pass 2): 10% tolerance, lower coverage. Requires solid volume for hidden surface verification.
+**Approximate mode** (Pass 2): 12% tolerance, coverage threshold relaxed to 0.8pi steradians. Requires solid volume for hidden surface verification.
 
 Unity sphere has diameter 1 at scale 1. Output: `Scale = (2*a1, 2*a2, 2*a3)`.
 
@@ -52,7 +52,7 @@ Fits a cylinder to a face cluster.
 2. Smallest eigenvector of N = cylinder axis (lateral face normals are perpendicular to axis)
 3. Project vertices onto plane perpendicular to axis
 4. **Kasa circle fitting** in 2D projected space (least-squares circle fit)
-5. Check radial deviation: `max(|dist - r|) / r < 0.02`
+5. Check radial deviation: `max(|dist - r|) / r < 0.05`
 6. Height = extent of vertices along axis
 
 Unity cylinder has radius 0.5, height 2. Output: `Scale = (2r, h/2, 2r)`.
@@ -61,14 +61,14 @@ Unity cylinder has radius 0.5, height 2. Output: `Scale = (2r, h/2, 2r)`.
 
 Detects axis-aligned or arbitrarily rotated boxes.
 
-**Exact mode** (`TryDetect`): Requires exactly 6 faces.
+**Exact mode** (`TryDetect`): Requires at least 4 faces that resolve into exactly 3 normal-direction clusters (opposite faces share a cluster).
 
-1. Cluster face normals into 3 anti-parallel pairs (tolerance: ~5 degrees)
-2. Check mutual orthogonality: `|dot(d_i, d_j)| < 0.05`
+1. Cluster face normals into 3 anti-parallel pairs (tolerance: dot > 0.88, ~28 degrees)
+2. Check mutual orthogonality: `|dot(d_i, d_j)| < 0.07`
 3. Project vertices onto each axis for extents
 4. Verify all vertices lie on box surface
 
-**Partial mode** (`TryDetectPartial`): For 2-48 visible faces forming a box protrusion (2 orthogonal faces are enough — the third axis comes from the cross product). Two approaches:
+**Partial mode** (`TryDetectPartial`): For 2-48 visible faces forming a box protrusion (2 orthogonal faces are enough - the third axis comes from the cross product). Two approaches:
 
 1. **Normal-based:** cluster visible face normals into orthogonal groups, infer missing axes from cross products
 2. **OBB fallback:** covariance eigendecomposition of vertex positions, fit oriented bounding box (**OBB**), verify vertices on surface
@@ -100,6 +100,6 @@ Both thresholds (max angle, min fraction) are configurable via the `smoothness` 
 | `SphereDetector.Validation.cs` | Normal validation, solid angle coverage, hidden surface verification |
 | `SphereDetector.Eigen.cs`      | Jacobi eigendecomposition for 3x3 symmetric matrices                 |
 | `CylinderDetector.cs`          | `TryDetect` for cylinder axis + Kasa circle fitting                  |
-| `CubeDetector.cs`              | `TryDetect` (exact 6-face) and `TryDetectPartial` (3-5 face)         |
+| `CubeDetector.cs`              | `TryDetect` (exact, >=4 faces) and `TryDetectPartial` (2-48 faces)   |
 | `CubeDetector.Fitting.cs`      | Normal-based fitting, OBB fitting, shared box verification           |
 | `SmoothnessCheck.cs`           | `IsSurfaceSmooth` dihedral angle gate                                |

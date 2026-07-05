@@ -16,9 +16,6 @@ public partial class ApproximateModel
     readonly List<Primitive> _parallelograms = [];
     readonly List<ParallelogramPrimitive> _fallbackParallelograms = [];
     readonly List<ParallelogramSnapshot> _parallelogramSnapshots = [];
-
-    // 1:1 with _parallelograms: original half-diagonals + owning stretch (null for
-    // rectangles). Used by stretch consolidation to rehome quads after building.
     readonly List<(Vector3 VLeft, Vector3 VUp, Primitive? Stretch)> _quadInfos = [];
     StretchSpatialIndex _stretches;
 

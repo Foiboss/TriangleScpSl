@@ -142,6 +142,13 @@ public partial class ApproximateModel
 
     void CreateParallelogram(Vector3 vLeft, Vector3 vUp, Vector3 center, PrimitiveFlags flags, Color color)
     {
+        // Near-zero-area parallelograms (degenerate triangles produce them with sizable diagonals)
+        // have no reliable orientation and render as stray rectangles, therefroe skip
+        float sizeSqr = Mathf.Max((vLeft + vUp).sqrMagnitude, (vLeft - vUp).sqrMagnitude);
+
+        if (Vector3.Cross(vLeft, vUp).sqrMagnitude <= sizeSqr * 1e-8f)
+            return;
+
         if (!VectorPhiSolver.TrySolve(vLeft, vUp, out float theta, out float phi))
         {
             CreateFallbackParallelogram(vLeft, vUp, center, flags, color);

@@ -13,55 +13,6 @@ namespace TriangleScpSl.Core.Decomposition.NGonDecomposition;
 public static class NGonModelBuilder
 {
     /// <summary>
-    ///     Loads a model synchronously. Throws on failure.
-    /// </summary>
-    public static NGonModelResult Load(string requestedFile, Color defaultColor, NGonModelConfig? config = null)
-    {
-        config ??= NGonModelConfig.CreateFromSession();
-
-        (string fileName, string modelPath) = ResolveModelPath(requestedFile);
-
-        List<NGonRaw> ngons = ParseModel(modelPath, defaultColor);
-
-        ngons = NGonDeduplicator.Deduplicate(ngons,
-            config.DeduplicateVertexThreshold, config.DeduplicatePlaneDistThreshold);
-
-        ModelSolidVolume? solid = config.UseHiddenTailOptimization || config.DetectPrimitives
-            ? ModelSolidVolume.Build(ngons)
-            : null;
-
-        List<ModelPrimitive> detectedPrimitives;
-        List<NGonRaw> remainingNgons;
-
-        if (config.DetectPrimitives)
-        {
-            (detectedPrimitives, remainingNgons) = PrimitiveShapeDetector.Detect(
-                ngons, config, solid);
-        }
-        else
-        {
-            detectedPrimitives = [];
-            remainingNgons = ngons;
-        }
-
-        List<NGonRaw> planarNgons = PlanarNGonSplitter.SplitAll(remainingNgons, config.PlanarThreshold);
-        List<ConvexNGon> convexNgons = ConvexNGonDecomposer.Decompose(planarNgons);
-
-        List<ModelParallelogram> parallelograms = HiddenTailParallelogramProcessor.Process(
-            convexNgons, solid, config.UseEdgeWalkSampling, config.HiddenTailPullIn, config.AllowNonPlanarNGons);
-
-        if (parallelograms.Count == 0 && detectedPrimitives.Count == 0)
-            throw new InvalidOperationException("No valid geometry produced from model polygons.");
-
-        return new NGonModelResult
-        {
-            Parallelograms = parallelograms,
-            DetectedPrimitives = detectedPrimitives,
-            NormalizedFileName = fileName,
-        };
-    }
-
-    /// <summary>
     ///     Loads a model as a coroutine, yielding periodically to avoid freezing.
     ///     Run it with <c>.Run()</c>. The result callback fires when done.
     /// </summary>

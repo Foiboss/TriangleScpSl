@@ -68,7 +68,7 @@ public static class CylinderDetector
 
         // Find cylinder axis via normal-covariance matrix.
         // Lateral face normals are perpendicular to the axis, so the axis
-        // corresponds to the SMALLEST eigenvalue.
+        // corresponds to the smallest eigenvalue.
         float nxx = 0, nxy = 0, nxz = 0, nyy = 0, nyz = 0, nzz = 0;
         var faceNormals = new List<Vector3>(faces.Count);
         var faceNormalIndices = new List<int>(faces.Count);
@@ -104,14 +104,14 @@ public static class CylinderDetector
         if (axis.sqrMagnitude < 1e-10f) return false;
         axis = axis.normalized;
 
-        // Check that the smallest eigenvalue is significantly smaller than the others.
+        // Check that the smallest eigenvalue is significantly smaller than the others
         if (eval.z > config.CylinderMinEigenRatio * eval.x) return false;
 
         // Reject near-coplanar faces: if both middle and smallest eigenvalues are small,
-        // normals only span one direction (flat surface, not a cylinder).
+        // normals only span one direction (flat surface, not a cylinder)
         if (eval.y < 0.3f * eval.x) return false;
 
-        // Classify faces as lateral (perpendicular to axis) or cap (parallel to axis).
+        // Classify faces as lateral (perpendicular to axis) or cap (parallel to axis)
         var lateralFaceIndices = new List<int>();
 
         for (var ni = 0; ni < faceNormals.Count; ni++)
@@ -347,9 +347,9 @@ public static class CylinderDetector
     }
 
     /// <summary>
-    ///     Maps every vertex of the lateral faces back to its index in
-    ///     uniqueVertices. Vertices are bucketed into a coarse grid so each face
-    ///     vertex is matched against a few candidates instead of the whole list.
+    ///     Maps every vertex of the lateral faces back to its index in uniqueVertices.
+    ///     Vertices are bucketed into a coarse grid so each face vertex
+    ///     is matched against a few candidates instead of the whole list.
     /// </summary>
     static HashSet<int> CollectLateralVertexIndices
     (

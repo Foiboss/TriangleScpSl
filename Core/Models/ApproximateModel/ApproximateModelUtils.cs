@@ -69,12 +69,14 @@ public static class ApproximateModelUtils
         );
     }
 
-    // Measures the world-space vertex displacement of the rendered parallelogram
-    // when CreateParallelogram is run with this candidate stretch instead of one
-    // that exactly fits (vLeft, vUp). Returns absolute world units, scales linearly
-    // with parallelogram size, and equals 0 whenever the candidate would render
-    // (vLeft, vUp) exactly - including non-trivial cases where (candidateTheta, candidatePhi)
-    // differs from the "true" solver output but still satisfies |v1C| = |v2C|.
+    /// <summary>
+    ///    Measures the world-space vertex displacement of the rendered parallelogram
+    ///    when CreateParallelogram is run with this candidate stretch instead of one
+    ///    that exactly fits (vLeft, vUp). Returns absolute world units, scales linearly
+    ///    with parallelogram size, and equals 0 whenever the candidate would render
+    ///    (vLeft, vUp) exactly - including non-trivial cases where (candidateTheta, candidatePhi)
+    ///    differs from the "true" solver output but still satisfies |v1C| = |v2C|.
+    /// </summary>
     public static float MaxVertexError
     (
         Vector3 vLeft, Vector3 vUp,
@@ -92,13 +94,14 @@ public static class ApproximateModelUtils
 
         if (a < 1e-12f || b < 1e-12f) return float.MaxValue;
 
-        Vector3 normalLocal = Vector3.Cross(v1C, v2C);
+        // Same orientation CreateParallelogram applies via LookRotation:
+        // local Y along (v1-v2), local Z along normal, local X = Y × Z.
+        // Normal from the unit diagonals, mirroring CreateParallelogram.
+        Vector3 yAxis = diffLocal / b;
+        Vector3 normalLocal = Vector3.Cross(yAxis, sumLocal / a);
         if (normalLocal.sqrMagnitude < 1e-24f) return float.MaxValue;
         normalLocal = normalLocal.normalized;
 
-        // Same orientation CreateParallelogram applies via LookRotation:
-        // local Y along (v1-v2), local Z along normal, local X = Y × Z.
-        Vector3 yAxis = diffLocal / b;
         Vector3 xAxis = Vector3.Cross(yAxis, normalLocal);
 
         // The unit quad after scale (a, b, 1) and that rotation has 4 corners at
@@ -124,15 +127,21 @@ public static class ApproximateModelUtils
         Vector3 position, Vector3 v1, Vector3 v2,
         Primitive stretch, PrimitiveFlags flags, Color color)
     {
-        Vector3 normal = Vector3.Cross(v1, v2).normalized;
         float a = (v1 + v2).magnitude;
         float b = (v1 - v2).magnitude;
+
+        // Basis from the unit diagonals: same rotation as Quaternion.LookRotation(normal, (v1 - v2).normalized);
+        // (cross(v1 - v2, v1 + v2) = 2 * cross(v1, v2)) but never degenerate. cross(v1, v2)
+        // underflows Unity's 1e-5 normalize threshold for thin quads in stretch space and
+        // LookRotation then silently returns identity.
+        Vector3 up = (v1 - v2) / b;
+        Vector3 normal = Vector3.Cross(up, (v1 + v2) / a);
 
         var prim = Primitive.Create(
             PrimitiveType.Quad, flags, position, null, Vector3.one, true, color);
 
         prim.Transform.SetParent(stretch.Transform, true);
-        prim.Transform.localRotation = Quaternion.LookRotation(normal, (v1 - v2).normalized);
+        prim.Transform.localRotation = Quaternion.LookRotation(normal, up);
         prim.Transform.localScale = new Vector3(a, b, 1f);
         return prim;
     }
@@ -189,12 +198,13 @@ public static class ApproximateModelUtils
     /// </summary>
     public static void ReparentToStretch(Primitive quad, Primitive stretch, Vector3 v1, Vector3 v2)
     {
-        Vector3 normal = Vector3.Cross(v1, v2).normalized;
         float a = (v1 + v2).magnitude;
         float b = (v1 - v2).magnitude;
+        Vector3 up = (v1 - v2) / b;
+        Vector3 normal = Vector3.Cross(up, (v1 + v2) / a);
 
         quad.Transform.SetParent(stretch.Transform, true);
-        quad.Transform.localRotation = Quaternion.LookRotation(normal, (v1 - v2).normalized);
+        quad.Transform.localRotation = Quaternion.LookRotation(normal, up);
         quad.Transform.localScale = new Vector3(a, b, 1f);
     }
 

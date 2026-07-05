@@ -27,7 +27,7 @@ public static partial class CubeDetector
             normals.Add(n / area);
         }
 
-        // 2 orthogonal faces are enough - the third axis comes from the cross product.
+        // 2 orthogonal faces are enough - the third axis comes from the cross product
         if (normals.Count < 2) return false;
 
         var directions = new List<Vector3>();
@@ -61,7 +61,7 @@ public static partial class CubeDetector
             }
         }
 
-        if (directions.Count < 2 || directions.Count > 3)
+        if (directions.Count is < 2 or > 3)
             return false;
 
         for (var i = 0; i < directions.Count; i++)

@@ -6,17 +6,17 @@ Converts OBJ mesh faces into `ModelParallelogram` and `ModelPrimitive` instances
 
 ```
 OBJ file
-  - ObjNGonParser               parse vertices, faces, MTL colors
-  - NGonDeduplicator            remove duplicate/overlapping faces
-  - ModelSolidVolume            build winding-number solid for inside/outside tests
-  - PrimitiveShapeDetector      detect spheres, cylinders, cubes -> ModelPrimitive
-  - PlanarNGonSplitter          merge coplanar same-color faces
-  - ConvexNGonDecomposer        split concave n-gons into convex pieces
-  - HiddenTailProcessor         decompose convex n-gons into parallelograms
+  - ObjNGonParser                       parse vertices, faces, MTL colors
+  - NGonDeduplicator                    remove duplicate/overlapping faces
+  - ModelSolidVolume                    build winding-number solid for inside/outside tests
+  - PrimitiveShapeDetector              detect spheres, cylinders, cubes -> ModelPrimitive
+  - PlanarNGonSplitter                  merge coplanar same-color faces
+  - ConvexNGonDecomposer                split concave n-gons into convex pieces
+  - HiddenTailParallelogramProcessor    decompose convex n-gons into parallelograms
   - List<ModelParallelogram> + List<ModelPrimitive>
 ```
 
-`NGonModelBuilder.Load()` (sync) and `NGonModelBuilder.LoadCoroutine()` (async) are the entry points that run this entire pipeline. Both accept an `NGonModelConfig` for all processing parameters.
+`NGonModelBuilder.LoadCoroutine()` is the entry point that runs this entire pipeline, yielding periodically to avoid freezing. It accepts an `NGonModelConfig` for all processing parameters.
 
 ## Key Data Types
 
@@ -90,7 +90,7 @@ The vertex selection for peeling uses the **fourth parallelogram vertex test**: 
 
 ## Shared Utilities
 
-`NGonMath.cs` contains shared geometric helpers used throughout the pipeline:
+`Geometry/NGonMath.cs` contains shared geometric helpers used throughout the pipeline:
 
 | Method                                 | Description                                                  |
 |----------------------------------------|--------------------------------------------------------------|
@@ -102,27 +102,27 @@ The vertex selection for peeling uses the **fourth parallelogram vertex test**: 
 
 ## Files
 
-| File                                               | Content                                                          |
-|----------------------------------------------------|------------------------------------------------------------------|
-| `NGonModelBuilder.cs`                              | Entry point: `Load()` / `LoadCoroutine()` run the full pipeline  |
-| `NGonModelConfig.cs`                               | Session-scoped config with reflection-based get/set              |
-| `NGonModelResult.cs`                               | Result container: parallelograms + detected primitives           |
-| `ObjNGonParser.cs`                                 | OBJ/MTL parser producing `NGonRaw` faces                         |
-| `NGonRaw.cs`                                       | Raw polygon data structure (vertices + color)                    |
-| `NGonDeduplicator.cs`                              | Duplicate face removal                                           |
-| `ModelSolidVolume.cs`                              | Generalized winding number solid                                 |
-| `PrimitiveShapeDetector.cs`                        | Shape detection orchestrator (3-pass)                            |
-| `ModelPrimitive.cs`                                | Detected native primitive data structure                         |
-| `PlanarNGonSplitter.cs`                            | Main coplanar merging logic + shared helpers                     |
-| `PlanarNGonSplitter.ExactMerge.cs`                 | Exact coplanar face merge                                        |
-| `PlanarNGonSplitter.ApproxMerge.cs`                | Approximate merge with vertex snapping                           |
-| `ConvexNGonDecomposer.cs`                          | Ear-clipping + Hertel-Mehlhorn convex decomposition              |
-| `ParallelogramProcessor.cs`                        | Simple convex n-gon to parallelogram conversion (no hidden tail) |
-| `HiddenTailParallelogramProcessor.cs`              | Main parallelogram decomposition with hidden tail optimization   |
-| `HiddenTailParallelogramProcessor.Peeling.cs`      | Parallel-sides peeling logic                                     |
-| `HiddenTailParallelogramProcessor.BoundingRect.cs` | Bounding rectangle covering logic                                |
-| `HiddenTailParallelogramProcessor.Geometry.cs`     | Geometric helpers (point-in-polygon, plane basis, projection)    |
-| `NGonMath.cs`                                      | Shared utilities (Newell normal, Union-Find, etc.)               |
+| File                                                             | Content                                                                                      |
+|------------------------------------------------------------------|----------------------------------------------------------------------------------------------|
+| `NGonModelBuilder.cs`                                            | Entry point: `LoadCoroutine()` runs the full pipeline                                        |
+| `NGonModelConfig.cs`                                             | Session-scoped config with reflection-based get/set                                          |
+| `NGonModelResult.cs`                                             | Result container: parallelograms + detected primitives                                       |
+| `PrimitiveShapeDetector.cs`                                      | Shape detection orchestrator (3-pass)                                                        |
+| `ModelPrimitive.cs`                                              | Detected native primitive data structure                                                     |
+| `Parsing/ObjNGonParser.cs`                                       | OBJ/MTL parser producing `NGonRaw` faces                                                     |
+| `Parsing/NGonRaw.cs`                                             | Raw polygon data structure (vertices + color)                                                |
+| `Geometry/NGonDeduplicator.cs`                                   | Duplicate face removal                                                                       |
+| `Geometry/ModelSolidVolume.cs`                                   | Generalized winding number solid                                                             |
+| `Geometry/NGonMath.cs`                                           | Shared utilities (Newell normal, Union-Find, etc.)                                           |
+| `Merging/PlanarNGonSplitter.cs`                                  | Main coplanar merging logic + shared helpers                                                 |
+| `Merging/PlanarNGonSplitter.ExactMerge.cs`                       | Exact coplanar face merge                                                                    |
+| `Merging/PlanarNGonSplitter.ApproxMerge.cs`                      | Approximate merge with vertex snapping                                                       |
+| `Merging/ConvexNGonDecomposer.cs`                                | Ear-clipping + Hertel-Mehlhorn convex decomposition                                          |
+| `Parallelogram/ParallelogramProcessor.cs`                        | Convex n-gon to parallelogram conversion (no hidden tail); test-only, unused by the pipeline |
+| `Parallelogram/HiddenTailParallelogramProcessor.cs`              | Main parallelogram decomposition with hidden tail optimization                               |
+| `Parallelogram/HiddenTailParallelogramProcessor.Peeling.cs`      | Parallel-sides peeling logic                                                                 |
+| `Parallelogram/HiddenTailParallelogramProcessor.BoundingRect.cs` | Bounding rectangle covering logic                                                            |
+| `Parallelogram/HiddenTailParallelogramProcessor.Geometry.cs`     | Geometric helpers (point-in-polygon, plane basis, projection)                                |
 
 ## Detectors Subfolder
 
