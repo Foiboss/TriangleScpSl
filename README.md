@@ -1,6 +1,10 @@
 # TriangleScpSl
 
 ![Fox](https://github.com/user-attachments/assets/efd20879-b73a-4ad3-b54b-580694ea59d6)
+<sub>
+Model Credit: ["Lowpoly fox"](https://skfb.ly/KVOq) by Vlad Zaichyk is licensed under [Creative Commons Attribution](http://creativecommons.org/licenses/by/4.0/).
+</sub>
+
 
 An [EXILED](https://github.com/ExMod-Team/EXILED) plugin for SCP: Secret Laboratory that renders 3D meshes from OBJ files in the game world using Unity primitive toys (Quads, Spheres, Cylinders, Cubes).
 
