@@ -1,6 +1,6 @@
 # TriangleScpSl
 
-![blender-monkey](https://github.com/user-attachments/assets/2012cb09-db5a-4140-a48f-e1e865e89234)
+![Fox](https://github.com/user-attachments/assets/efd20879-b73a-4ad3-b54b-580694ea59d6)
 
 An [EXILED](https://github.com/ExMod-Team/EXILED) plugin for SCP: Secret Laboratory that renders 3D meshes from OBJ files in the game world using Unity primitive toys (Quads, Spheres, Cylinders, Cubes).
 
