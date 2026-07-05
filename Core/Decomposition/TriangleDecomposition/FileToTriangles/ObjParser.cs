@@ -70,7 +70,7 @@ public static class ObjParser
                         return false;
                     }
 
-                    vertices.Add(new Vector3(x, y, z));
+                    vertices.Add(new Vector3(-x, y, z));
 
                     if (parts.Length >= 7 &&
                         TryParseFloat(parts[4], out float r) &&
@@ -119,6 +119,9 @@ public static class ObjParser
 
                     faceIndices.Add(resolvedIndex);
                 }
+
+                // Mirroring X above reverses winding, so reverse the loop back to keep normals outward.
+                faceIndices.Reverse();
 
                 for (var i = 1; i < faceIndices.Count - 1; i++)
                 {

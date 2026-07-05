@@ -74,7 +74,7 @@ public static class ObjNGonParser
                         return false;
                     }
 
-                    vertices.Add(new Vector3(x, y, z));
+                    vertices.Add(new Vector3(-x, y, z));
                     continue;
                 }
 
@@ -110,6 +110,9 @@ public static class ObjNGonParser
 
                     faceVerts.Add(vertices[resolvedIndex]);
                 }
+
+                // Mirroring X above reverses winding, so reverse the loop back to keep normals outward.
+                faceVerts.Reverse();
 
                 if (faceVerts.Count >= 3)
                 {
